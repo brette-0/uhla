@@ -135,3 +135,5 @@ _NCrunch*
 # FileContentIndexing
 
 *.vsidx
+
+/.vs
