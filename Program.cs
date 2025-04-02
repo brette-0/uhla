@@ -7,6 +7,7 @@ using System.Data;
 using Tataru;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
+using Microsoft.CodeAnalysis.Emit;
 
 public static class Program {
     static readonly string OperatorRegex = @"(\d+|\w+|<=|>=|==|!=|\+\+|--|\+=|-=|\*=|/=|\$=|\??=|%=|&=|\|=|\^=|>>=|<<=|<<|>>|<=|>=|==|!=|\+|\-|\*|\/|&|\| |\^|\%|\$|!|#|\\|@|[(){}\[\]|<|>|\|]+)";
@@ -14,6 +15,10 @@ public static class Program {
         "<", ">", "==", "!=", "<=", ">=", "?", "??", "+", "-", "*", "/", "&", "|", "^",
         "%", "$", "!", ">>", "<<", ">|", "|<", "++", "--", "+=", "-=", "*=", "/=",
         "$=", "??=", "%=", "&=", "|=", "^=", ">>=", "<<=", "#", "\\", "@", "(", ")", "[", "]", "{", "}"
+    ];
+
+    static readonly HashSet<string> WeakOperatorLUT = [
+        "(", ")", "[", "]", "{", "}"
     ];
 
     static bool DebugFile = false;
@@ -32,14 +37,18 @@ public static class Program {
     static string ActiveScope = "root";
 
 
-    static async Task<int> Eval(string expression) {
+    static async Task<StatusResponse<int>> Eval(string expression) {
         try {
-            return CSharpScript.EvaluateAsync<int>(
+            return new StatusResponse<int> {
+                Status = EXIT_CODES.OK,
+                Response = CSharpScript.EvaluateAsync<int>(
                 expression,
                 ScriptOptions.Default.WithImports("System")
-            ).Result;
+            ).Result };
         } catch (Exception) {
-            return 0;
+            return new StatusResponse<int> {
+                Status = EXIT_CODES.SYNTAX_ERROR, Response = default
+            };
         }
     }
 
@@ -47,8 +56,8 @@ public static class Program {
 
         LabelDataBase["root"] = [];                     // create root scope
 
-        string TestString = "2 $ 3";
-        int foo = RequestEvaluate(ref TestString).Response;
+        string TestString = "2 * (2 + 3)";
+        string? foo = RequestEvaluate(ref TestString).Response.Context;
 
 
         EXIT_CODES resp = ResolveArguments(ref args);   // digest cli args
@@ -94,13 +103,12 @@ public static class Program {
         WAIT
     }
 
-    struct ReconstructSegment {
+    private struct Label {
         public EvaluationLevel Level;
-        public string Segment;
-        public int Index;
+        public string Context;
     }
 
-    private static StatusResponse<int> RequestEvaluate(ref string _Context) {
+    private static unsafe StatusResponse<Label> RequestEvaluate(ref string _Context) {
         // streamlined approach is the most logically optimal
         // parenthesis and brackets indicate hierarchy (sort of, brackets are semantically different)
 
@@ -125,14 +133,8 @@ public static class Program {
 
         string[] Context = SplitExpression(_Context);
 
-        ReconstructSegment[] Reconstructs = [];
-        Reconstructs =
-        [ .. Reconstructs,
-            new() {
-                Segment = "",
-                Level = EvaluationLevel.OK,
-            },
-        ];
+        EvaluationLevel Level = EvaluationLevel.OK;
+        string Segment = "";
 
         bool OperatorClock = false;
         System.Globalization.NumberStyles ActiveDenotation = System.Globalization.NumberStyles.Number;   // default to decimal denotation alwayss
@@ -146,22 +148,15 @@ public static class Program {
         for (int iter = 0; iter < Context.Length; iter++) {
             if (OperatorLUT.Contains(Context[iter].Trim())) {
                 // if Operator is % or $ it could be binary or hex denotation
-                if (OperatorClock) {
+                if (OperatorClock || WeakOperatorLUT.Contains(Context[iter].Trim())) {
                     switch (Context[iter].Trim()) {
                         case "(":
-                            Reconstructs = [.. Reconstructs, new ReconstructSegment { Level = EvaluationLevel.OK, Segment = "" }];
+                        case ")":
+                            Segment += Context[iter].Trim();
                             continue;
 
-                        case ")":
-                            if (Reconstructs[^1].Level == EvaluationLevel.WAIT) {
-                                Reconstructs[^2].Level = EvaluationLevel.WAIT;
-                            }
-                            Reconstructs[^2].Segment += $"({Reconstructs[^1].Segment})";
-                            Reconstructs = [.. Reconstructs.Take(Reconstructs.Length - 2)];
-                            break;
-
                         default:
-                            Reconstructs[^1].Segment += Context[iter].Trim();
+                            Segment += Context[iter].Trim();
                             break;
                     }
                 } else {
@@ -179,11 +174,11 @@ public static class Program {
                                 ExpressionAppend = FetchDenotedNumber(ref Context[++iter], ActiveDenotation).ToString();
                                 ActiveDenotation = System.Globalization.NumberStyles.Number;            // 'reset' - potentially redundant
                             } catch { goto default; }
-                            Reconstructs[^1].Segment += ExpressionAppend;
+                            Segment += ExpressionAppend;
                             break;
 
                         default:    // SYNTAX ERROR | Two Consecutive Operators
-                            return new StatusResponse<int> {
+                            return new StatusResponse<Label> {
                                 Status = EXIT_CODES.SYNTAX_ERROR
                             };
                     }
@@ -192,13 +187,13 @@ public static class Program {
                 try {
                     int Temp = int.Parse(Context[iter].Trim());
                     ExpressionAppend = Temp.ToString();
-                    Reconstructs[^1].Segment += ExpressionAppend;
+                    Segment += ExpressionAppend;
                 } catch {
                     if (LabelDataBase[ActiveScope].ContainsKey(Context[iter].Trim())) {
                         if (LabelDataBase[ActiveScope][Context[iter].Trim()] is null) {
-                            Reconstructs[^-1].Segment += Context[iter];
+                            Segment += Context[iter];
                         } else {
-                            Reconstructs[^-1].Segment += LabelDataBase[ActiveScope][Context[iter].Trim()];
+                            Segment += LabelDataBase[ActiveScope][Context[iter].Trim()];
                         }
                     }
                 }
@@ -206,8 +201,17 @@ public static class Program {
             OperatorClock = !OperatorClock;
         }
 
-
-        return new StatusResponse<int>(EXIT_CODES.OK, Eval(ReplaceExponentiation(Reconstructs[0].Segment)).Result);
+        if (Level == EvaluationLevel.OK) {
+            return new StatusResponse<Label>(EXIT_CODES.OK, new Label {
+                Level = EvaluationLevel.OK,
+                Context = Eval(ReplaceExponentiation(Segment)).Result.Response.ToString()
+            });
+        } else {
+            return new StatusResponse<Label>(EXIT_CODES.OK, new Label {
+                Level = EvaluationLevel.WAIT,
+                Context = Segment
+            });
+        }
     }
 
     private static EXIT_CODES ResolveArguments(ref String[] args) {
@@ -276,7 +280,7 @@ Commands:
         public EXIT_CODES Status;
         public T? Response;
 
-        public StatusResponse(EXIT_CODES status, T? response) => (this.Status, this.Response) = (status, response);
+        public StatusResponse(EXIT_CODES status, T? response) => (Status, Response) = (status, response);
     }
 
     public enum Targets {
