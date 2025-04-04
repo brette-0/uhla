@@ -8,17 +8,25 @@ using Tataru;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
 using Microsoft.CodeAnalysis.Emit;
+using static Program;
 
 public static class Program {
+
     static readonly string OperatorRegex = @"(\d+|\w+|<=|>=|==|!=|\+\+|--|\+=|-=|\*=|/=|\$=|\??=|%=|&=|\|=|\^=|>>=|<<=|<<|>>|<=|>=|==|!=|\+|\-|\*|\/|&|\| |\^|\%|\$|!|#|\\|@|[(){}\[\]|<|>|\|]+)";
     static readonly HashSet<string> OperatorLUT = [
-        "<", ">", "==", "!=", "<=", ">=", "?", "??", "+", "-", "*", "/", "&", "|", "^",
+        "<", ">", "==", "!=", "<=", ">=", "?", ":", "??", "+", "-", "*", "/", "&", "|", "^",
         "%", "$", "!", ">>", "<<", ">|", "|<", "++", "--", "+=", "-=", "*=", "/=",
         "$=", "??=", "%=", "&=", "|=", "^=", ">>=", "<<=", "#", "\\", "@", "(", ")", "[", "]", "{", "}"
     ];
 
+
+
     static readonly HashSet<string> WeakOperatorLUT = [
         "(", ")", "[", "]", "{", "}"
+    ];
+
+    static readonly HashSet<string> ConstantKeywords = [
+    "null"
     ];
 
     static bool DebugFile = false;
@@ -33,21 +41,26 @@ public static class Program {
     static string TargetEntryPointFilePath = "";
 
     // scope[name] = value for all labels
-    static Dictionary<string, Dictionary<string, int?>> LabelDataBase = [];
+    static Dictionary<string, Dictionary<string, Label?>> LabelDataBase = [];
     static string ActiveScope = "root";
 
 
-    static async Task<StatusResponse<int>> Eval(string expression) {
+
+    static async Task<StatusResponse<string>> Eval<T>(string expression) {
         try {
-            return new StatusResponse<int> {
-                Status = EXIT_CODES.OK,
-                Response = CSharpScript.EvaluateAsync<int>(
+            var result = await CSharpScript.EvaluateAsync<object>(
                 expression,
                 ScriptOptions.Default.WithImports("System")
-            ).Result };
+            );
+
+            return new StatusResponse<string> {
+                Status = EXIT_CODES.OK,
+                Response = result?.ToString() ?? "null" // Safely handle null
+            };
         } catch (Exception) {
-            return new StatusResponse<int> {
-                Status = EXIT_CODES.SYNTAX_ERROR, Response = default
+            return new StatusResponse<string> {
+                Status = EXIT_CODES.SYNTAX_ERROR, 
+                Response = default // or "error" if you prefer
             };
         }
     }
@@ -56,8 +69,12 @@ public static class Program {
 
         LabelDataBase["root"] = [];                     // create root scope
 
-        string TestString = "2 * (2 + 3)";
-        string? foo = RequestEvaluate(ref TestString).Response.Context;
+        string TestText = "alpha * 10";
+        StatusResponse<Symbol> Test = RequestEvaluate(ref TestText);
+        //StatusResponse<int?> TestResult;
+        //if (Test.Status == EXIT_CODES.OK) {
+        //    TestResult = AccessLabelContent<int?>(Test);
+        //}
 
 
         EXIT_CODES resp = ResolveArguments(ref args);   // digest cli args
@@ -68,6 +85,39 @@ public static class Program {
         //AssemblyFileTree.Add(0, new InterruptableMultiline { 0, File.ReadAllLines(SourceEntryPointFilePath) });  // Index 0 (top/entryhpoint) | Included at 0 (source include) | contents of file
         Assemble();
         return 0;
+    }
+
+    private static StatusResponse<T> AccessLabelContent<T>(StatusResponse<Symbol> Context) {
+        if (Context.Status == EXIT_CODES.OK) {
+            if (Context.Response.Context == "null") {
+                return new StatusResponse<T> {
+                    Status = EXIT_CODES.OK,
+                };
+            } else {
+                switch (typeof(T) switch {
+                    Type t when t == typeof(int) => 0x00,
+                    Type t when t == typeof(int?) => 0x01,
+                    Type t when t == typeof(string) => 0x02,
+                    _ => -1
+                }) {
+                    case 0x00:
+                        return new StatusResponse<T> { Status = EXIT_CODES.OK, Response = (T)(object)int.Parse(Context.Response.Context) };
+                    case 0x01:
+                        if (Context.Response.Context == "null") 
+                        return new StatusResponse<T> { Status = EXIT_CODES.OK, Response = (T?)(object?)null };
+                        return new StatusResponse<T> { Status = EXIT_CODES.OK, Response = (T)(object)int.Parse(Context.Response.Context) };
+                    case 0x02:
+                        return new StatusResponse<T> { Status = EXIT_CODES.OK, Response = (T)(object)Context.Response.Context };
+                    default:
+                        throw new Exception("May only define object as int or string");
+                }
+                throw new Exception("Determinism is dead, the universe is destroyed and there is no point in assembling this ROM");
+            }
+        } else {
+            return new StatusResponse<T> {
+                Status = EXIT_CODES.SYNTAX_ERROR,
+            };
+        }
     }
 
     private static EXIT_CODES Assemble() {
@@ -98,17 +148,23 @@ public static class Program {
         e_err
     }
 
-    private enum EvaluationLevel {
-        OK,
-        WAIT
+    public enum EvaluationLevel {
+        OK,     // ready for evaluation
+        WAIT    // needs more information
     }
 
-    private struct Label {
+    public struct Symbol {
         public EvaluationLevel Level;
         public string Context;
     }
 
-    private static unsafe StatusResponse<Label> RequestEvaluate(ref string _Context) {
+    public struct Label {
+        public EvaluationLevel Level;
+        public TypeCode TypeCode;
+        public Union Context;
+    }
+
+    private static StatusResponse<Symbol> RequestEvaluate(ref string _Context) {
         // streamlined approach is the most logically optimal
         // parenthesis and brackets indicate hierarchy (sort of, brackets are semantically different)
 
@@ -178,7 +234,7 @@ public static class Program {
                             break;
 
                         default:    // SYNTAX ERROR | Two Consecutive Operators
-                            return new StatusResponse<Label> {
+                            return new StatusResponse<Symbol> {
                                 Status = EXIT_CODES.SYNTAX_ERROR
                             };
                     }
@@ -191,9 +247,40 @@ public static class Program {
                 } catch {
                     if (LabelDataBase[ActiveScope].ContainsKey(Context[iter].Trim())) {
                         if (LabelDataBase[ActiveScope][Context[iter].Trim()] is null) {
+                            // referenced but not defined
                             Segment += Context[iter];
+                            Level = EvaluationLevel.WAIT;
+                        } else if (LabelDataBase[ActiveScope][Context[iter].Trim()]!.Value.Level == EvaluationLevel.WAIT) {
+                            // partially defined
+                            Segment += Context[iter]; 
                         } else {
-                            Segment += LabelDataBase[ActiveScope][Context[iter].Trim()];
+                            // defined
+                            switch (LabelDataBase[ActiveScope][Context[iter].Trim()]!.Value.TypeCode) {
+                                case TypeCode.Int32:
+                                    Segment += LabelDataBase[ActiveScope][Context[iter].Trim()]!.Value.Context.Get<int>().ToString();
+                                    break;
+
+                                case TypeCode.String:
+                                    Segment += LabelDataBase[ActiveScope][Context[iter].Trim()]!.Value.Context.Get<string>();
+                                    break;
+                            }
+                        }
+                    } else {
+                        Segment += Context[iter];
+                        if (ConstantKeywords.Contains(Context[iter])) {
+                            switch (Context[iter]) {
+                                case "null":
+                                    break;
+
+                                default:
+                                    return new StatusResponse<Symbol> {
+                                        Status = EXIT_CODES.SYNTAX_ERROR
+                                    };
+                            }
+                        } else {
+                            // new expression to generate
+                            LabelDataBase[ActiveScope].Add(Context[iter].Trim(), null);
+                            Level = EvaluationLevel.WAIT;                                   // expression cannot be resolved yet
                         }
                     }
                 }
@@ -202,12 +289,20 @@ public static class Program {
         }
 
         if (Level == EvaluationLevel.OK) {
-            return new StatusResponse<Label>(EXIT_CODES.OK, new Label {
-                Level = EvaluationLevel.OK,
-                Context = Eval(ReplaceExponentiation(Segment)).Result.Response.ToString()
-            });
+            string? Temp = Eval<int?>(ReplaceExponentiation(Segment)).Result.Response;
+            if (Temp is null) {
+                return new StatusResponse<Symbol>(EXIT_CODES.SYNTAX_ERROR, new Symbol {
+                    Level = EvaluationLevel.OK,
+                    Context = ""
+                });
+            } else {
+                return new StatusResponse<Symbol>(EXIT_CODES.OK, new Symbol {
+                    Level = EvaluationLevel.OK,
+                    Context = Temp!
+                });
+            }
         } else {
-            return new StatusResponse<Label>(EXIT_CODES.OK, new Label {
+            return new StatusResponse<Symbol>(EXIT_CODES.OK, new Symbol {
                 Level = EvaluationLevel.WAIT,
                 Context = Segment
             });
@@ -281,6 +376,34 @@ Commands:
         public T? Response;
 
         public StatusResponse(EXIT_CODES status, T? response) => (Status, Response) = (status, response);
+    }
+
+    public class Union {
+        private object? _value;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public string? String() {
+            return (string?)_value;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int? Int() {
+            return (int?)_value;
+        }
+
+        public Union(object? value) {
+            _value = value;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public T? Get<T>() {
+            return (T?)_value;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Set(object value) {
+            _value = value;
+        }
     }
 
     public enum Targets {
