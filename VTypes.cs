@@ -1,107 +1,109 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
+﻿#pragma warning disable IDE1006
 namespace Tataru {
     internal class VTypes {
-        internal class num {
+        internal class Num {
             [Flags]
             public enum TypeFlags {
                 Endian    = 0x01,
                 Decimal   = 0x02,
-                Signed    = 0x04,
-                Positive  = 0x08,
+                Signed    = 0x04
             }
 
             TypeFlags TypeMeta;
             public int Width;
             public ushort Offset;
 
-            protected internal num(TypeFlags _TypeFlags, int _Width) {
+            protected internal Num(TypeFlags _TypeFlags, int _Width) {
                 Width = _Width; TypeMeta = _TypeFlags;
             }
+        }
 
-                // u8 holds Width 1 and TypeMeta 0
-                // i8 holds Width 1 and TypeMeta 4
-                // p7 holds Width 1 and TypeMeta 8
-                // n7 holds Width 1 and TypeMeta c
-                // bdn63 holds Width 8 and TypeMeta f
+        internal class MPET<T> {
+            internal struct DeterminismStruct {
+                public ulong IndexField, ValueField;
+            }
+            DeterminismStruct Determinism;
+            internal T Value;
+
+            protected internal MPET(T value, ulong indexField, ulong valueField) {
+                Value = value;
+                Determinism = new DeterminismStruct { IndexField = indexField, ValueField = valueField };
+            }
         }
 
 
-        internal class u8    : num { internal    u8(ushort _Offset) : base(0, 1) { base.Offset = _Offset; } }
-        internal class u16   : num { internal   u16(ushort _Offset) : base(0, 2) { base.Offset = _Offset; } }
-        internal class u24   : num { internal   u24(ushort _Offset) : base(0, 3) { base.Offset = _Offset; } }
-        internal class u32   : num { internal   u32(ushort _Offset) : base(0, 4) { base.Offset = _Offset; } }
-        internal class u64   : num { internal   u64(ushort _Offset) : base(0, 8) { base.Offset = _Offset; } }
-        internal class i8    : num { internal    i8(ushort _Offset) : base(num.TypeFlags.Signed, 1) { base.Offset = _Offset; } }
-        internal class i16   : num { internal   i16(ushort _Offset) : base(num.TypeFlags.Signed, 2) { base.Offset = _Offset; } }
-        internal class i24   : num { internal   i24(ushort _Offset) : base(num.TypeFlags.Signed, 3) { base.Offset = _Offset; } }
-        internal class i32   : num { internal   i32(ushort _Offset) : base(num.TypeFlags.Signed, 4) { base.Offset = _Offset; } }
-        internal class i64   : num { internal   i64(ushort _Offset) : base(num.TypeFlags.Signed, 8) { base.Offset = _Offset; } }
-        internal class p7    : num { internal    p7(ushort _Offset) : base(num.TypeFlags.Positive, 1) { base.Offset = _Offset; } }
-        internal class p15   : num { internal   p15(ushort _Offset) : base(num.TypeFlags.Positive, 2) { base.Offset = _Offset; } }
-        internal class p23   : num { internal   p23(ushort _Offset) : base(num.TypeFlags.Positive, 3) { base.Offset = _Offset; } }
-        internal class p31   : num { internal   p31(ushort _Offset) : base(num.TypeFlags.Positive, 4) { base.Offset = _Offset; } }
-        internal class p63   : num { internal   p63(ushort _Offset) : base(num.TypeFlags.Positive, 8) { base.Offset = _Offset; } }
-        internal class n7    : num { internal    n7(ushort _Offset) : base(num.TypeFlags.Signed | num.TypeFlags.Positive, 1) { base.Offset = _Offset; } }
-        internal class n15   : num { internal   n15(ushort _Offset) : base(num.TypeFlags.Signed | num.TypeFlags.Positive, 2) { base.Offset = _Offset; } }
-        internal class n23   : num { internal   n23(ushort _Offset) : base(num.TypeFlags.Signed | num.TypeFlags.Positive, 3) { base.Offset = _Offset; } }
-        internal class n31   : num { internal   n31(ushort _Offset) : base(num.TypeFlags.Signed | num.TypeFlags.Positive, 4) { base.Offset = _Offset; } }
-        internal class n63   : num { internal   n63(ushort _Offset) : base(num.TypeFlags.Signed | num.TypeFlags.Positive, 8) { base.Offset = _Offset; } }
-        internal class du8   : num { internal   du8(ushort _Offset) : base(num.TypeFlags.Decimal, 1) { base.Offset = _Offset; } }
-        internal class du16  : num { internal  du16(ushort _Offset) : base(num.TypeFlags.Decimal, 2) { base.Offset = _Offset; } }
-        internal class du24  : num { internal  du24(ushort _Offset) : base(num.TypeFlags.Decimal, 3) { base.Offset = _Offset; } }
-        internal class du32  : num { internal  du32(ushort _Offset) : base(num.TypeFlags.Decimal, 4) { base.Offset = _Offset; } }
-        internal class du64  : num { internal  du64(ushort _Offset) : base(num.TypeFlags.Decimal, 8) { base.Offset = _Offset; } }
-        internal class di8   : num { internal   di8(ushort _Offset) : base(num.TypeFlags.Decimal | num.TypeFlags.Signed, 1) { base.Offset = _Offset; } }
-        internal class di16  : num { internal  di16(ushort _Offset) : base(num.TypeFlags.Decimal | num.TypeFlags.Signed, 2) { base.Offset = _Offset; } }
-        internal class di24  : num { internal  di24(ushort _Offset) : base(num.TypeFlags.Decimal | num.TypeFlags.Signed, 3) { base.Offset = _Offset; } }
-        internal class di32  : num { internal  di32(ushort _Offset) : base(num.TypeFlags.Decimal | num.TypeFlags.Signed, 4) { base.Offset = _Offset; } }
-        internal class di64  : num { internal  di64(ushort _Offset) : base(num.TypeFlags.Decimal | num.TypeFlags.Signed, 8) { base.Offset = _Offset; } }
-        internal class dp7   : num { internal   dp7(ushort _Offset) : base(num.TypeFlags.Decimal | num.TypeFlags.Positive, 1) { base.Offset = _Offset; } }
-        internal class dp15  : num { internal  dp15(ushort _Offset) : base(num.TypeFlags.Decimal | num.TypeFlags.Positive, 2) { base.Offset = _Offset; } }
-        internal class dp23  : num { internal  dp23(ushort _Offset) : base(num.TypeFlags.Decimal | num.TypeFlags.Positive, 3) { base.Offset = _Offset; } }
-        internal class dp31  : num { internal  dp31(ushort _Offset) : base(num.TypeFlags.Decimal | num.TypeFlags.Positive, 4) { base.Offset = _Offset; } }
-        internal class dp63  : num { internal  dp63(ushort _Offset) : base(num.TypeFlags.Decimal | num.TypeFlags.Positive, 8) { base.Offset = _Offset; } }
-        internal class dn7   : num { internal   dn7(ushort _Offset) : base(num.TypeFlags.Decimal | num.TypeFlags.Signed | num.TypeFlags.Positive, 1) { base.Offset = _Offset; } }
-        internal class dn15  : num { internal  dn15(ushort _Offset) : base(num.TypeFlags.Decimal | num.TypeFlags.Signed | num.TypeFlags.Positive, 2) { base.Offset = _Offset; } }
-        internal class dn23  : num { internal  dn23(ushort _Offset) : base(num.TypeFlags.Decimal | num.TypeFlags.Signed | num.TypeFlags.Positive, 3) { base.Offset = _Offset; } }
-        internal class dn31  : num { internal  dn31(ushort _Offset) : base(num.TypeFlags.Decimal | num.TypeFlags.Signed | num.TypeFlags.Positive, 4) { base.Offset = _Offset; } }
-        internal class dn63  : num { internal  dn63(ushort _Offset) : base(num.TypeFlags.Decimal | num.TypeFlags.Signed | num.TypeFlags.Positive, 8) { base.Offset = _Offset; } }
-        internal class bu16  : num { internal  bu16(ushort _Offset) : base(num.TypeFlags.Endian, 2) { base.Offset = _Offset; } }
-        internal class bu24  : num { internal  bu24(ushort _Offset) : base(num.TypeFlags.Endian, 3) { base.Offset = _Offset; } }
-        internal class bu32  : num { internal  bu32(ushort _Offset) : base(num.TypeFlags.Endian, 4) { base.Offset = _Offset; } }
-        internal class bu64  : num { internal  bu64(ushort _Offset) : base(num.TypeFlags.Endian, 8) { base.Offset = _Offset; } }
-        internal class bi16  : num { internal  bi16(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Signed, 2) { base.Offset = _Offset; } }
-        internal class bi24  : num { internal  bi24(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Signed, 3) { base.Offset = _Offset; } }
-        internal class bi32  : num { internal  bi32(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Signed, 4) { base.Offset = _Offset; } }
-        internal class bi64  : num { internal  bi64(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Signed, 8) { base.Offset = _Offset; } }
-        internal class bp15  : num { internal  bp15(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Positive, 2) { base.Offset = _Offset; } }
-        internal class bp23  : num { internal  bp23(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Positive, 3) { base.Offset = _Offset; } }
-        internal class bp31  : num { internal  bp31(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Positive, 4) { base.Offset = _Offset; } }
-        internal class bp63  : num { internal  bp63(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Positive, 8) { base.Offset = _Offset; } }
-        internal class bn15  : num { internal  bn15(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Signed | num.TypeFlags.Positive, 2) { base.Offset = _Offset; } }
-        internal class bn23  : num { internal  bn23(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Signed | num.TypeFlags.Positive, 3) { base.Offset = _Offset; } }
-        internal class bn31  : num { internal  bn31(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Signed | num.TypeFlags.Positive, 4) { base.Offset = _Offset; } }
-        internal class bn63  : num { internal  bn63(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Signed | num.TypeFlags.Positive, 8) { base.Offset = _Offset; } }
-        internal class bdu16 : num { internal bdu16(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Decimal, 2) { base.Offset = _Offset; } }
-        internal class bdu24 : num { internal bdu24(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Decimal, 3) { base.Offset = _Offset; } }
-        internal class bdu32 : num { internal bdu32(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Decimal, 4) { base.Offset = _Offset; } }
-        internal class bdu64 : num { internal bdu64(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Decimal, 8) { base.Offset = _Offset; } }
-        internal class bdi16 : num { internal bdi16(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Decimal | num.TypeFlags.Signed, 2) { base.Offset = _Offset; } }
-        internal class bdi24 : num { internal bdi24(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Decimal | num.TypeFlags.Signed, 3) { base.Offset = _Offset; } }
-        internal class bdi32 : num { internal bdi32(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Decimal | num.TypeFlags.Signed, 4) { base.Offset = _Offset; } }
-        internal class bdi64 : num { internal bdi64(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Decimal | num.TypeFlags.Signed, 8) { base.Offset = _Offset; } }
-        internal class bdp15 : num { internal bdp15(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Decimal | num.TypeFlags.Positive, 2) { base.Offset = _Offset; } }
-        internal class bdp23 : num { internal bdp23(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Decimal | num.TypeFlags.Positive, 3) { base.Offset = _Offset; } }
-        internal class bdp31 : num { internal bdp31(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Decimal | num.TypeFlags.Positive, 4) { base.Offset = _Offset; } }
-        internal class bdp63 : num { internal bdp63(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Decimal | num.TypeFlags.Positive, 8) { base.Offset = _Offset; } }
-        internal class bdn15 : num { internal bdn15(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Decimal | num.TypeFlags.Signed | num.TypeFlags.Positive, 2) { base.Offset = _Offset; } }
-        internal class bdn23 : num { internal bdn23(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Decimal | num.TypeFlags.Signed | num.TypeFlags.Positive, 3) { base.Offset = _Offset; } }
-        internal class bdn31 : num { internal bdn31(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Decimal | num.TypeFlags.Signed | num.TypeFlags.Positive, 4) { base.Offset = _Offset; } }
-        internal class bdn63 : num { internal bdn63(ushort _Offset) : base(num.TypeFlags.Endian | num.TypeFlags.Decimal | num.TypeFlags.Signed | num.TypeFlags.Positive, 8) { base.Offset = _Offset; } }
+        internal class u8    : Num { internal    u8(ushort _Offset) : base(0, 1) { base.Offset = _Offset; } }
+        internal class u16   : Num { internal   u16(ushort _Offset) : base(0, 2) { base.Offset = _Offset; } }
+        internal class u24   : Num { internal   u24(ushort _Offset) : base(0, 3) { base.Offset = _Offset; } }
+        internal class u32   : Num { internal   u32(ushort _Offset) : base(0, 4) { base.Offset = _Offset; } }
+        internal class u64   : Num { internal   u64(ushort _Offset) : base(0, 8) { base.Offset = _Offset; } }
+        internal class i8    : Num { internal    i8(ushort _Offset) : base(Num.TypeFlags.Signed, 1) { base.Offset = _Offset; } }
+        internal class i16   : Num { internal   i16(ushort _Offset) : base(Num.TypeFlags.Signed, 2) { base.Offset = _Offset; } }
+        internal class i24   : Num { internal   i24(ushort _Offset) : base(Num.TypeFlags.Signed, 3) { base.Offset = _Offset; } }
+        internal class i32   : Num { internal   i32(ushort _Offset) : base(Num.TypeFlags.Signed, 4) { base.Offset = _Offset; } }
+        internal class i64   : Num { internal   i64(ushort _Offset) : base(Num.TypeFlags.Signed, 8) { base.Offset = _Offset; } }
+        internal class du8   : Num { internal   du8(ushort _Offset) : base(Num.TypeFlags.Decimal, 1) { base.Offset = _Offset; } }
+        internal class du16  : Num { internal  du16(ushort _Offset) : base(Num.TypeFlags.Decimal, 2) { base.Offset = _Offset; } }
+        internal class du24  : Num { internal  du24(ushort _Offset) : base(Num.TypeFlags.Decimal, 3) { base.Offset = _Offset; } }
+        internal class du32  : Num { internal  du32(ushort _Offset) : base(Num.TypeFlags.Decimal, 4) { base.Offset = _Offset; } }
+        internal class du64  : Num { internal  du64(ushort _Offset) : base(Num.TypeFlags.Decimal, 8) { base.Offset = _Offset; } }
+        internal class di8   : Num { internal   di8(ushort _Offset) : base(Num.TypeFlags.Decimal | Num.TypeFlags.Signed, 1) { base.Offset = _Offset; } }
+        internal class di16  : Num { internal  di16(ushort _Offset) : base(Num.TypeFlags.Decimal | Num.TypeFlags.Signed, 2) { base.Offset = _Offset; } }
+        internal class di24  : Num { internal  di24(ushort _Offset) : base(Num.TypeFlags.Decimal | Num.TypeFlags.Signed, 3) { base.Offset = _Offset; } }
+        internal class di32  : Num { internal  di32(ushort _Offset) : base(Num.TypeFlags.Decimal | Num.TypeFlags.Signed, 4) { base.Offset = _Offset; } }
+        internal class di64  : Num { internal  di64(ushort _Offset) : base(Num.TypeFlags.Decimal | Num.TypeFlags.Signed, 8) { base.Offset = _Offset; } }
+        internal class bu16  : Num { internal  bu16(ushort _Offset) : base(Num.TypeFlags.Endian, 2) { base.Offset = _Offset; } }
+        internal class bu24  : Num { internal  bu24(ushort _Offset) : base(Num.TypeFlags.Endian, 3) { base.Offset = _Offset; } }
+        internal class bu32  : Num { internal  bu32(ushort _Offset) : base(Num.TypeFlags.Endian, 4) { base.Offset = _Offset; } }
+        internal class bu64  : Num { internal  bu64(ushort _Offset) : base(Num.TypeFlags.Endian, 8) { base.Offset = _Offset; } }
+        internal class bi16  : Num { internal  bi16(ushort _Offset) : base(Num.TypeFlags.Endian | Num.TypeFlags.Signed, 2) { base.Offset = _Offset; } }
+        internal class bi24  : Num { internal  bi24(ushort _Offset) : base(Num.TypeFlags.Endian | Num.TypeFlags.Signed, 3) { base.Offset = _Offset; } }
+        internal class bi32  : Num { internal  bi32(ushort _Offset) : base(Num.TypeFlags.Endian | Num.TypeFlags.Signed, 4) { base.Offset = _Offset; } }
+        internal class bi64  : Num { internal  bi64(ushort _Offset) : base(Num.TypeFlags.Endian | Num.TypeFlags.Signed, 8) { base.Offset = _Offset; } }
+        internal class bdu16 : Num { internal bdu16(ushort _Offset) : base(Num.TypeFlags.Endian | Num.TypeFlags.Decimal, 2) { base.Offset = _Offset; } }
+        internal class bdu24 : Num { internal bdu24(ushort _Offset) : base(Num.TypeFlags.Endian | Num.TypeFlags.Decimal, 3) { base.Offset = _Offset; } }
+        internal class bdu32 : Num { internal bdu32(ushort _Offset) : base(Num.TypeFlags.Endian | Num.TypeFlags.Decimal, 4) { base.Offset = _Offset; } }
+        internal class bdu64 : Num { internal bdu64(ushort _Offset) : base(Num.TypeFlags.Endian | Num.TypeFlags.Decimal, 8) { base.Offset = _Offset; } }
+        internal class bdi16 : Num { internal bdi16(ushort _Offset) : base(Num.TypeFlags.Endian | Num.TypeFlags.Decimal | Num.TypeFlags.Signed, 2) { base.Offset = _Offset; } }
+        internal class bdi24 : Num { internal bdi24(ushort _Offset) : base(Num.TypeFlags.Endian | Num.TypeFlags.Decimal | Num.TypeFlags.Signed, 3) { base.Offset = _Offset; } }
+        internal class bdi32 : Num { internal bdi32(ushort _Offset) : base(Num.TypeFlags.Endian | Num.TypeFlags.Decimal | Num.TypeFlags.Signed, 4) { base.Offset = _Offset; } }
+        internal class bdi64 : Num { internal bdi64(ushort _Offset) : base(Num.TypeFlags.Endian | Num.TypeFlags.Decimal | Num.TypeFlags.Signed, 8) { base.Offset = _Offset; } }
+    
+        internal class p7    : MPET<i8>    { internal    p7(i8    Variable, ushort _Offset) : base(Variable, 0x0000000000000080, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class p15   : MPET<i16>   { internal   p15(i16   Variable, ushort _Offset) : base(Variable, 0x0000000000008000, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class p23   : MPET<i24>   { internal   p23(i24   Variable, ushort _Offset) : base(Variable, 0x0000000000800000, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class p31   : MPET<i32>   { internal   p31(i32   Variable, ushort _Offset) : base(Variable, 0x0000000080000000, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class p63   : MPET<i64>   { internal   p63(i64   Variable, ushort _Offset) : base(Variable, 0x8000000000000000, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class n7    : MPET<i8>    { internal    n7(i8    Variable, ushort _Offset) : base(Variable, 0x0000000000000080, 0x0000000000000080) { base.Value.Offset = _Offset; } }
+        internal class n15   : MPET<i16>   { internal   n15(i16   Variable, ushort _Offset) : base(Variable, 0x0000000000008000, 0x0000000000008000) { base.Value.Offset = _Offset; } }
+        internal class n23   : MPET<i24>   { internal   n23(i24   Variable, ushort _Offset) : base(Variable, 0x0000000000800000, 0x0000000000800000) { base.Value.Offset = _Offset; } }
+        internal class n31   : MPET<i32>   { internal   n31(i32   Variable, ushort _Offset) : base(Variable, 0x0000000080000000, 0x0000000080000000) { base.Value.Offset = _Offset; } }
+        internal class n63   : MPET<i64>   { internal   n63(i64   Variable, ushort _Offset) : base(Variable, 0x8000000000000000, 0x8000000000000000) { base.Value.Offset = _Offset; } }
+        internal class dp7   : MPET<di8>   { internal   dp7(di8   Variable, ushort _Offset) : base(Variable, 0x0000000000000080, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class dp15  : MPET<di16>  { internal  dp15(di16  Variable, ushort _Offset) : base(Variable, 0x0000000000008000, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class dp23  : MPET<di24>  { internal  dp23(di24  Variable, ushort _Offset) : base(Variable, 0x0000000000800000, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class dp31  : MPET<di32>  { internal  dp31(di32  Variable, ushort _Offset) : base(Variable, 0x0000000080000000, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class dp63  : MPET<di64>  { internal  dp63(di64  Variable, ushort _Offset) : base(Variable, 0x8000000000000000, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class dn7   : MPET<di8>   { internal   dn7(di8   Variable, ushort _Offset) : base(Variable, 0x0000000000000080, 0x0000000000000080) { base.Value.Offset = _Offset; } }
+        internal class dn15  : MPET<di16>  { internal  dn15(di16  Variable, ushort _Offset) : base(Variable, 0x0000000000008000, 0x0000000000008000) { base.Value.Offset = _Offset; } }
+        internal class dn23  : MPET<di24>  { internal  dn23(di24  Variable, ushort _Offset) : base(Variable, 0x0000000000800000, 0x0000000000800000) { base.Value.Offset = _Offset; } }
+        internal class dn31  : MPET<di32>  { internal  dn31(di32  Variable, ushort _Offset) : base(Variable, 0x0000000080000000, 0x0000000080000000) { base.Value.Offset = _Offset; } }
+        internal class dn63  : MPET<di64>  { internal  dn63(di64  Variable, ushort _Offset) : base(Variable, 0x8000000000000000, 0x8000000000000000) { base.Value.Offset = _Offset; } }
+        internal class bp15  : MPET<bi16>  { internal  bp15(bi16  Variable, ushort _Offset) : base(Variable, 0x0000000000008000, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class bp23  : MPET<bi24>  { internal  bp23(bi24  Variable, ushort _Offset) : base(Variable, 0x0000000000800000, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class bp31  : MPET<bi32>  { internal  bp31(bi32  Variable, ushort _Offset) : base(Variable, 0x0000000080000000, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class bp63  : MPET<bi64>  { internal  bp63(bi64  Variable, ushort _Offset) : base(Variable, 0x8000000000000000, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class bn15  : MPET<bi16>  { internal  bn15(bi16  Variable, ushort _Offset) : base(Variable, 0x0000000000008000, 0x0000000000008000) { base.Value.Offset = _Offset; } }
+        internal class bn23  : MPET<bi24>  { internal  bn23(bi24  Variable, ushort _Offset) : base(Variable, 0x0000000000800000, 0x0000000000800000) { base.Value.Offset = _Offset; } }
+        internal class bn31  : MPET<bi32>  { internal  bn31(bi32  Variable, ushort _Offset) : base(Variable, 0x0000000080000000, 0x0000000080000000) { base.Value.Offset = _Offset; } }
+        internal class bn63  : MPET<bi64>  { internal  bn63(bi64  Variable, ushort _Offset) : base(Variable, 0x8000000000000000, 0x8000000000000000) { base.Value.Offset = _Offset; } }
+        internal class bdp15 : MPET<bdi16> { internal bdp15(bdi16 Variable, ushort _Offset) : base(Variable, 0x0000000000008000, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class bdp23 : MPET<bdi24> { internal bdp23(bdi24 Variable, ushort _Offset) : base(Variable, 0x0000000000800000, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class bdp31 : MPET<bdi32> { internal bdp31(bdi32 Variable, ushort _Offset) : base(Variable, 0x0000000080000000, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class bdp63 : MPET<bdi64> { internal bdp63(bdi64 Variable, ushort _Offset) : base(Variable, 0x8000000000000000, 0x0000000000000000) { base.Value.Offset = _Offset; } }
+        internal class bdn15 : MPET<bdi16> { internal bdn15(bdi16 Variable, ushort _Offset) : base(Variable, 0x0000000000008000, 0x0000000000008000) { base.Value.Offset = _Offset; } }
+        internal class bdn23 : MPET<bdi24> { internal bdn23(bdi24 Variable, ushort _Offset) : base(Variable, 0x0000000000800000, 0x0000000000800000) { base.Value.Offset = _Offset; } }
+        internal class bdn31 : MPET<bdi32> { internal bdn31(bdi32 Variable, ushort _Offset) : base(Variable, 0x0000000080000000, 0x0000000080000000) { base.Value.Offset = _Offset; } }
+        internal class bdn63 : MPET<bdi64> { internal bdn63(bdi64 Variable, ushort _Offset) : base(Variable, 0x8000000000000000, 0x8000000000000000) { base.Value.Offset = _Offset; } }
     }
 }

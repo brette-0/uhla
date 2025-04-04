@@ -8,6 +8,10 @@ using Tataru;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
 using Microsoft.CodeAnalysis.Emit;
+
+using AngouriMath;
+
+
 using static Program;
 
 public static class Program {
@@ -71,10 +75,10 @@ public static class Program {
 
         string TestText = "alpha * 10";
         StatusResponse<Symbol> Test = RequestEvaluate(ref TestText);
-        //StatusResponse<int?> TestResult;
-        //if (Test.Status == EXIT_CODES.OK) {
-        //    TestResult = AccessLabelContent<int?>(Test);
-        //}
+        StatusResponse<int?> TestResult;
+        if (Test.Status == EXIT_CODES.OK) {
+            TestResult = AccessLabelContent<int?>(Test);
+        }
 
 
         EXIT_CODES resp = ResolveArguments(ref args);   // digest cli args
