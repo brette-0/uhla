@@ -45,6 +45,7 @@ namespace Tataru {
 
                 "if", "else",                                                           // Conditional Assembly
                 "loop",                                                                 // Generating Compile Time Iteration
+                "del",                                                                  // memory freeing and lexis destruction
             };
         }
     }

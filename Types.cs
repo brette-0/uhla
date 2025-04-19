@@ -17,8 +17,9 @@ namespace Tataru {
         }
 
         internal struct Variable {
-            internal int Width;
+            internal int Width, Offset;
             internal bool Endian, Signed, BCD;
+            internal MemoryTypes MemoryType;
         }
 
         internal class Register {

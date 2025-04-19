@@ -10,6 +10,7 @@ using Tataru.Constants;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using HonkSharp.Fluency;
 
 public static class Program {
     static bool DebugFile = false;
@@ -122,9 +123,72 @@ public static class Program {
                     if (Constants.Keywords.Contains(CurrentStep[iter])) {
                         switch (CurrentStep[iter]) {
 
+                            case "int":                                 // assembler variable
+                                iter++;
+                                if (iter != CurrentStep.Length - 1) {
+                                    int NewStringNameIndex = iter;
+
+                                    if (++iter == '=') {
+                                        iter++;
+                                        if (int.TryParse(CurrentStep[iter], out int Content)) {
+                                            LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.Add(CurrentStep[iter],
+                                                new Label { Context = new Union(Content), Level = EvaluationLevel.OK, Type = typeof(int).TypeHandle });
+                                        }
+                                    } else {
+                                        return new StatusResponse<T> { Status = EXIT_CODES.SYNTAX_ERROR };
+                                    }
+                                } else {
+                                    LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.Add(CurrentStep[iter],
+                                        new Label { Context = new Union(null), Level = EvaluationLevel.WAIT, Type = typeof(int).TypeHandle });
+                                }
+                                break;
+
+                            case "bool":                                 // assembler variable
+                                iter++;
+                                if (iter != CurrentStep.Length - 1) {
+                                    int NewStringNameIndex = iter;
+
+                                    if (++iter == '=') {
+                                        iter++;
+                                        if (bool.TryParse(CurrentStep[iter], out bool Content)) {
+                                            LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.Add(CurrentStep[iter],
+                                                new Label { Context = new Union(Content), Level = EvaluationLevel.OK, Type = typeof(bool).TypeHandle });
+                                        }
+                                    } else {
+                                        return new StatusResponse<T> { Status = EXIT_CODES.SYNTAX_ERROR };
+                                    }
+                                } else {
+                                    LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.Add(CurrentStep[iter],
+                                        new Label { Context = new Union(null), Level = EvaluationLevel.WAIT, Type = typeof(bool).TypeHandle });
+                                }
+                                break;
+
+                            // Need something for string and exp
+
                             case "del":
                                 iter++;
-                                if (LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.TryGetValue(CurrentStep[iter], out Label? _)){
+                                if (LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.TryGetValue(CurrentStep[iter], out Label? Context)){
+                                    if (Context!.Value.Type.Equals(typeof(Variable).TypeHandle)) {
+                                        switch (Context.Value.Context.Get<Variable>().MemoryType) {
+                                            case MemoryTypes.Slow:
+                                                SYSRAMUsage -= Context.Value.Context.Get<Variable>().Width;
+                                                break;
+
+                                            case MemoryTypes.Fast:
+                                                if (Context.Value.Context.Get<Variable>().Offset >= 0x100) {
+                                                    goto case MemoryTypes.Slow;
+                                                } else {
+                                                    goto case MemoryTypes.Fast;
+                                                }
+
+                                            case MemoryTypes.ZP:
+                                                ZPUsage -= Context.Value.Context.Get<Variable>().Width;
+                                                break;
+                                            }
+
+                                            // case MemoryTypes.MMC
+                                            // case MemoryTypes.PRG
+                                    }
                                     LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.Remove(CurrentStep[iter]);
                                     break;
                                 } else {
