@@ -16,6 +16,11 @@ namespace Tataru {
             Slow, Fast, ZP, MMC, PRG
         }
 
+        internal struct Variable {
+            internal int Width;
+            internal bool Endian, Signed, BCD;
+        }
+
         internal class Register {
             internal enum Explicit {
                 a, x, y

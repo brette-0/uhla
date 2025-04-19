@@ -46,51 +46,53 @@ public static class Program {
         return 0;
     }
 
-    private static StatusResponse<int> ReserveMemory(MemoryTypes MemoryType, string Context) {
+    private static StatusResponse<Variable> ReserveMemory(MemoryTypes MemoryType, string Context) {
 
-        bool BCD = false;
-        bool Signed = false;
-        int width = 0;
+        bool __BCD__ = false;
+        bool __Signed__ = false;
+        bool __Endian__ = false;
+        int __Width__ = 0;
 
 
-        if (Context.Contains('d')) BCD    = true;
-        if (Context.Contains('i')) Signed = true;
-        else if (!Context.Contains('u')) return new StatusResponse<int> { Status = EXIT_CODES.SYNTAX_ERROR };
+        if (Context.Contains('d')) __BCD__ = true;
+        if (Context.Contains('b')) __BCD__ = true;
+        if (Context.Contains('i')) __Signed__ = true;
+        else if (!Context.Contains('u')) return new StatusResponse<Variable> { Status = EXIT_CODES.SYNTAX_ERROR };
 
-        if (!int.TryParse(Regex.Replace(Context, @"[^\d]", ""), out width)) return new StatusResponse<int> { Status = EXIT_CODES.SYNTAX_ERROR };
+        if (!int.TryParse(Regex.Replace(Context, @"[^\d]", ""), out __Width__)) return new StatusResponse<Variable> { Status = EXIT_CODES.SYNTAX_ERROR };
 
         // PROGRAM LOGIC SUCH IF NO SYSRAM IS AVAILABLE, USE CARTRAM INSTEAD
 
         switch (MemoryType) {
             case MemoryTypes.Slow:
-                if ((SYSRAMUsage + width) > 0x600) {
-                    return new StatusResponse<int> {
+                if ((SYSRAMUsage + __Width__) > 0x600) {
+                    return new StatusResponse<Variable> {
                         Status = EXIT_CODES.NOTHING_TO_DO
                     };
                 }
 
-                SYSRAMUsage += width;
-                return new StatusResponse<int> {
+                SYSRAMUsage += __Width__;
+                return new StatusResponse<Variable> {
                     Status = EXIT_CODES.OK,
-                    Response = 0x100 + SYSRAMUsage
+                    Response = new Variable {Width = 0x100 + SYSRAMUsage - __Width__, Endian = __Endian__, BCD = __BCD__, Signed = __Signed__}
                 };
 
             case MemoryTypes.Fast:
-                if ((ZPUsage + width) > 0x100) {
+                if ((ZPUsage + __Width__) > 0x100) {
                     goto case MemoryTypes.Slow;
                 } else goto case MemoryTypes.ZP;
 
             case MemoryTypes.ZP:
-                if ((ZPUsage + width) > 0x100) {
-                    return new StatusResponse<int> {
+                if ((ZPUsage + __Width__) > 0x100) {
+                    return new StatusResponse<Variable> {
                         Status = EXIT_CODES.NOTHING_TO_DO
                     };
                 }
 
-                ZPUsage += (ushort)width;
-                return new StatusResponse<int> {
+                ZPUsage += __Width__;
+                return new StatusResponse<Variable> {
                     Status = EXIT_CODES.OK,
-                    Response = ZPUsage - width
+                    Response = new Variable { Width = ZPUsage - __Width__, Endian = __Endian__, BCD = __BCD__, Signed = __Signed__ }
                 };
 
                 //case MemoryTypes.MMC:
@@ -112,52 +114,56 @@ public static class Program {
 
             // This part must resolve defines, labels, recurse on macro call and generate a Rosyln Evaluable C# String
             // It must also handle returning case too, will feed back in on itself
+            for (int Step = 0; Step < Steps.Length; Step++) {
+                for (int iter = 0; iter < CurrentStep.Length; iter++) {
+                    // decode request (directive, declaration, definition, keyword)
 
-            for (int iter = 0; iter < CurrentStep.Length; iter++) {
-                // decode request (directive, declaration, definition, keyword)
+                    MemoryTypes CurrentMemoryType = MemoryTypes.Fast;   // Default to fast memory every symbol accses in event of memory reservation
 
-                MemoryTypes CurrentMemoryType = MemoryTypes.Fast;   // Default to fast memory every symbol accses in event of memory reservation
+                    if (Constants.Keywords.Contains(CurrentStep[iter])) {
+                        switch (CurrentStep[iter]) {
 
-                if (Constants.Keywords.Contains(CurrentStep[iter])) {
-                    switch (CurrentStep[iter]) {
+                            case "proc":
+                                // add new scope based off proc name
+                                iter++;
+                                LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.Add(CurrentStep[iter], new Label {
+                                    Context = new Union(new Dictionary<string, Label?>()),
+                                    Type = typeof(Dictionary<string, Label?>).TypeHandle,
+                                    Level = EvaluationLevel.OK
+                                });
+                                ActiveScope = CurrentStep[iter];
+                                break;
 
-                        case "proc":
-                            // add new scope based off proc name
-                            iter++;
-                            LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.Add(CurrentStep[iter], new Label {
-                                Context = new Union(new Dictionary<string, Label?>()),
-                                Type = typeof(Dictionary<string, Label?>).TypeHandle,
-                                Level = EvaluationLevel.OK
-                            });
-                            ActiveScope = CurrentStep[iter];
-                            break;
+                            case "slow":
+                                iter++;
+                                CurrentMemoryType = MemoryTypes.Slow;
+                                goto default;
 
-                        case "slow":
-                            CurrentMemoryType = MemoryTypes.Slow;
-                            goto default;
+                            case "zp":                                  // 'fast' keyword does nothing but assist legibility
+                                iter++;
+                                CurrentMemoryType = MemoryTypes.ZP;
+                                goto default;
 
-                        case "zp":                                  // 'fast' keyword does nothing but assist legibility
-                            CurrentMemoryType = MemoryTypes.ZP;
-                            goto default;
+                            default:
+                                StatusResponse<Variable> Resp = ReserveMemory(CurrentMemoryType, CurrentStep[iter]);
+                                switch (Resp.Status) {
+                                    case EXIT_CODES.OK:
+                                        iter++;
+                                        // Register Label with Offset
+                                        LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.Add(CurrentStep[iter],
+                                            new Label { Context = new Union(Resp.Response), Level = EvaluationLevel.OK, Type = typeof(Variable).TypeHandle });
 
-                        default:
-                            StatusResponse<int> Resp = ReserveMemory(CurrentMemoryType, CurrentStep[iter]);
-                            switch (Resp.Status) {
-                                case EXIT_CODES.OK:
-                                    iter++;
-                                    // Register Label with Offset
-                                    LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.Add(CurrentStep[iter], 
-                                        new Label { Context = new Union(Resp.Response), Level = EvaluationLevel.OK, Type = typeof(int).TypeHandle });
+                                        if (CurrentStep.Length - 1 != iter) goto default;
+                                        continue;
 
-                                    break;
-
-                                default:
-                                    return (StatusResponse<T>)(object)Resp;
-                            }
-                            break;
+                                    default:
+                                        return (StatusResponse<T>)(object)Resp;
+                                }
+                        }
                     }
                 }
             }
+            
         }
 
         if (TargetLine == TargetContents.Length && AssemblyFileTree.Length == 1) {
