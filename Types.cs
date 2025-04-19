@@ -7,56 +7,91 @@ using System.Threading.Tasks;
 
 namespace Tataru {
     namespace Types {
-        public enum EvaluationLevel {
+        internal enum EvaluationLevel {
             OK,     // ready for evaluation
             WAIT    // needs more information
         }
 
-        public struct Symbol {
-            public EvaluationLevel Level;
-            public string Context;
+        internal enum MemoryTypes {
+            Slow, Fast, ZP, MMC, PRG
         }
 
-        public struct Label {
-            public EvaluationLevel Level;
-            public RuntimeTypeHandle Type;
-            public Union Context;
+        internal class Register {
+            internal enum Explicit {
+                a, x, y
+            }
+
+            Explicit Content;
+
+            internal Register (Explicit __Content__) {
+                Content = __Content__;
+            }
         }
 
-        public unsafe class Union {
+        internal class Flag {
+            internal enum Explicit {
+                z, c, n, v
+            }
+
+            Explicit Content;
+
+            internal Flag(Explicit __Content__) {
+                Content = __Content__;
+            }
+        }
+
+        internal ref struct Macro<T> {
+            ref InterruptableMultiline AssemblyTreeReference;
+            int LineNumber;
+            T Context;
+            RuntimeTypeHandle[] ParameterTypes;
+        }
+
+        internal struct Symbol {
+            internal EvaluationLevel Level;
+            internal string Context;
+        }
+
+        internal struct Label {
+            internal EvaluationLevel Level;
+            internal RuntimeTypeHandle Type;
+            internal Union Context;
+        }
+
+        internal unsafe class Union {
             private object? _value;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public string? String() {
+            internal string? String() {
                 return (string?)_value;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public int? Int() {
+            internal int? Int() {
                 return (int?)_value;
             }
 
-            public Union(object? value) {
+            internal Union(object? value) {
                 _value = value;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public T? Get<T>() {
+            internal T? Get<T>() {
                 return (T?)_value;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void Set(object value) {
+            internal void Set(object value) {
                 _value = value;
             }
         }
 
-        struct InterruptableMultiline {
+        internal struct InterruptableMultiline {
             public int Index;
             public string[] Lines;
         }
 
-        public enum EXIT_CODES {
+        internal enum EXIT_CODES {
             OK,
             INVALID_ARGUMENT,
             NO_PARAMETER,
@@ -64,11 +99,11 @@ namespace Tataru {
             NOTHING_TO_DO
         }
 
-        public struct StatusResponse<T> {
-            public EXIT_CODES Status;
-            public T? Response;
+        internal struct StatusResponse<T> {
+            internal EXIT_CODES Status;
+            internal T? Response;
 
-            public StatusResponse(EXIT_CODES status, T? response) => (Status, Response) = (status, response);
+            internal StatusResponse(EXIT_CODES status, T? response) => (Status, Response) = (status, response);
         }
     }
 }

@@ -7,6 +7,9 @@ using AngouriMath;
 using Tataru.Types;
 using Tataru.Header;
 using Tataru.Constants;
+using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
 
 public static class Program {
     static bool DebugFile = false;
@@ -21,6 +24,9 @@ public static class Program {
     // scope[name] = value for all labels
     static Dictionary<string, Label?> LabelDataBase = [];
     static string ActiveScope = "root";
+
+    static int ZPUsage, SYSRAMUsage;
+
 
     public static int Main(String[] args) {
         Header.Target = Targets.None;
@@ -40,6 +46,60 @@ public static class Program {
         return 0;
     }
 
+    private static StatusResponse<int> ReserveMemory(MemoryTypes MemoryType, string Context) {
+
+        bool BCD = false;
+        bool Signed = false;
+        int width = 0;
+
+
+        if (Context.Contains('d')) BCD    = true;
+        if (Context.Contains('i')) Signed = true;
+        else if (!Context.Contains('u')) return new StatusResponse<int> { Status = EXIT_CODES.SYNTAX_ERROR };
+
+        if (!int.TryParse(Regex.Replace(Context, @"[^\d]", ""), out width)) return new StatusResponse<int> { Status = EXIT_CODES.SYNTAX_ERROR };
+
+        // PROGRAM LOGIC SUCH IF NO SYSRAM IS AVAILABLE, USE CARTRAM INSTEAD
+
+        switch (MemoryType) {
+            case MemoryTypes.Slow:
+                if ((SYSRAMUsage + width) > 0x600) {
+                    return new StatusResponse<int> {
+                        Status = EXIT_CODES.NOTHING_TO_DO
+                    };
+                }
+
+                SYSRAMUsage += width;
+                return new StatusResponse<int> {
+                    Status = EXIT_CODES.OK,
+                    Response = 0x100 + SYSRAMUsage
+                };
+
+            case MemoryTypes.Fast:
+                if ((ZPUsage + width) > 0x100) {
+                    goto case MemoryTypes.Slow;
+                } else goto case MemoryTypes.ZP;
+
+            case MemoryTypes.ZP:
+                if ((ZPUsage + width) > 0x100) {
+                    return new StatusResponse<int> {
+                        Status = EXIT_CODES.NOTHING_TO_DO
+                    };
+                }
+
+                ZPUsage += (ushort)width;
+                return new StatusResponse<int> {
+                    Status = EXIT_CODES.OK,
+                    Response = ZPUsage - width
+                };
+
+                //case MemoryTypes.MMC:
+                //case MemoryTypes.PRG:
+            }
+
+        return new();
+    }
+
     private static StatusResponse<T> DecodeCodeBlock<T>(ref String[] TargetContents, int TargetLine) {
         string[] Steps = [];        // expressions to decode split by ';'
         string[] CurrentStep = [];  // current expression split with regex
@@ -48,12 +108,55 @@ public static class Program {
             // decode things
 
             Steps = TargetContents[TargetLine].Split(';');
-            // CurrenStep split by regex
+            // CurrentStep split by regex
 
             // This part must resolve defines, labels, recurse on macro call and generate a Rosyln Evaluable C# String
             // It must also handle returning case too, will feed back in on itself
-            foreach (string Element in CurrentStep) { 
-                
+
+            for (int iter = 0; iter < CurrentStep.Length; iter++) {
+                // decode request (directive, declaration, definition, keyword)
+
+                MemoryTypes CurrentMemoryType = MemoryTypes.Fast;   // Default to fast memory every symbol accses in event of memory reservation
+
+                if (Constants.Keywords.Contains(CurrentStep[iter])) {
+                    switch (CurrentStep[iter]) {
+
+                        case "proc":
+                            // add new scope based off proc name
+                            iter++;
+                            LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.Add(CurrentStep[iter], new Label {
+                                Context = new Union(new Dictionary<string, Label?>()),
+                                Type = typeof(Dictionary<string, Label?>).TypeHandle,
+                                Level = EvaluationLevel.OK
+                            });
+                            ActiveScope = CurrentStep[iter];
+                            break;
+
+                        case "slow":
+                            CurrentMemoryType = MemoryTypes.Slow;
+                            goto default;
+
+                        case "zp":                                  // 'fast' keyword does nothing but assist legibility
+                            CurrentMemoryType = MemoryTypes.ZP;
+                            goto default;
+
+                        default:
+                            StatusResponse<int> Resp = ReserveMemory(CurrentMemoryType, CurrentStep[iter]);
+                            switch (Resp.Status) {
+                                case EXIT_CODES.OK:
+                                    iter++;
+                                    // Register Label with Offset
+                                    LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.Add(CurrentStep[iter], 
+                                        new Label { Context = new Union(Resp.Response), Level = EvaluationLevel.OK, Type = typeof(int).TypeHandle });
+
+                                    break;
+
+                                default:
+                                    return (StatusResponse<T>)(object)Resp;
+                            }
+                            break;
+                    }
+                }
             }
         }
 
