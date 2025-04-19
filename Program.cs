@@ -12,8 +12,6 @@ public static class Program {
     static bool DebugFile = false;
     static bool ListingFile = false;
 
-    static Targets Target = Targets.None;
-
     // line position at include : file as array of lines split by new line
     static InterruptableMultiline[] AssemblyFileTree = [];
 
@@ -24,27 +22,9 @@ public static class Program {
     static Dictionary<string, Label?> LabelDataBase = [];
     static string ActiveScope = "root";
 
-
-    static async Task<StatusResponse<string>> Eval<T>(string expression) {
-        try {
-            var result = await CSharpScript.EvaluateAsync<object>(
-                expression,
-                ScriptOptions.Default.WithImports("System")
-            );
-
-            return new StatusResponse<string> {
-                Status = EXIT_CODES.OK,
-                Response = result?.ToString() ?? "null" // Safely handle null
-            };
-        } catch (Exception) {
-            return new StatusResponse<string> {
-                Status = EXIT_CODES.SYNTAX_ERROR, 
-                Response = default // or "error" if you prefer
-            };
-        }
-    }
-
     public static int Main(String[] args) {
+        Header.Target = Targets.None;
+
         LabelDataBase["root"] = new Label {
             Level   = EvaluationLevel.OK,
             Type    = typeof(Dictionary<string, Label?>).TypeHandle,
@@ -61,14 +41,20 @@ public static class Program {
     }
 
     private static StatusResponse<T> DecodeCodeBlock<T>(ref String[] TargetContents, int TargetLine) {
-        // return null if we do not meet a valid return, may indicate end of assembly
+        string[] Steps = [];        // expressions to decode split by ';'
+        string[] CurrentStep = [];  // current expression split with regex
 
         while (TargetLine != TargetContents.Length) {
             // decode things
 
-            // if decoded expression begins with 'return' then return immediately with the value
-            // fetch rightside
-            // return new StatusResponse<T> {Status = EXIT_CODES.OK, Response = rightside};
+            Steps = TargetContents[TargetLine].Split(';');
+            // CurrenStep split by regex
+
+            // This part must resolve defines, labels, recurse on macro call and generate a Rosyln Evaluable C# String
+            // It must also handle returning case too, will feed back in on itself
+            foreach (string Element in CurrentStep) { 
+                
+            }
         }
 
         if (TargetLine == TargetContents.Length && AssemblyFileTree.Length == 1) {
