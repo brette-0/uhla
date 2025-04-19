@@ -11,6 +11,7 @@ using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using HonkSharp.Fluency;
+using System.Transactions;
 
 public static class Program {
     static bool DebugFile = false;
@@ -42,8 +43,8 @@ public static class Program {
         EXIT_CODES resp = ResolveArguments(ref args);   // digest cli args
         if (resp != 0) return (int)resp;                // if fail, return with fail ctx
 
-        AssemblyFileTree = [.. AssemblyFileTree, new InterruptableMultiline {Index = 0, Lines = File.ReadAllLines(SourceEntryPointFilePath) }];
-        DecodeCodeBlock<int>(ref AssemblyFileTree[0].Lines, 0);
+        AssemblyFileTree = [.. AssemblyFileTree, new InterruptableMultiline {Index = 0, LinesBox = new Box<string[]>(File.ReadAllLines(SourceEntryPointFilePath)) }];
+        DecodeCodeBlock<int>(ref AssemblyFileTree[0].LinesBox.Value, 0);
         return 0;
     }
 
@@ -134,6 +135,9 @@ public static class Program {
                                             LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.Add(CurrentStep[iter],
                                                 new Label { Context = new Union(Content), Level = EvaluationLevel.OK, Type = typeof(int).TypeHandle });
                                         }
+                                    } else if (iter == '(') {
+                                        StatusResponse<T> AMSR = AddMacro<T>(typeof(int).TypeHandle, ref CurrentStep, ref iter, ref TargetLine);
+                                        if (AMSR.Status != EXIT_CODES.OK) return AMSR;
                                     } else {
                                         return new StatusResponse<T> { Status = EXIT_CODES.SYNTAX_ERROR };
                                     }
@@ -154,6 +158,9 @@ public static class Program {
                                             LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.Add(CurrentStep[iter],
                                                 new Label { Context = new Union(Content), Level = EvaluationLevel.OK, Type = typeof(bool).TypeHandle });
                                         }
+                                    } else if (iter == '(') {
+                                        StatusResponse<T> AMSR = AddMacro<T>(typeof(bool).TypeHandle, ref CurrentStep, ref iter, ref TargetLine);
+                                        if (AMSR.Status != EXIT_CODES.OK) return AMSR;
                                     } else {
                                         return new StatusResponse<T> { Status = EXIT_CODES.SYNTAX_ERROR };
                                     }
@@ -249,6 +256,51 @@ public static class Program {
         }
 
         return new();
+    }
+
+    private static StatusResponse<T> AddMacro<T>(object RTH, ref string[] CurrentStep, ref int iter, ref int TargetLine) {
+        RuntimeTypeHandle[] MacroParameterBuffer = [];
+
+        do {
+            MacroParameterBuffer = [.. MacroParameterBuffer, 
+                CurrentStep[iter] switch {
+                    "int"       => typeof(int).TypeHandle,
+                    "string"    => typeof(string).TypeHandle,
+                    "exp"       => typeof(Exp).TypeHandle,
+                    "register"  => typeof(Register).TypeHandle,
+                    "flag"      => typeof(Flag).TypeHandle,
+                    _           => typeof(EXIT_CODES).TypeHandle,
+                }
+            ];
+
+            if (MacroParameterBuffer[^1].Equals(typeof(EXIT_CODES).TypeHandle)) {
+                return new StatusResponse<T> { Status = EXIT_CODES.SYNTAX_ERROR };
+            }
+
+            ++iter; // TODO: Ensure parameter names are valid
+
+            if (!new string[] { ",", ")" }.Contains(CurrentStep[++iter])) {
+                return new StatusResponse<T> {
+                    Status = EXIT_CODES.SYNTAX_ERROR
+                };
+            }
+        } while (CurrentStep[iter] != ")");
+
+        LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.Add(CurrentStep[iter],
+                new Label {
+                    Context = new Union(new Macro {
+                        LineNumber = TargetLine,
+                        ReturnType = (RuntimeTypeHandle)RTH,
+                        ParameterTypes = MacroParameterBuffer,
+                        AssemblyTreeReference = AssemblyFileTree[^1]
+                    }),
+                    Level = EvaluationLevel.OK,
+                    Type = typeof(Macro).TypeHandle
+                });
+
+        return new StatusResponse<T> {
+            Status = EXIT_CODES.OK
+        };
     }
 
     private static EXIT_CODES ResolveArguments(ref String[] args) {

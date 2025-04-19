@@ -12,6 +12,14 @@ namespace Tataru {
             WAIT    // needs more information
         }
 
+        internal class Exp {
+            internal string Value;
+
+            internal Exp(string value) {
+                Value = value;
+            }
+        }
+
         internal enum MemoryTypes {
             Slow, Fast, ZP, MMC, PRG
         }
@@ -46,11 +54,18 @@ namespace Tataru {
             }
         }
 
-        internal ref struct Macro<T> {
-            ref InterruptableMultiline AssemblyTreeReference;
-            int LineNumber;
-            T Context;
-            RuntimeTypeHandle[] ParameterTypes;
+        internal struct Macro {
+            internal InterruptableMultiline AssemblyTreeReference;
+            internal int LineNumber;
+            internal RuntimeTypeHandle ReturnType;
+            internal RuntimeTypeHandle[] ParameterTypes;
+        }
+
+        internal class Box<T> {
+            internal T Value;
+            internal Box(T value)     {
+                Value = value;
+            }
         }
 
         internal struct Symbol {
@@ -94,7 +109,7 @@ namespace Tataru {
 
         internal struct InterruptableMultiline {
             public int Index;
-            public string[] Lines;
+            public Box<string[]> LinesBox;
         }
 
         internal enum EXIT_CODES {
