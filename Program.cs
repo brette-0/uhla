@@ -51,7 +51,6 @@ public static class Program {
         bool __BCD__ = false;
         bool __Signed__ = false;
         bool __Endian__ = false;
-        int __Width__ = 0;
 
 
         if (Context.Contains('d')) __BCD__ = true;
@@ -59,7 +58,7 @@ public static class Program {
         if (Context.Contains('i')) __Signed__ = true;
         else if (!Context.Contains('u')) return new StatusResponse<Variable> { Status = EXIT_CODES.SYNTAX_ERROR };
 
-        if (!int.TryParse(Regex.Replace(Context, @"[^\d]", ""), out __Width__)) return new StatusResponse<Variable> { Status = EXIT_CODES.SYNTAX_ERROR };
+        if (!int.TryParse(Regex.Replace(Context, @"[^\d]", ""), out int __Width__)) return new StatusResponse<Variable> { Status = EXIT_CODES.SYNTAX_ERROR };
 
         // PROGRAM LOGIC SUCH IF NO SYSRAM IS AVAILABLE, USE CARTRAM INSTEAD
 
@@ -74,7 +73,7 @@ public static class Program {
                 SYSRAMUsage += __Width__;
                 return new StatusResponse<Variable> {
                     Status = EXIT_CODES.OK,
-                    Response = new Variable {Width = 0x100 + SYSRAMUsage - __Width__, Endian = __Endian__, BCD = __BCD__, Signed = __Signed__}
+                    Response = new Variable {Width = 0x200 + SYSRAMUsage - __Width__, Endian = __Endian__, BCD = __BCD__, Signed = __Signed__}
                 };
 
             case MemoryTypes.Fast:
@@ -123,6 +122,17 @@ public static class Program {
                     if (Constants.Keywords.Contains(CurrentStep[iter])) {
                         switch (CurrentStep[iter]) {
 
+                            case "del":
+                                iter++;
+                                if (LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.TryGetValue(CurrentStep[iter], out Label? _)){
+                                    LabelDataBase[ActiveScope]!.Value.Context.Get<Dictionary<string, Label?>>()!.Remove(CurrentStep[iter]);
+                                    break;
+                                } else {
+                                    return new StatusResponse<T> {
+                                        Status = EXIT_CODES.INVALID_ARGUMENT
+                                    };
+                                }
+
                             case "proc":
                                 // add new scope based off proc name
                                 iter++;
@@ -159,7 +169,7 @@ public static class Program {
                                     default:
                                         return (StatusResponse<T>)(object)Resp;
                                 }
-                        }
+                            }
                     }
                 }
             }
