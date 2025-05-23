@@ -17,7 +17,7 @@
 
             internal struct AssembleTimeValue {
                 internal AssembleTimeTypes Type;
-                internal object Value;
+                internal object? Value;
             }
 
             internal class AssembleTimeBoxClass {
