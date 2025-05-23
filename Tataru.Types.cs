@@ -8,7 +8,40 @@
                 EXP,
                 SCOPE,
                 MACRO,
-                PROCEDURE
+                PROCEDURE,
+                BANK,
+                REGISTER,
+                FLAG,               // c z v n (Carry, Zero, Overflow, Negative)
+                RUNTIME
+            }
+
+            internal struct AssembleTimeValue {
+                internal AssembleTimeTypes Type;
+                internal object Value;
+            }
+
+            internal class AssembleTimeBoxClass {
+                internal object? Value;
+            }
+
+            internal class Scope     : AssembleTimeBoxClass {
+                
+            }
+
+            internal class Macro     : AssembleTimeBoxClass {
+
+            }
+
+            internal class Procedure : AssembleTimeBoxClass {
+
+            }
+
+            internal class Bank      : AssembleTimeBoxClass {
+
+            }
+
+            internal class Runtime   : AssembleTimeBoxClass {
+
             }
         }
 
@@ -29,22 +62,24 @@
                 UNDEFINED = -1
             }
 
-            internal struct RunTimeVariable {
+            internal enum Instruction {
+                EXPLICIT, IMPLICIT, UNRECOGNIZED
+            }
+
+            internal struct RunTimeValue {
                 internal byte Width;
                 internal bool Signed;
                 internal bool Endian;
-                internal bool Decimal;
                 internal bool Pointer;
 
                 internal ushort Offset;             // Offset in CPU Space
-                internal ulong  ROMOffset;          // Offset in PRGRAM space (promotes bankable RAM)
+                internal ulong  ROMOffset;          // Offset in PRGROM/PRGRAM space (Promotes Banking)
                 internal RunTimeVariableRule Rule;  // Generated rule
             }
             
             internal static class RunTime {
-                static internal RunTimeVariable Decode(ref string VariableTypeKeyword) {
-                    RunTimeVariable ReturnRTV = new();
-                    if (VariableTypeKeyword.Contains('d'))        ReturnRTV.Decimal = true;
+                static internal RunTimeValue Decode(ref string VariableTypeKeyword) {
+                    RunTimeValue ReturnRTV = new();
                     if (VariableTypeKeyword.Contains('b'))        ReturnRTV.Endian  = true;
                     if (VariableTypeKeyword.StartsWith('i'))      ReturnRTV.Signed  = true;
                     if (VariableTypeKeyword.EndsWith('*'))        ReturnRTV.Pointer = true;
