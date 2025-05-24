@@ -54,6 +54,225 @@ static partial class Program {
         return (Ready, ReconstructedExpression);
     }
 
+    private static void ProcessInstruction(string Mnemonic) {
+        switch (Mnemonic) {
+            case "adc": // Add with Carry
+            case "and": // Logical And | BitMask
+            case "asl": // Arithmetic Shift Left | Left Bitshift
+
+            case "bcc": // Branch Carry Clear (traditional)
+            case "blt": // Branch Less than (Uncommon)
+                        // Branch C clear
+
+            case "bcs": // Branch Carry Set (Tradtional)
+            case "bgt": // Branch Greater than (Uncommon)
+                        // Branch C Set
+
+            case "bne": // Branch on Not Equal (Traditional)
+            case "bzc": // Branch on Zero Clear (Tataru/internal)
+                        // Branch Z clear
+
+            case "beq": // Branch on Equal (Traditional)
+            case "bzs": // Branch on Zero Set (Tataru/internal)
+                        // Branch Z Set
+
+            case "bvc": // Branch on Overflow Clear 
+                        // Branch V clear
+
+            case "bvs": // Branch on Overflow Set
+                        // Branch V Set
+
+            case "bpl": // Branch on Plus (Traditional)
+            case "bnc": // Branch Negative Clear (Tataru/internal)
+                        // Branch N clear
+
+            case "bmi": // Branch on Minus (Traditional)
+            case "bns": // Branch Negative Set (Tataru/internal)
+                        // Branch N set
+
+            case "bit": // Bit Check
+            case "brk": // Break
+
+            case "clc": // Clear Carry
+            case "cld": // Clear Decimal (nop)
+            case "clv": // Clear Overflow
+
+            case "cmp": // Compare (A)
+            case "cpx": // Compare X
+            case "cpy": // Compare Y
+
+            case "dec": // Decrement
+            case "dex": // Decrement X
+            case "dey": // Decrement Y
+
+            case "eor": // Exclusive Or (Traditional)
+            case "xor": // Exclusive Or (Alternative)
+
+            case "inc": // Increment
+            case "inx": // Increment X
+            case "iny": // Increment Y
+
+            case "jmp":  // Jump (Traditional)
+            case "jump": // Jump (Alternative)
+
+            case "jsr":  // Jump to Subroutine (Traditional)
+            case "call": // Call Procedure (Alternative)
+
+            case "lda": // Load with Accumolator
+            case "ldx": // Load with X
+            case "ldy": // Load with Y
+
+            case "lsr": // Logical Shift Right
+
+            case "nop": // No Operation
+
+            case "ora": // Logical Or 
+
+            case "pha": // Push Accumulator to Stack
+            case "php": // Push Processor Status to Stack
+            case "pla": // Pull from Stack into Accumulator
+            case "plp": // Pull from Stack into Processor Status
+
+            case "rol": // Roll Left
+            case "ror": // Roll Right
+
+            case "ret": // Return (Alternative)
+            case "rts": // Return from Subroutine (Traditional)
+
+            case "rti": // Return from Interrupt
+
+            case "sbc": // Subtract with Carry
+
+            case "sec": // Set Carry
+            case "sed": // Set Decimal
+            case "sei": // Set Interrupt
+
+            case "sta": // Store with Accumolator
+            case "stx": // Store with X
+            case "sty": // Store with Y
+
+            case "tax": // Transfer A to X
+            case "tay": // Transfer A to Y
+            case "tsx": // Transfer SP to X
+            case "txa": // Transfer X to A
+            case "txs": // Transfer X to SP
+            case "tya": // Transfer Y to A
+
+            // Illegal/Unofficial Instruction Mnemonics : (Taken from NoMoreSecrets with adjustments from ca65)
+
+            case "aso":
+            case "slo": // ca65/asm6f
+
+            case "rla": // ca65/asm6f
+            case "rln":
+
+            case "lse":
+            case "sre": // ca65/asm6f
+
+            case "rra": // ca65/asm6f
+            case "rrd":
+
+            case "aax":
+            case "sax": // ca65/asm6f
+
+            case "lax": // ca65/asm6f
+
+            case "dcm":
+            case "dcp": // ca65/asm6f
+
+            case "isc": // ca65/asm6f
+            case "usb":
+
+            case "ana":
+            case "anb":
+            case "anc": // ca65/asm6f
+
+            case "alr": // ca65/asm6f
+            case "asr":
+
+            case "arr": // ca65/asm6f
+            case "sbx":
+            case "xma":
+
+            case "axs": // ca65/asm6f
+
+            case "ahx":
+            case "axa":
+            case "sha": // ca65/asm6f
+            case "tea":
+
+            case "shx": // ca65/asm6f
+            case "sxa":
+            case "tex":
+            case "xas":
+
+            case "say":
+            case "shy": // ca65/asm6f
+            case "sya":
+            case "tey":
+
+            case "shs":
+            case "tas": // ca65/asm6f
+
+            case "lar":
+            case "las": // ca65/asm6f
+
+            case "ane":
+            case "axm":
+            case "xaa": // ca65/asm6f
+
+            case "hlt":
+            case "kil":
+            case "jam":
+            case "stp": // ca65/asm6f
+
+            default: break;
+        }
+    }
+
+    /// <summary>
+    /// Validates all parenthesis are closed for each opened in the correct order.
+    /// </summary>
+    /// <param name="Context">Array of encapsulating 'parenthesis' operators.</param>
+    /// <returns></returns>
+    private static bool IsContextComplete(char[] Context) {
+        char[] ResolveBuffer = new char[(Context.Length + 1) >> 1];
+        int    ResolveBufferIndex = 0;
+
+        for (int element_i = 0; element_i < Context.Length; element_i++) { 
+            switch (Context[element_i]) {
+                case '{':
+                case '[':
+                case '(':
+                    ResolveBuffer[ResolveBufferIndex] = Context[element_i];
+                    ResolveBufferIndex++;
+                    continue;
+
+                case '}':
+                case ']':
+
+                    if (ResolveBuffer[ResolveBufferIndex] != Context[element_i] - 2) return false;
+                    ResolveBufferIndex--;
+                    continue;
+                
+                case ')':
+                    if (ResolveBuffer[ResolveBufferIndex] != '(') return false;
+                    ResolveBufferIndex--;
+                    continue;
+
+                case '\"':
+                    if (ResolveBuffer[ResolveBufferIndex] == '\"') ResolveBufferIndex--;
+                    else {
+                        ResolveBuffer[ResolveBufferIndex] = Context[element_i];
+                        ResolveBufferIndex++;
+                    }
+                    continue;
+            }
+        }
+
+        return ResolveBufferIndex == 0;
+    }
+
     // returns (decoded, line pos)
     private static (AssembleTimeValue?, int) Descope(ref string[] Line, int Index) {
         Dictionary<string, AssembleTimeValue> ThisScope;
@@ -189,211 +408,142 @@ static partial class Program {
                 string[] Steps = TargetSource[(int)TargetIndex].Split(';');
                 for (int i_step = 0; i_step < Steps.Length - 1; i_step++) {
                     // until no longer possible, solve all defines
-                    while (Defines.Keys.Any(k => Regex.IsMatch(Steps[i_step], $@"\b{Regex.Escape(k)}\b"))){
+                    while (Defines.Keys.Any(k => Regex.IsMatch(Steps[i_step], $@"\b{Regex.Escape(k)}\b"))) {
                         foreach (KeyValuePair<string, string> Define in Defines) {
                             Steps[i_step] = Regex.Replace(Steps[i_step], $@"\b{Regex.Escape(Define.Key)}\b", Define.Value);
                         }
+
+                    }
+
+                    // identify function (keyword, macro call, implicit instruction, explicit instruction)
+
+                    // keywords
+
+                    switch (Steps[i_step]) {
+                        case "return":
+                            if (i_step == Steps.Length - 1)       return (ExitConditions.OK, null);   // VOID => NULL
+                            else if (Steps[i_step + 1] == "null") return (ExitConditions.OK, null);
+                            // else attempt to solve, if impossible return ERROR, NULL
+                            // otherwise return OK with return value
+                            break;
+
+                        case "proc":
+                            break;
+
+                        case "if":
+                            // wait for condition ()
+                            // if true enter and log we entered an if statement
+                            // otherwise skip over everything until we hit the if statement close
+                            // the skip will require reading things still, logging brace entry and closing
+                            break;
+
+                        case "else":
+                            // check for else if (), if case is else if then goto case "if"
+                            // otherwise act like if but contain no conditional
+                            break;
+
+                        case "loop":
+                            // indefinitely loop, when we hit the end re-enter loop at top
+                            break;
+
+                        case "break":
+                            // break from loop, scan for loop end
+                            // OR do not leak into next case in switch-case
+                            break;
+
+                        case "switch":
+                            // switch (num, string, exp) => case 
+                            break;
+
+                        case "case":
+                            // used in a switch case, target result code
+                            break;
+
+                        case "nmi":
+                            break;
+
+                        case "reset":
+                            break;
+
+                        case "irq":
+                            break;
+
+                        case "ref":
+                            break;
+
+                        case "void":
+                            break;
+
+                        case "int":
+                            break;
+
+                        case "string":
+                            break;
+
+                        case "exp":
+                            break;
+
+                        case "macro":
+                            break;
+
+                        case "bank":
+                            break;
+
+                        case "register":
+                            break;
+
+                        case "flag":
+                            break;
+
+                        case "scope":
+                            break;
+
+                        case "ux":
+                        case "ix":
+                        case "lx":
+                        case "bx":
+                        case "nx":
+                        case "ulx":
+                        case "ilx":
+                        case "ubx":
+                        case "ibx":
+                        case "unx":
+                        case "inx":
+                        case "ulnx":
+                        case "ilnx":
+                        case "num":
+                        case "x8":
+                        case "x16":
+                        case "x24":
+                        case "x32":
+                        case "x64":
+                        case "l16":
+                        case "l24":
+                        case "l32":
+                        case "l64":
+                        case "ln16":
+                        case "ln24":
+                        case "ln32":
+                        case "ln64":
+                        case "b16":
+                        case "b24":
+                        case "b32":
+                        case "b64":
+                        case "bn16":
+                        case "bn24":
+                        case "bn32":
+                        case "bn64":
+                            // cannot start with these as they are filter keywords for macros
+                            Console.WriteLine($"Cannot reserve type of {Steps[i_step]} as it is not a variable type, but variable type filter rule.");
+                            return (ExitConditions.ERROR, null);
                         
                     }
+
+
+
 
                     // descope and solve labels
                     SplitCodeLine(ref LineElements);
-
-                    if (LineElements.Length == 0) continue;
-
-                    (ExitConditions Status, string? Mnemonic) = MakeInstructionExplicit(LineElements[0]);
-                    
-                    if (Status == ExitConditions.ERROR) {
-                        Console.WriteLine(Mnemonic);
-                        return (ExitConditions.ERROR, null);
-                    } 
-
-                    switch (Mnemonic) {
-
-                        case "adc": // Add with Carry
-                        case "and": // Logical And | BitMask
-                        case "asl": // Arithmetic Shift Left | Left Bitshift
-
-                        case "bcc": // Branch Carry Clear (traditional)
-                        case "blt": // Branch Less than (Uncommon)
-                        // Branch C clear
-
-                        case "bcs": // Branch Carry Set (Tradtional)
-                        case "bgt": // Branch Greater than (Uncommon)
-                        // Branch C Set
-
-                        case "bne": // Branch on Not Equal (Traditional)
-                        case "bzc": // Branch on Zero Clear (Tataru/internal)
-                        // Branch Z clear
-
-                        case "beq": // Branch on Equal (Traditional)
-                        case "bzs": // Branch on Zero Set (Tataru/internal)
-                        // Branch Z Set
-
-                        case "bvc": // Branch on Overflow Clear 
-                        // Branch V clear
-
-                        case "bvs": // Branch on Overflow Set
-                        // Branch V Set
-
-                        case "bpl": // Branch on Plus (Traditional)
-                        case "bnc": // Branch Negative Clear (Tataru/internal)
-                        // Branch N clear
-
-                        case "bmi": // Branch on Minus (Traditional)
-                        case "bns": // Branch Negative Set (Tataru/internal)
-                        // Branch N set
-
-                        case "bit": // Bit Check
-                        case "brk": // Break
-
-                        case "clc": // Clear Carry
-                        case "cld": // Clear Decimal (nop)
-                        case "clv": // Clear Overflow
-
-                        case "cmp": // Compare (A)
-                        case "cpx": // Compare X
-                        case "cpy": // Compare Y
-
-                        case "dec": // Decrement
-                        case "dex": // Decrement X
-                        case "dey": // Decrement Y
-
-                        case "eor": // Exclusive Or (Traditional)
-                        case "xor": // Exclusive Or (Alternative)
-
-                        case "inc": // Increment
-                        case "inx": // Increment X
-                        case "iny": // Increment Y
-
-                        case "jmp":  // Jump (Traditional)
-                        case "jump": // Jump (Alternative)
-
-                        case "jsr":  // Jump to Subroutine (Traditional)
-                        case "call": // Call Procedure (Alternative)
-
-                        case "lda": // Load with Accumolator
-                        case "ldx": // Load with X
-                        case "ldy": // Load with Y
-
-                        case "lsr": // Logical Shift Right
-
-                        case "nop": // No Operation
-
-                        case "ora": // Logical Or 
-
-                        case "pha": // Push Accumulator to Stack
-                        case "php": // Push Processor Status to Stack
-                        case "pla": // Pull from Stack into Accumulator
-                        case "plp": // Pull from Stack into Processor Status
-
-                        case "rol": // Roll Left
-                        case "ror": // Roll Right
-                        
-                        case "ret": // Return (Alternative)
-                        case "rts": // Return from Subroutine (Traditional)
-
-                        case "rti": // Return from Interrupt
-
-                        case "sbc": // Subtract with Carry
-                        
-                        case "sec": // Set Carry
-                        case "sed": // Set Decimal
-                        case "sei": // Set Interrupt
-
-                        case "sta": // Store with Accumolator
-                        case "stx": // Store with X
-                        case "sty": // Store with Y
-
-                        case "tax": // Transfer A to X
-                        case "tay": // Transfer A to Y
-                        case "tsx": // Transfer SP to X
-                        case "txa": // Transfer X to A
-                        case "txs": // Transfer X to SP
-                        case "tya": // Transfer Y to A
-
-                        // Illegal/Unofficial Instruction Mnemonics : (Taken from NoMoreSecrets with adjustments from ca65)
-
-                        case "aso":
-                        case "slo": // ca65/asm6f
-
-                        case "rla": // ca65/asm6f
-                        case "rln":
-
-                        case "lse":
-                        case "sre": // ca65/asm6f
-
-                        case "rra": // ca65/asm6f
-                        case "rrd":
-
-                        case "aax":
-                        case "sax": // ca65/asm6f
-
-                        case "lax": // ca65/asm6f
-
-                        case "dcm":
-                        case "dcp": // ca65/asm6f
-
-                        case "isc": // ca65/asm6f
-                        case "usb":
-
-                        case "ana":
-                        case "anb":
-                        case "anc": // ca65/asm6f
-
-                        case "alr": // ca65/asm6f
-                        case "asr":
-
-                        case "arr": // ca65/asm6f
-                        case "sbx":
-                        case "xma":
-
-                        case "axs": // ca65/asm6f
-
-                        case "ahx":
-                        case "axa":
-                        case "sha": // ca65/asm6f
-                        case "tea":
-
-                        case "shx": // ca65/asm6f
-                        case "sxa":
-                        case "tex":
-                        case "xas":
-
-                        case "say":
-                        case "shy": // ca65/asm6f
-                        case "sya":
-                        case "tey":
-
-                        case "shs":
-                        case "tas": // ca65/asm6f
-
-                        case "lar":
-                        case "las": // ca65/asm6f
-
-                        case "ane":
-                        case "axm":
-                        case "xaa": // ca65/asm6f
-
-                        case "hlt":
-                        case "kil":
-                        case "jam":
-                        case "stp": // ca65/asm6f
-
-
-
-                        default: break;
-                    }
-                        
-                    (bool Ready, string? ContextNullHandler) = ResolveVariables(LineElements);
-
-                    if (ContextNullHandler == null) return (ExitConditions.ERROR, null);
-
-                    if (Ready) {
-                        // evalutate with Rosely API
-                    } else {
-                        // subscribe to waitlist
-                    }
                 }
 
                 do {

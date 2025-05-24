@@ -14,6 +14,20 @@
             internal enum ExitConditions { 
                 OK, ERROR, CONTINUE
             }
+
+            [Flags]
+            internal enum MemoryAddressMode {
+                Implicit  = 0x001,
+                Direct    = 0x002,
+                DirectX   = 0x004,
+                DirectY   = 0x008,
+                Absolute  = 0x010,
+                AbsoluteX = 0x020,
+                AbsoluteY = 0x030,
+                Indirect  = 0x080,
+                IndirectX = 0x100,
+                IndirectY = 0x200
+            }
         }
     }
 }
