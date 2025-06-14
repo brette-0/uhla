@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "Tataru": {
+      "commandName": "Project",
+      "commandLineArgs": "-i \"Main.s\" -o \"Main.NES\"",
+      "workingDirectory": "C:\\Users\\Administrator\\Documents\\GitHub\\Tataru\\Tataru\\Test"
+    }
+  }
+}

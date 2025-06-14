@@ -1,14 +1,37 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
+﻿using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
+
+using Tataru.Langauges;
 
 namespace Tataru {
 
     namespace Engine {
+        internal ref struct NonLiteral {
+            internal object value;
+            internal object parent;
+        }
+
+        internal struct RunTimeVariable {
+            internal int  size;   // in bytes
+            internal bool signed; // false => unsigned
+            internal bool endian; // false => little
+        }
+
+        internal enum AssembleTimeTypes {
+            INT,        // assemble time integer
+            STRING,     // assemble time string
+            EXP,        // expression (not a string)
+            VOID,       // void macro
+            SCOPE,      // scope type
+            RT,         // Runtime Variable
+            REG,        // Register
+            FLAG,       // CPU Status Flag
+            PROC,       // Procedure
+            INTER,      // Interrupt
+            BANK        // Bank
+        }
+
+
         internal enum ContextFetcherEnums {
             OK,
             MALFORMED,
@@ -30,7 +53,55 @@ namespace Tataru {
 
         }
 
+        internal enum ErrorLevels {
+            LOG, WARN, ERROR
+        }
+
+        internal enum ErrorTypes {
+            None, SyntaxError, ParsingError, NothingToDo
+        }
+
+        internal enum DecodingPhase {
+            TERMINAL, TOKEN
+        }
+
         static class Engine {
+
+            internal static readonly string[] Reserved = [
+                // directives
+                "cpu", "rom", "define", "undefine", "include", "assert",
+                
+                // assemble time types
+                "ref", "void", "int", "string", "exp", "bank", "proc", "reg", "flag", "scope", "namespace",
+                
+                // conditional assembly
+                "if", "else", "loop", "break", "switch", "case", "return",
+                
+                // runtime type filters
+                "ux", "ix", "lx", "bx", "ulx", "ilx", "ubx", "ibx", "num", 
+                "x8", "x16", "x24", "x32", "x64", "l16", "l24", "l32", "l64", "b16", "b24", "b32", "b64",
+            
+                // runtime type memory adjectives
+                "direct", "system", "program", "mapper", "field", "slow", "fast",
+
+                // runtime types
+                "u8", "i8", "u16", "i16", "u24", "i24", "u32", "i32", "u64", "i64",
+                "ub16", "ib16", "ub24", "ib24", "ub32", "ib32", "ub64", "ib64",
+
+                // Operators
+                // Math
+                "+", "-", "*", "/", "%", "&", "|", "^", "~", "(", ")",
+
+                // Indexing
+                ",", "[", "]",
+
+                // Numerical Systems
+                "%", "$", "£", "0x", "0b", "0o",
+
+                // Control
+                ";", ":", "#", "\\", "\"", "{", "}", "?", ">", "<", "!", ".", ","
+            ];
+
             /// <summary>
             /// Fetches context for the next step in decoding.
             /// Modified the Source File read Index for each accumulated context.
@@ -39,7 +110,7 @@ namespace Tataru {
             /// <param name="Source"></param>
             /// <param name="Index"></param>
             /// <returns></returns>
-            internal static (List<string[]>?, ContextFetcherEnums Code) FetchContext(string[] Source, int Index) {
+            internal static (List<string[]>?, ContextFetcherEnums Code) FetchContext(string[] Source, int Index, string Filename) {
                 List<string[]> Tokens           = [];
                 int      StartingIndex          = Index;            // Beginning Line Number for Error Reports
                 int      StringIndex            = 0;                // How far into the raw strings we are
@@ -72,7 +143,7 @@ namespace Tataru {
                                      * Syntax Error : Unexpected Parenthesis (1, 2) :\n{line information}
                                      */
                                     Terminal.Error(
-                                        ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Unexpected Parenthesis",
+                                        ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Parenthesis in")]} {Filename}",
                                         StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
                                     );
                                     return (null, ContextFetcherEnums.MALFORMED);
@@ -105,7 +176,7 @@ namespace Tataru {
                                      * Syntax Error : Unexpected Bracket (1, 2) :\n{line information}
                                      */
                                     Terminal.Error(
-                                        ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Unexpected Bracket",
+                                        ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Bracket in")]} {Filename}",
                                         StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
                                     );
                                     return (null, ContextFetcherEnums.MALFORMED);
@@ -127,7 +198,7 @@ namespace Tataru {
                                      * Syntax Error : Unexpected Brace (1, 2) :\n{line information}
                                      */
                                     Terminal.Error(
-                                        ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Unexpected Brace",
+                                        ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Brace in")]} {Filename}",
                                         StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
                                     );
                                     return (null, ContextFetcherEnums.MALFORMED);
@@ -150,7 +221,7 @@ namespace Tataru {
                                         */
 
                                     Terminal.Error(
-                                        ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Unexpected Line Termination",
+                                        ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Line Termination in")]} {Filename}",
                                         StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, StringIndex, 1)
                                     );
                                     return (null, ContextFetcherEnums.MALFORMED);
@@ -164,18 +235,18 @@ namespace Tataru {
                     // if no more context can be supplied, return unterminated and log error to user
                     if (++Index == Source.Length) {
                         Terminal.Error(
-                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Could not Fetch Required Context",
+                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Could not Fetch Required Context from")]} {Filename}",
                             StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle($"{AccumulatedContext} ", StringIndex, 1)        
                         );
                         return (null, ContextFetcherEnums.UNTERMINATED);
                     }
 
-                    TokenizedBuffer = [.. TokenizedBuffer.TakeLast(TokenizedBuffer.Length - TokenizedCheckPoint)];
+                    TokenizedBuffer     = [.. TokenizedBuffer.TakeLast(TokenizedBuffer.Length - TokenizedCheckPoint)];
                     TokenizedCheckPoint = 0;
-                    StringIndex = VerifiedStringIndex;  // Reset for more accurate wiggling
+                    StringIndex         = VerifiedStringIndex;  // Reset for more accurate wiggling
 
                     AccumulatedContext += Source[Index];
-                    TokenizedBuffer = [.. TokenizedBuffer, .. Tokenize(Source[Index])];
+                    TokenizedBuffer     = [.. TokenizedBuffer, .. Tokenize(Source[Index])];
 
                     HasSteps |= TokenizedBuffer.Contains(";");
 
@@ -185,47 +256,176 @@ namespace Tataru {
                 return (Tokens, ContextFetcherEnums.OK);
             }
 
-            internal enum ErrorLevels {
-                LOG, WARN, ERROR
-            }
-
-            internal enum ErrorTypes {
-                SyntaxError
-            }
-
-            internal enum DecodingPhase {
-                TOKEN
-            }
-
             internal static class Terminal {
-                internal static void WriteInfo(ErrorLevels ErrorLevel, ErrorTypes ErrorType, DecodingPhase Phase, string Message, int LineNumber, int? StepNumber, string Context) {
-                    Console.ForegroundColor = ErrorLevel switch {ErrorLevels.LOG => ConsoleColor.Cyan, ErrorLevels.WARN => ConsoleColor.Yellow, ErrorLevels.ERROR => ConsoleColor.Red, _ => ConsoleColor.White};
-                    Console.WriteLine( ErrorType switch {
-                                            ErrorTypes.SyntaxError => "Syntax Error",
-                                            _                      => "Unknown Error"
-                                   } + " During " + Phase switch {
-                                            DecodingPhase.TOKEN => "Token Decoding",
-                                            _                   => "Unknown"
-                                   } + $" Phase : {Message} " + (StepNumber == null ? $"({LineNumber})" : $"({LineNumber}, {StepNumber})")+ $" : {Context}");
+                [Flags]
+                internal enum AssemblyFlags {
+                    Complete = 0x80,              // indicates that no context is required, as a task was completed here
+                    Failed   = 0x40
+                }
+                
+                internal static (string? InputPath, string? OutputPath, AssemblyFlags Flags) Parse(string[] args) {
+                    string? InputPath = null, OutPutPath = null;
+                    int StringIndex = 0;
+                    string Flattened = args.ToString()!;
+                    AssemblyFlags Flags = 0x00;
+
+                    for (int i = 0; i < args.Length; i++, StringIndex += i == args.Length ? 0 : args[i].Length) {
+                        switch (args[i]) {
+                            case "-i":
+                            case "--input":
+                                if (i == args.Length - 1) {
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Input Path Provided")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Flags |= AssemblyFlags.Failed;
+                                } else if (InputPath != null) {
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Input Source File Path has already been specified")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Flags |= AssemblyFlags.Failed;
+                                } else {
+                                    InputPath = args[++i];
+                                }
+                                break;
+
+                            case "-o":
+                            case "--output":
+                                if (i == args.Length - 1) {
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Output Path Provided")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Flags |= AssemblyFlags.Failed;
+                                } else if (OutPutPath != null) {
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Output Binary File Path has already been specified")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Flags |= AssemblyFlags.Failed;
+                                }
+                                OutPutPath = args[++i];
+                                break;
+
+                            case "-h":
+                            case "--help":
+                                Flags |= AssemblyFlags.Complete;
+                                Log(ErrorTypes.None, DecodingPhase.TERMINAL,
+$"""
+Numinous 2a03 - GPL V2 Brette Allen 2026
+
+-i | --input        | [path]    | {Language.Connectives[(Program.ActiveLanguage, "Entrypoint Source Assembly File")]}
+-o | --output       | [path]    | {Language.Connectives[(Program.ActiveLanguage, "Ouput ROM/Disk Binary Output")]}
+-h | --help         |           | {Language.Connectives[(Program.ActiveLanguage, "Display the help string (you did that)")]}
+-l | --language     | [lang]    | {Language.Connectives[(Program.ActiveLanguage, "Choose a langauge to use")]}
+-L | --Languages    |           | {Language.Connectives[(Program.ActiveLanguage, "Display all Languages")]}
+       
+""", null, null, null);
+                                break;
+
+                            case "-l":
+                            case "--language":
+                                if (i == args.Length - 1) {
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Language Provided")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Flags |= AssemblyFlags.Failed;
+                                    break;
+                                }
+
+                                Program.ActiveLanguage = args[++i] switch {
+                                    "en_gb" => Languages.English_UK,
+                                    "en_us" => Languages.English_US,
+                                    "es"    => Languages.Spanish,
+                                    "de"    => Languages.German,
+                                    "ja"    => Languages.Japanese,
+                                    "fr"    => Languages.French,
+                                    "pt"    => Languages.Portuguese,
+                                    "ru"    => Languages.Russian,
+                                    "it"    => Languages.Italian,
+                                    "ne"    => Languages.Dutch,
+                                    "pl"    => Languages.Polish,
+                                    "tr"    => Languages.Turkish,
+                                    "vt"    => Languages.Vietnamese,
+                                    "in"    => Languages.Indonesian,
+                                    "cz"    => Languages.Czech,
+                                    "ko"    => Languages.Korean,
+                                    "uk"    => Languages.Ukrainian,
+                                    "ar"    => Languages.Arabic,
+                                    "sw"    => Languages.Swedish,
+                                    "pe"    => Languages.Persian,
+                                    "ch"    => Languages.Chinese,
+
+                                    _       => Languages.Null
+                                };
+
+                                if (Program.ActiveLanguage == Languages.Null) {
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Invalid Language Provided")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Flags |= AssemblyFlags.Failed;
+                                }
+                                break;
+
+                            case "-L":
+                            case "--Languages":
+                                Console.Write(@"
+English (UK)      ""-l en_gb""
+English (US)      ""-l en_us""
+Español           ""-l es""
+Deutsch           ""-l de""
+日本語              ""-l ja""
+Français          ""-l fr""
+Português         ""-l pt""
+Русский           ""-l ru""
+Italiano          ""-l it""
+Nederlands        ""-l ne""
+Polski            ""-l pl""
+Türkçe            ""-l tr""
+Tiếng Việt        ""-l vt""
+Bahasa Indonesia  ""-l in""
+Čeština           ""-l cz""
+한국어              ""-l ko""
+Українська        ""-l uk""
+العربية           ""-l ar""
+Svenska           ""-l sw""
+فارسی             ""-l pe""
+中文               ""-l ch""
+");
+                                break;
+
+                            default:
+                                Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Unrecognized Terminal Argument")]} '{args[i]}'.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                Flags |= AssemblyFlags.Failed;
+                                break;
+                        }
+                    }
+
+                    return (InputPath, OutPutPath, Flags);
+                }
+
+                internal static void WriteInfo(ErrorLevels ErrorLevel, ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context) {
+                    Languages UseLanguage = Program.ActiveLanguage;
+                    if (Program.ActiveLanguage == Languages.Null) UseLanguage = Program.ActiveLanguage = Language.CaptureSystemLanguage();
+                    if (Program.ActiveLanguage == Languages.Null) UseLanguage = Program.ActiveLanguage = Program.ActiveLanguage = Languages.English_UK;
+
+
+                    Console.ForegroundColor = ErrorLevel switch {
+                        ErrorLevels.LOG     => ConsoleColor.Cyan, 
+                        ErrorLevels.WARN    => ConsoleColor.Yellow, 
+                        ErrorLevels.ERROR   => ConsoleColor.Red, 
+                        
+                        _                   => ConsoleColor.White
+                    };
+
+                    string ErrorTypeString, ErrorTypeConnective, LocationString, DecodePhaseString;
+
+                    ErrorTypeString     = Language.ErrorTypeMessages[(UseLanguage, ErrorType)];
+                    ErrorTypeConnective = Language.Connectives[(UseLanguage, "During")];
+                    DecodePhaseString   = Language.DecodePhaseMessages[(UseLanguage, Phase)];
+                    LocationString      = LineNumber == null ? "" : (StepNumber == null ? $"({LineNumber})" : $"({LineNumber}, {StepNumber})");
+                    Context = Context == null ? "" : $": {Context}";
+
+                    // Something Error During Something Phase :: Could not do a thing (1, 2) : ah, the issue is here.
+                    Console.WriteLine($"{ErrorTypeString} {ErrorTypeConnective} {DecodePhaseString} :: {Message} {LocationString}{Context}");
                     Console.ResetColor();
                 }
 
-                internal static void   Log(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int LineNumber, int? StepNumber, string Context) {
+                internal static void   Log(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context) {
                     WriteInfo(ErrorLevels.LOG,   ErrorType, Phase, Message, LineNumber, StepNumber, Context);
                 }
 
-                internal static void  Warn(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int LineNumber, int? StepNumber, string Context) {
+                internal static void  Warn(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context) {
                     WriteInfo(ErrorLevels.WARN,  ErrorType, Phase, Message, LineNumber, StepNumber, Context);
                 }
 
-                internal static void Error(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int LineNumber, int? StepNumber, string Context) {
+                internal static void Error(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context) {
                     WriteInfo(ErrorLevels.ERROR, ErrorType, Phase, Message, LineNumber, StepNumber, Context);
-                }
-            }
-
-            internal static partial class Error {
-                public static void WriteError(string message) {
-                    Console.WriteLine(ApplyWiggle(message, 0, message.Length)); // example usage
                 }
             }
 
@@ -242,6 +442,16 @@ namespace Tataru {
                 return builder.ToString();
             }
 
+            internal static void AddContext(string Filepath) {
+                string[] Throwaway = File.ReadAllLines(Filepath);
+                if (Throwaway.Length == 0) {
+                    Terminal.Warn(ErrorTypes.NothingToDo, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Source file")]} {Filepath} {Language.Connectives[(Program.ActiveLanguage, "has no contents")]}", null, null, null);
+                    return;
+                }
+                Program.SourceFileNameBuffer.Add(Filepath);
+                Program.SourceFileContentBuffer.Add(Throwaway);
+            }
+
 
             // Generated function : I don't know how regex works
             /// <summary>
@@ -249,7 +459,7 @@ namespace Tataru {
             /// </summary>
             /// <param name="input"></param>
             /// <returns></returns>
-            public static List<string> Tokenize(string input) {
+            internal static List<string> Tokenize(string input) {
                 // The characters to treat as separators, space included
                 string separators = @"!""£$%\^&*()+\-=\[\]{};:'@#~\\|,<.>/?\s";
 
