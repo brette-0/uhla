@@ -266,7 +266,7 @@ namespace Tataru {
                 internal static (string? InputPath, string? OutputPath, AssemblyFlags Flags) Parse(string[] args) {
                     string? InputPath = null, OutPutPath = null;
                     int StringIndex = 0;
-                    string Flattened = args.ToString()!;
+                    string Flattened = string.Join(" ", args);
                     AssemblyFlags Flags = 0x00;
 
                     for (int i = 0; i < args.Length; i++, StringIndex += i == args.Length ? 0 : args[i].Length) {
@@ -304,9 +304,9 @@ $"""
 Numinous 2a03 - GPL V2 Brette Allen 2026
 
 -i | --input        | [path]    | {Language.Connectives[(Program.ActiveLanguage, "Entrypoint Source Assembly File")]}
--o | --output       | [path]    | {Language.Connectives[(Program.ActiveLanguage, "Ouput ROM/Disk Binary Output")]}
+-o | --output       | [path]    | {Language.Connectives[(Program.ActiveLanguage, "Output ROM/Disk Binary Output")]}
 -h | --help         |           | {Language.Connectives[(Program.ActiveLanguage, "Display the help string (you did that)")]}
--l | --language     | [lang]    | {Language.Connectives[(Program.ActiveLanguage, "Choose a langauge to use")]}
+-l | --language     | [lang]    | {Language.Connectives[(Program.ActiveLanguage, "Choose a language to use")]}
 -L | --Languages    |           | {Language.Connectives[(Program.ActiveLanguage, "Display all Languages")]}
        
 """, null, null, null);
@@ -377,10 +377,11 @@ Svenska           ""-l sw""
 فارسی             ""-l pe""
 中文               ""-l ch""
 ");
+                                Flags |= AssemblyFlags.Complete;
                                 break;
 
                             default:
-                                Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Unrecognized Terminal Argument")]} '{args[i]}'.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Unrecognized Terminal Argument")]}.", null, null, ApplyWiggle(Flattened, 1 + StringIndex, args[i].Length));
                                 Flags |= AssemblyFlags.Failed;
                                 break;
                         }
@@ -405,6 +406,11 @@ Svenska           ""-l sw""
 
                     string ErrorTypeString, ErrorTypeConnective, LocationString, DecodePhaseString;
 
+                    if (ErrorType  == ErrorTypes.None) {
+                        Console.WriteLine(Message);
+                        goto Exit;
+                    }
+
                     ErrorTypeString     = Language.ErrorTypeMessages[(UseLanguage, ErrorType)];
                     ErrorTypeConnective = Language.Connectives[(UseLanguage, "During")];
                     DecodePhaseString   = Language.DecodePhaseMessages[(UseLanguage, Phase)];
@@ -413,6 +419,8 @@ Svenska           ""-l sw""
 
                     // Something Error During Something Phase :: Could not do a thing (1, 2) : ah, the issue is here.
                     Console.WriteLine($"{ErrorTypeString} {ErrorTypeConnective} {DecodePhaseString} :: {Message} {LocationString}{Context}");
+                    
+                Exit:
                     Console.ResetColor();
                 }
 
