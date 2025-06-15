@@ -2,9 +2,9 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
-using Tataru.Engine;
+using Numinous.Engine;
 
-namespace Tataru {
+namespace Numinous {
     namespace Langauges {
         internal enum Languages {
             English_UK,

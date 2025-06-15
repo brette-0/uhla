@@ -1,9 +1,9 @@
 ﻿using System.Text;
 using System.Text.RegularExpressions;
 
-using Tataru.Langauges;
+using Numinous.Langauges;
 
-namespace Tataru {
+namespace Numinous {
 
     namespace Engine {
         internal ref struct NonLiteral {
@@ -29,6 +29,18 @@ namespace Tataru {
             PROC,       // Procedure
             INTER,      // Interrupt
             BANK        // Bank
+        }
+
+        internal enum AssemleTimeValueStatus {
+            DECLARED,   // int foo;
+            PARTIAL,    // int foo = defined_later;
+            OK          // int foo = 2;
+        }
+
+        internal struct AssembleTimeValue {
+            internal AssembleTimeTypes Type;
+            internal AssemleTimeValueStatus Status;
+            object Value;
         }
 
 
@@ -65,7 +77,40 @@ namespace Tataru {
             TERMINAL, TOKEN
         }
 
-        static class Engine {
+        namespace Types {
+            internal class Scope;
+        }
+
+        internal struct DatabaseItem {
+            internal object value;
+            internal object parent;
+        }
+
+        internal static class Engine {
+
+            /// <summary>
+            /// Used for reordering the Tokens into the mutation chronology.
+            /// Parenthesis, indexing, attributes and scope routing are handling differently.
+            /// Incrementor and Decrementor is also handled seperately
+            /// </summary>
+            internal static readonly List<string>[] OrderedOperators = [
+                /* Unary            */ ["+", "-", "~", "!"],
+                /* Switch           */ ["switch"],
+                /* Multiplicative   */ ["*", "/", "%"],
+                /* Additive         */ ["+", "-"],
+                /* Shift            */ [">>", "<<"],
+                /* Boolean And      */ ["&"],
+                /* Boolean Xor      */ ["^"],
+                /* Boolean Or       */ ["|"],
+                /* Relational       */ [">", "<", ">=", "<=", "<=>"],
+                /* Equality         */ ["==", "!="],
+                /* Conditional And  */ ["&&"],
+                /* Conditional Or   */ ["||"],
+                /* Null coalesce    */ ["??"],
+                /* Ternary          */ ["?", ":"],                                                                  // Violates VOV
+                /* Assignment       */ ["=", "+=", "-=", "*=", "/=", "%=", "|=", "&=", "^=", "??=", ">>=", "<<="],  // Modifies in post
+                /* Term             */ [","]
+            ];
 
             internal static readonly string[] Reserved = [
                 // directives
@@ -89,6 +134,18 @@ namespace Tataru {
                 "ub16", "ib16", "ub24", "ib24", "ub32", "ib32", "ub64", "ib64",
 
                 // Operators
+                // Assignment
+                "=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", ">>=", "<<=",
+
+                // Unary
+                "==", "!=", "<=", ">=", ">", "<",
+
+                // LLambda
+                "=>",
+
+                // Null Coalescence
+                "??", "??=", "?.",
+
                 // Math
                 "+", "-", "*", "/", "%", "&", "|", "^", "~", "(", ")",
 
@@ -101,6 +158,16 @@ namespace Tataru {
                 // Control
                 ";", ":", "#", "\\", "\"", "{", "}", "?", ">", "<", "!", ".", ","
             ];
+
+            internal static List<string> ReadValueReorderer(string[] Tokens) {
+                List<string> Response = [];
+
+                
+
+
+
+                return Response;
+            }
 
             /// <summary>
             /// Fetches context for the next step in decoding.
@@ -354,12 +421,12 @@ Numinous 2a03 - GPL V2 Brette Allen 2026
 
                             case "-L":
                             case "--Languages":
-                                Console.Write(@"
+                                Log(ErrorTypes.None, DecodingPhase.TERMINAL,@"
 English (UK)      ""-l en_gb""
 English (US)      ""-l en_us""
 Español           ""-l es""
 Deutsch           ""-l de""
-日本語              ""-l ja""
+日本語            ""-l ja""
 Français          ""-l fr""
 Português         ""-l pt""
 Русский           ""-l ru""
@@ -370,13 +437,13 @@ Türkçe            ""-l tr""
 Tiếng Việt        ""-l vt""
 Bahasa Indonesia  ""-l in""
 Čeština           ""-l cz""
-한국어              ""-l ko""
+한국어            ""-l ko""
 Українська        ""-l uk""
 العربية           ""-l ar""
 Svenska           ""-l sw""
 فارسی             ""-l pe""
-中文               ""-l ch""
-");
+中文              ""-l ch""
+", null, null, null);
                                 Flags |= AssemblyFlags.Complete;
                                 break;
 
