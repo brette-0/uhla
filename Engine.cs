@@ -184,7 +184,7 @@ namespace Numinous {
                 int      StartingIndex          = Index;            // Beginning Line Number for Error Reports
                 int      StringIndex            = 0;                // How far into the raw strings we are
                 int      VerifiedStringIndex    = 0;                // Sum of all verified (thus far) steps
-                int      BufferTaleStringIndex  = 0;                // Last Open Encapsulation
+                int      ContainerBufferTaleStringIndex  = 0;                // Last Open Encapsulation
                 string   AccumulatedContext     = Source[Index];    // Accumolated Context for Error Reporting
 
                 string[] TokenizedBuffer        = [.. Tokenize(Source[Index])];
@@ -241,7 +241,7 @@ namespace Numinous {
                                     if (Hierachy != -1 && ContainerBuffer[Hierachy] != '(') {
                                         Terminal.Error(
                                             ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Comma, only parenthesis '()' and string parenthesis '\"\"' may contain commas")]}.",
-                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
+                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, StringIndex + 1, 1)
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     }
@@ -250,8 +250,8 @@ namespace Numinous {
 
                                     if (UnresolvedTermsBuffer[1 + Hierachy] == -1) {
                                         Terminal.Error(
-                                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Comma, the amount of terms to resolve is")]}: {nCapturedItemsBuffer[1 + Hierachy]}.",
-                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
+                                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Comma, the amount of terms to resolve is")]} {1 + nCapturedItemsBuffer[1 + Hierachy]}.",
+                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, StringIndex + 1, 1)
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     }
@@ -259,10 +259,10 @@ namespace Numinous {
 
                                 case '(':
                                     ++Hierachy;
-                                    nCapturedItemsBuffer[1 + Hierachy] = 0;        // New set of terms (begin 0)
-                                    ResolvingTermsBuffer[1 + Hierachy] = false;    // Mark as fetching
-                                    ContainerBuffer[Hierachy] = '(';      // Log last used container
-                                    BufferTaleStringIndex = StringIndex;
+                                    nCapturedItemsBuffer[1 + Hierachy] = 0;         // New set of terms (begin 0)
+                                    ResolvingTermsBuffer[1 + Hierachy] = false;     // Mark as fetching
+                                    ContainerBuffer[Hierachy] = '(';                // Log last used container
+                                    ContainerBufferTaleStringIndex = StringIndex;
                                     continue;
 
                                 case ')':
@@ -273,14 +273,14 @@ namespace Numinous {
                                          */
                                         Terminal.Error(
                                             ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Parenthesis in")]} {Filename}",
-                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
+                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, ContainerBufferTaleStringIndex + 1, StringIndex - ContainerBufferTaleStringIndex)
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     } else {
                                         if (UnresolvedTermsBuffer[1 + Hierachy] != 0) {
                                             Terminal.Error(
-                                                ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Terms left unaccouned for")]}: {nCapturedItemsBuffer[1 + Hierachy] - UnresolvedTermsBuffer[1 + Hierachy]}",
-                                                StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
+                                                ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Terms left unaccounted for")]}: {1 + nCapturedItemsBuffer[1 + Hierachy] - UnresolvedTermsBuffer[1 + Hierachy]}",
+                                                StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, StringIndex, 1)
                                             );
                                             return (null, ContextFetcherEnums.MALFORMED);
                                         }
@@ -291,7 +291,7 @@ namespace Numinous {
                                 case '[':
                                     Hierachy++;
                                     ContainerBuffer[Hierachy] = '[';
-                                    BufferTaleStringIndex = StringIndex;
+                                    ContainerBufferTaleStringIndex = StringIndex;
                                     continue;
 
                                 case ']':
@@ -302,7 +302,7 @@ namespace Numinous {
                                          */
                                         Terminal.Error(
                                             ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Bracket in")]} {Filename}",
-                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
+                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, ContainerBufferTaleStringIndex + 1, StringIndex - ContainerBufferTaleStringIndex)
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     } else {
@@ -313,7 +313,7 @@ namespace Numinous {
                                 case '{':
                                     Hierachy++;
                                     ContainerBuffer[Hierachy] = '[';
-                                    BufferTaleStringIndex = StringIndex;
+                                    ContainerBufferTaleStringIndex = StringIndex;
                                     continue;
 
                                 case '}':
@@ -324,7 +324,7 @@ namespace Numinous {
                                          */
                                         Terminal.Error(
                                             ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Brace in")]} {Filename}",
-                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
+                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, ContainerBufferTaleStringIndex + 1, StringIndex - ContainerBufferTaleStringIndex)
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     } else {
@@ -336,8 +336,8 @@ namespace Numinous {
                                     if (Hierachy == -1) {
                                         if (UnresolvedTermsBuffer[0] != 0) {
                                             Terminal.Error(
-                                                ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Terms left unaccounted for")]}: {nCapturedItemsBuffer[0] - UnresolvedTermsBuffer[0]}",
-                                                StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
+                                                ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Terms left unaccounted for")]}: {1 + nCapturedItemsBuffer[0] - UnresolvedTermsBuffer[0]}",
+                                                StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, StringIndex, 1)
                                             );
                                             return (null, ContextFetcherEnums.MALFORMED);
                                         }
