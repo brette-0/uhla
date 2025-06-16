@@ -200,7 +200,7 @@ namespace Numinous {
                 
                 // Used to unify between string and char operator identifiers
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                void UnifiedModularHunk() {
+                void UnifiedModularCompareAssignment() {
                     if (!ResolvingTermsBuffer[1 + Hierachy]) {
                         UnresolvedTermsBuffer[1 + Hierachy] = nCapturedItemsBuffer[1 + Hierachy];
                         ResolvingTermsBuffer[1 + Hierachy] = true;
@@ -210,159 +210,158 @@ namespace Numinous {
                 do {
                     Hierachy = -1;
                     for (int i = 0; i < TokenizedBuffer.Length; StringIndex += TokenizedBuffer[i].Length, i++) {
-                        if      (TokenizedBuffer[i] == "+=") UnifiedModularHunk();
-                        else if (TokenizedBuffer[i] == "-=") UnifiedModularHunk();
-                        else if (TokenizedBuffer[i] == "*=") UnifiedModularHunk();
-                        else if (TokenizedBuffer[i] == "/=") UnifiedModularHunk();
-                        else if (TokenizedBuffer[i] == "%=") UnifiedModularHunk();
-                        else if (TokenizedBuffer[i] == "|=") UnifiedModularHunk();
-                        else if (TokenizedBuffer[i] == "^=") UnifiedModularHunk();
-                        else if (TokenizedBuffer[i] == "&=") UnifiedModularHunk();
-                        else if (TokenizedBuffer[i] == ">>=") UnifiedModularHunk();
-                        else if (TokenizedBuffer[i] == "<<=") UnifiedModularHunk();
-                        else if (TokenizedBuffer[i] == "??=") UnifiedModularHunk();
+                        if (TokenizedBuffer[i][0] == '\"') {
+                            if ((Hierachy == -1) || (ContainerBuffer[Hierachy] != '\"')) {
+                                ContainerBuffer[++Hierachy] = '\"';
+                            } else {
+                                ContainerBuffer[Hierachy] = '\x00';  // clear to indicate closed string
+                                Hierachy--;
+                            }
+                        }
+                        else if (Hierachy != -1 && ContainerBuffer[Hierachy] == '\"') continue;
+                        else if (TokenizedBuffer[i] == "+=")  UnifiedModularCompareAssignment();
+                        else if (TokenizedBuffer[i] == "-=")  UnifiedModularCompareAssignment();
+                        else if (TokenizedBuffer[i] == "*=")  UnifiedModularCompareAssignment();
+                        else if (TokenizedBuffer[i] == "/=")  UnifiedModularCompareAssignment();
+                        else if (TokenizedBuffer[i] == "%=")  UnifiedModularCompareAssignment();
+                        else if (TokenizedBuffer[i] == "|=")  UnifiedModularCompareAssignment();
+                        else if (TokenizedBuffer[i] == "^=")  UnifiedModularCompareAssignment();
+                        else if (TokenizedBuffer[i] == "&=")  UnifiedModularCompareAssignment();
+                        else if (TokenizedBuffer[i] == ">>=") UnifiedModularCompareAssignment();
+                        else if (TokenizedBuffer[i] == "<<=") UnifiedModularCompareAssignment();
+                        else if (TokenizedBuffer[i] == "??=") UnifiedModularCompareAssignment();
+
+                        else if (TokenizedBuffer[i] == "$\"") ContainerBuffer[++Hierachy] = '$';
                         else switch (TokenizedBuffer[i][0]) {
-                            case '=':
-                                UnifiedModularHunk();
-                                break;
+                                case '=':
+                                    UnifiedModularCompareAssignment();
+                                    break;
 
-                            case ',':
-                                if (Hierachy != -1 && ContainerBuffer[Hierachy] != '(' && ContainerBuffer[Hierachy] != '\"') {
-                                    Terminal.Error(
-                                        ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Comma, only parenthesis '()' and string parenthesis '\"\"' may contain commas")]}.",
-                                        StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
-                                    );
-                                    return (null, ContextFetcherEnums.MALFORMED);
-                                }
-                                if (ResolvingTermsBuffer[1 + Hierachy]) UnresolvedTermsBuffer[1 + Hierachy]--; 
-                                else                                    nCapturedItemsBuffer[ 1 + Hierachy]++;
-
-                                if (UnresolvedTermsBuffer[1 + Hierachy] == -1) {
-                                    Terminal.Error(
-                                        ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Comma, the amount of terms to resolve is")]}: {nCapturedItemsBuffer[1 + Hierachy]}.",
-                                        StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
-                                    );
-                                    return (null, ContextFetcherEnums.MALFORMED);
-                                }
-                                break;
-
-                            case '(':
-                                ++Hierachy;
-
-                                nCapturedItemsBuffer[ 1 + Hierachy] = 0;        // New set of terms (begin 0)
-                                ResolvingTermsBuffer[ 1 + Hierachy] = false;    // Mark as fetching
-                                ContainerBuffer[Hierachy]           = '(';      // Log last used container
-                                BufferTaleStringIndex = StringIndex;
-                                continue;
-
-                            case ')':
-                                if (Hierachy == -1 || ContainerBuffer[Hierachy] != '(') {
-                                    /*
-                                     * May look like [1 + 2)    <-- invalid termination
-                                     * Syntax Error : Unexpected Parenthesis (1, 2) :\n{line information}
-                                     */
-                                    Terminal.Error(
-                                        ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Parenthesis in")]} {Filename}",
-                                        StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
-                                    );
-                                    return (null, ContextFetcherEnums.MALFORMED);
-                                } else {
-                                    if (UnresolvedTermsBuffer[1 + Hierachy] != 0) {
+                                case ',':
+                                    if (Hierachy != -1 && ContainerBuffer[Hierachy] != '(') {
                                         Terminal.Error(
-                                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Terms left unaccouned for")]}: {nCapturedItemsBuffer[1 + Hierachy] - UnresolvedTermsBuffer[1 + Hierachy]}",
+                                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Comma, only parenthesis '()' and string parenthesis '\"\"' may contain commas")]}.",
                                             StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     }
-                                    Hierachy--;
-                                    continue;
-                                }
+                                    if (ResolvingTermsBuffer[1 + Hierachy]) UnresolvedTermsBuffer[1 + Hierachy]--;
+                                    else nCapturedItemsBuffer[1 + Hierachy]++;
 
-                            case '\"':
-                                if (ContainerBuffer[Hierachy] == '\"') {
-                                    ContainerBuffer[Hierachy] = '\x00';  // clear to indicate closed string
-                                    Hierachy--;
+                                    if (UnresolvedTermsBuffer[1 + Hierachy] == -1) {
+                                        Terminal.Error(
+                                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Comma, the amount of terms to resolve is")]}: {nCapturedItemsBuffer[1 + Hierachy]}.",
+                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
+                                        );
+                                        return (null, ContextFetcherEnums.MALFORMED);
+                                    }
+                                    break;
+
+                                case '(':
+                                    ++Hierachy;
+                                    nCapturedItemsBuffer[1 + Hierachy] = 0;        // New set of terms (begin 0)
+                                    ResolvingTermsBuffer[1 + Hierachy] = false;    // Mark as fetching
+                                    ContainerBuffer[Hierachy] = '(';      // Log last used container
+                                    BufferTaleStringIndex = StringIndex;
                                     continue;
-                                } else {
+
+                                case ')':
+                                    if (Hierachy == -1 || ContainerBuffer[Hierachy] != '(') {
+                                        /*
+                                         * May look like [1 + 2)    <-- invalid termination
+                                         * Syntax Error : Unexpected Parenthesis (1, 2) :\n{line information}
+                                         */
+                                        Terminal.Error(
+                                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Parenthesis in")]} {Filename}",
+                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
+                                        );
+                                        return (null, ContextFetcherEnums.MALFORMED);
+                                    } else {
+                                        if (UnresolvedTermsBuffer[1 + Hierachy] != 0) {
+                                            Terminal.Error(
+                                                ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Terms left unaccouned for")]}: {nCapturedItemsBuffer[1 + Hierachy] - UnresolvedTermsBuffer[1 + Hierachy]}",
+                                                StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
+                                            );
+                                            return (null, ContextFetcherEnums.MALFORMED);
+                                        }
+                                        Hierachy--;
+                                        continue;
+                                    }
+
+                                case '[':
                                     Hierachy++;
-                                    ContainerBuffer[Hierachy] = '\"';
+                                    ContainerBuffer[Hierachy] = '[';
+                                    BufferTaleStringIndex = StringIndex;
                                     continue;
-                                }
 
-                            case '[':
-                                Hierachy++;
-                                ContainerBuffer[Hierachy] = '[';
-                                BufferTaleStringIndex = StringIndex;
-                                continue;
-
-                            case ']':
-                                if (Hierachy == -1 || ContainerBuffer[Hierachy] != '[') {
-                                    /*
-                                     * May look like {1 + 2]    <-- invalid termination
-                                     * Syntax Error : Unexpected Bracket (1, 2) :\n{line information}
-                                     */
-                                    Terminal.Error(
-                                        ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Bracket in")]} {Filename}",
-                                        StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
-                                    );
-                                    return (null, ContextFetcherEnums.MALFORMED);
-                                } else {
-                                    Hierachy--;
-                                    continue;
-                                }
-
-                            case '{':
-                                Hierachy++;
-                                ContainerBuffer[Hierachy] = '[';
-                                BufferTaleStringIndex = StringIndex;
-                                continue;
-
-                            case '}':
-                                if (Hierachy == -1 || ContainerBuffer[Hierachy] != '[') {
-                                    /*
-                                     * May look like (1 + 2}    <-- invalid termination
-                                     * Syntax Error : Unexpected Brace (1, 2) :\n{line information}
-                                     */
-                                    Terminal.Error(
-                                        ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Brace in")]} {Filename}",
-                                        StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
-                                    );
-                                    return (null, ContextFetcherEnums.MALFORMED);
-                                } else {
-                                    Hierachy--;
-                                    continue;
-                                }
-
-                            case ';':
-                                if (Hierachy == -1) {
-                                    if (UnresolvedTermsBuffer[0] != 0) {
+                                case ']':
+                                    if (Hierachy == -1 || ContainerBuffer[Hierachy] != '[') {
+                                        /*
+                                         * May look like {1 + 2]    <-- invalid termination
+                                         * Syntax Error : Unexpected Bracket (1, 2) :\n{line information}
+                                         */
                                         Terminal.Error(
-                                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Terms left unaccounted for")]}: {nCapturedItemsBuffer[0] - UnresolvedTermsBuffer[0]}",
+                                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Bracket in")]} {Filename}",
                                             StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
+                                    } else {
+                                        Hierachy--;
+                                        continue;
                                     }
-                                    ResolvingTermsBuffer[0] = false;
-                                    nCapturedItemsBuffer[0] = 0;
-                                    VerifiedStringIndex = StringIndex + 1;
-                                    Tokens.Add(new string[i - TokenizedCheckPoint]);
-                                    Array.Copy(TokenizedBuffer, TokenizedCheckPoint, Tokens[^1], 0, i - TokenizedCheckPoint);
-                                    TokenizedCheckPoint = i + 1;
-                                } else if (ContainerBuffer[Hierachy] == '\"') break;
-                                  else {
-                                    HasSteps |= true;
-                                    /*
-                                        * May look like (1 + 2;)    <-- invalid termination
-                                        * Syntax Error : Unexpected Parenthesis (1, 2) :\n{line information}
-                                        */
 
-                                    Terminal.Error(
-                                        ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Line Termination in")]} {Filename}",
-                                        StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, StringIndex, 1)
-                                    );
-                                    return (null, ContextFetcherEnums.MALFORMED);
-                                }
-                                continue;
+                                case '{':
+                                    Hierachy++;
+                                    ContainerBuffer[Hierachy] = '[';
+                                    BufferTaleStringIndex = StringIndex;
+                                    continue;
+
+                                case '}':
+                                    if (Hierachy == -1 || ContainerBuffer[Hierachy] != '[') {
+                                        /*
+                                         * May look like (1 + 2}    <-- invalid termination
+                                         * Syntax Error : Unexpected Brace (1, 2) :\n{line information}
+                                         */
+                                        Terminal.Error(
+                                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Brace in")]} {Filename}",
+                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
+                                        );
+                                        return (null, ContextFetcherEnums.MALFORMED);
+                                    } else {
+                                        Hierachy--;
+                                        continue;
+                                    }
+
+                                case ';':
+                                    if (Hierachy == -1) {
+                                        if (UnresolvedTermsBuffer[0] != 0) {
+                                            Terminal.Error(
+                                                ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Terms left unaccounted for")]}: {nCapturedItemsBuffer[0] - UnresolvedTermsBuffer[0]}",
+                                                StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
+                                            );
+                                            return (null, ContextFetcherEnums.MALFORMED);
+                                        }
+                                        ResolvingTermsBuffer[0] = false;
+                                        nCapturedItemsBuffer[0] = 0;
+                                        VerifiedStringIndex = StringIndex + 1;
+                                        Tokens.Add(new string[i - TokenizedCheckPoint]);
+                                        Array.Copy(TokenizedBuffer, TokenizedCheckPoint, Tokens[^1], 0, i - TokenizedCheckPoint);
+                                        TokenizedCheckPoint = i + 1;
+                                    } else if (ContainerBuffer[Hierachy] == '\"') break;
+                                    else {
+                                        HasSteps |= true;
+                                        /*
+                                            * May look like (1 + 2;)    <-- invalid termination
+                                            * Syntax Error : Unexpected Parenthesis (1, 2) :\n{line information}
+                                            */
+
+                                        Terminal.Error(
+                                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Line Termination in")]} {Filename}",
+                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, StringIndex, 1)
+                                        );
+                                        return (null, ContextFetcherEnums.MALFORMED);
+                                    }
+                                    continue;
                             }
                     }
 
@@ -604,11 +603,25 @@ Svenska           ""-l sw""
             /// <param name="input"></param>
             /// <returns></returns>
             internal static List<string> Tokenize(string input) {
-                // The characters to treat as separators, space included
+                // Wide multi-character operators and atomic tokens
+                string[] atomicTokens = new[] {
+                    "$\"", "<=>", "==", "!=", "<=", ">=", "&&", "||", "++", "--",
+                    "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<", ">>", "->", "??", "?."
+                };
+
+                // Escape them for regex and order by length
+                string escapedTokens = string.Join("|", atomicTokens
+                    .Select(Regex.Escape)
+                    .OrderByDescending(s => s.Length));
+
+                // Single-character separators including whitespace
                 string separators = @"!""£$%\^&*()+\-=\[\]{};:'@#~\\|,<.>/?\s";
 
-                // Manually form a valid regex character class from the separators
-                string pattern = $"([^{separators}]+|[{separators}])";
+                // Final pattern:
+                // 1. Match atomic tokens
+                // 2. Match non-separator sequences
+                // 3. Match single separators
+                string pattern = $@"({escapedTokens})|([^{separators}]+)|([{separators}])";
 
                 var matches = Regex.Matches(input, pattern);
                 var tokens = new List<string>();
