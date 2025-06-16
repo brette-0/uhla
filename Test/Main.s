@@ -1,2 +1,4 @@
-(foo + bar) + (ash -
-tin]
+a, b, c = 
+			1,
+			2,
+			3

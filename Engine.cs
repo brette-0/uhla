@@ -1,4 +1,6 @@
-﻿using System.Text;
+﻿using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.RegularExpressions;
 
 using Numinous.Langauges;
@@ -186,25 +188,75 @@ namespace Numinous {
                 string   AccumulatedContext     = Source[Index];    // Accumolated Context for Error Reporting
 
                 string[] TokenizedBuffer        = [.. Tokenize(Source[Index])];
-                
                 char[]   ContainerBuffer        = new char[TokenizedBuffer.Length];
-                int      BufferIndex;
+                int[]    UnresolvedTermsBuffer  = new int[TokenizedBuffer.Length];
+                int[]    nCapturedItemsBuffer   = new int[TokenizedBuffer.Length];
+                bool[]   ResolvingTermsBuffer   = new bool[TokenizedBuffer.Length]; // begin collecting, post assignment begin resolving
+                int      Hierachy;
                 int      TokenizedCheckPoint    = 0;
 
                 bool     HasSteps               = TokenizedBuffer.Contains(";");
 
+                
+                // Used to unify between string and char operator identifiers
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                void UnifiedModularHunk() {
+                    if (!ResolvingTermsBuffer[1 + Hierachy]) {
+                        UnresolvedTermsBuffer[1 + Hierachy] = nCapturedItemsBuffer[1 + Hierachy];
+                        ResolvingTermsBuffer[1 + Hierachy] = true;
+                    }
+                }
+
                 do {
-                    BufferIndex = -1;
+                    Hierachy = -1;
                     for (int i = 0; i < TokenizedBuffer.Length; StringIndex += TokenizedBuffer[i].Length, i++) {
-                        switch (TokenizedBuffer[i][0]) {
+                        if      (TokenizedBuffer[i] == "+=") UnifiedModularHunk();
+                        else if (TokenizedBuffer[i] == "-=") UnifiedModularHunk();
+                        else if (TokenizedBuffer[i] == "*=") UnifiedModularHunk();
+                        else if (TokenizedBuffer[i] == "/=") UnifiedModularHunk();
+                        else if (TokenizedBuffer[i] == "%=") UnifiedModularHunk();
+                        else if (TokenizedBuffer[i] == "|=") UnifiedModularHunk();
+                        else if (TokenizedBuffer[i] == "^=") UnifiedModularHunk();
+                        else if (TokenizedBuffer[i] == "&=") UnifiedModularHunk();
+                        else if (TokenizedBuffer[i] == ">>=") UnifiedModularHunk();
+                        else if (TokenizedBuffer[i] == "<<=") UnifiedModularHunk();
+                        else if (TokenizedBuffer[i] == "??=") UnifiedModularHunk();
+                        else switch (TokenizedBuffer[i][0]) {
+                            case '=':
+                                UnifiedModularHunk();
+                                break;
+
+                            case ',':
+                                if (Hierachy != -1 && ContainerBuffer[Hierachy] != '(' && ContainerBuffer[Hierachy] != '\"') {
+                                    Terminal.Error(
+                                        ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Comma, only parenthesis '()' and string parenthesis '\"\"' may contain commas")]}.",
+                                        StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
+                                    );
+                                    return (null, ContextFetcherEnums.MALFORMED);
+                                }
+                                if (ResolvingTermsBuffer[1 + Hierachy]) UnresolvedTermsBuffer[1 + Hierachy]--; 
+                                else                                    nCapturedItemsBuffer[ 1 + Hierachy]++;
+
+                                if (UnresolvedTermsBuffer[1 + Hierachy] == -1) {
+                                    Terminal.Error(
+                                        ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Comma, the amount of terms to resolve is")]}: {nCapturedItemsBuffer[1 + Hierachy]}.",
+                                        StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
+                                    );
+                                    return (null, ContextFetcherEnums.MALFORMED);
+                                }
+                                break;
+
                             case '(':
-                                BufferIndex++;
-                                ContainerBuffer[BufferIndex] = '(';
+                                ++Hierachy;
+
+                                nCapturedItemsBuffer[ 1 + Hierachy] = 0;        // New set of terms (begin 0)
+                                ResolvingTermsBuffer[ 1 + Hierachy] = false;    // Mark as fetching
+                                ContainerBuffer[Hierachy]           = '(';      // Log last used container
                                 BufferTaleStringIndex = StringIndex;
                                 continue;
 
                             case ')':
-                                if (BufferIndex == -1 || ContainerBuffer[BufferIndex] != '(') {
+                                if (Hierachy == -1 || ContainerBuffer[Hierachy] != '(') {
                                     /*
                                      * May look like [1 + 2)    <-- invalid termination
                                      * Syntax Error : Unexpected Parenthesis (1, 2) :\n{line information}
@@ -215,29 +267,36 @@ namespace Numinous {
                                     );
                                     return (null, ContextFetcherEnums.MALFORMED);
                                 } else {
-                                    BufferIndex--;
+                                    if (UnresolvedTermsBuffer[1 + Hierachy] != 0) {
+                                        Terminal.Error(
+                                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Terms left unaccouned for")]}: {nCapturedItemsBuffer[1 + Hierachy] - UnresolvedTermsBuffer[1 + Hierachy]}",
+                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
+                                        );
+                                        return (null, ContextFetcherEnums.MALFORMED);
+                                    }
+                                    Hierachy--;
                                     continue;
                                 }
 
                             case '\"':
-                                if (ContainerBuffer[BufferIndex] == '\"') {
-                                    ContainerBuffer[BufferIndex] = '\x00';  // clear to indicate closed string
-                                    BufferIndex--;
+                                if (ContainerBuffer[Hierachy] == '\"') {
+                                    ContainerBuffer[Hierachy] = '\x00';  // clear to indicate closed string
+                                    Hierachy--;
                                     continue;
                                 } else {
-                                    BufferIndex++;
-                                    ContainerBuffer[BufferIndex] = '\"';
+                                    Hierachy++;
+                                    ContainerBuffer[Hierachy] = '\"';
                                     continue;
                                 }
 
                             case '[':
-                                BufferIndex++;
-                                ContainerBuffer[BufferIndex] = '[';
+                                Hierachy++;
+                                ContainerBuffer[Hierachy] = '[';
                                 BufferTaleStringIndex = StringIndex;
                                 continue;
 
                             case ']':
-                                if (BufferIndex == -1 || ContainerBuffer[BufferIndex] != '[') {
+                                if (Hierachy == -1 || ContainerBuffer[Hierachy] != '[') {
                                     /*
                                      * May look like {1 + 2]    <-- invalid termination
                                      * Syntax Error : Unexpected Bracket (1, 2) :\n{line information}
@@ -248,18 +307,18 @@ namespace Numinous {
                                     );
                                     return (null, ContextFetcherEnums.MALFORMED);
                                 } else {
-                                    BufferIndex--;
+                                    Hierachy--;
                                     continue;
                                 }
 
                             case '{':
-                                BufferIndex++;
-                                ContainerBuffer[BufferIndex] = '[';
+                                Hierachy++;
+                                ContainerBuffer[Hierachy] = '[';
                                 BufferTaleStringIndex = StringIndex;
                                 continue;
 
                             case '}':
-                                if (BufferIndex == -1 || ContainerBuffer[BufferIndex] != '[') {
+                                if (Hierachy == -1 || ContainerBuffer[Hierachy] != '[') {
                                     /*
                                      * May look like (1 + 2}    <-- invalid termination
                                      * Syntax Error : Unexpected Brace (1, 2) :\n{line information}
@@ -270,18 +329,28 @@ namespace Numinous {
                                     );
                                     return (null, ContextFetcherEnums.MALFORMED);
                                 } else {
-                                    BufferIndex--;
+                                    Hierachy--;
                                     continue;
                                 }
 
                             case ';':
-                                if (BufferIndex == -1) {
+                                if (Hierachy == -1) {
+                                    if (UnresolvedTermsBuffer[0] != 0) {
+                                        Terminal.Error(
+                                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Terms left unaccounted for")]}: {nCapturedItemsBuffer[0] - UnresolvedTermsBuffer[0]}",
+                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, BufferTaleStringIndex + 1, StringIndex - BufferTaleStringIndex)
+                                        );
+                                        return (null, ContextFetcherEnums.MALFORMED);
+                                    }
+                                    ResolvingTermsBuffer[0] = false;
+                                    nCapturedItemsBuffer[0] = 0;
                                     VerifiedStringIndex = StringIndex + 1;
                                     Tokens.Add(new string[i - TokenizedCheckPoint]);
                                     Array.Copy(TokenizedBuffer, TokenizedCheckPoint, Tokens[^1], 0, i - TokenizedCheckPoint);
                                     TokenizedCheckPoint = i + 1;
-                                } else if (ContainerBuffer[BufferIndex] == '\"') break;
+                                } else if (ContainerBuffer[Hierachy] == '\"') break;
                                   else {
+                                    HasSteps |= true;
                                     /*
                                         * May look like (1 + 2;)    <-- invalid termination
                                         * Syntax Error : Unexpected Parenthesis (1, 2) :\n{line information}
@@ -297,7 +366,7 @@ namespace Numinous {
                             }
                     }
 
-                    if (BufferIndex == -1) break;
+                    if ((UnresolvedTermsBuffer[0] == 0) && Hierachy == -1) break;
 
                     // if no more context can be supplied, return unterminated and log error to user
                     if (++Index == Source.Length) {
@@ -308,14 +377,14 @@ namespace Numinous {
                         return (null, ContextFetcherEnums.UNTERMINATED);
                     }
 
-                    TokenizedBuffer     = [.. TokenizedBuffer.TakeLast(TokenizedBuffer.Length - TokenizedCheckPoint)];
+                    ResolvingTermsBuffer[0] = false;
+                    nCapturedItemsBuffer[0] = 0;
+                    TokenizedBuffer = [.. TokenizedBuffer.TakeLast(TokenizedBuffer.Length - TokenizedCheckPoint)];
                     TokenizedCheckPoint = 0;
                     StringIndex         = VerifiedStringIndex;  // Reset for more accurate wiggling
 
                     AccumulatedContext += Source[Index];
                     TokenizedBuffer     = [.. TokenizedBuffer, .. Tokenize(Source[Index])];
-
-                    HasSteps |= TokenizedBuffer.Contains(";");
 
                 } while (true);
 
