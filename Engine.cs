@@ -251,7 +251,7 @@ internal enum AssembleTimeTypes  : byte {
             /// <param name="Source"></param>
             /// <param name="Index"></param>
             /// <returns></returns>
-            internal static (List<List<(string[] DeltaTokens, int Hierachy)>>?, ContextFetcherEnums Code) FetchContext(string[] Source, int Index, string Filename) {
+            internal static (List<List<(string[] DeltaTokens, int Hierachy, int Terms)>>?, ContextFetcherEnums Code) FetchContext(string[] Source, int Index, string Filename) {
                 int      StartingIndex              = Index;            // Beginning Line Number for Error Reports
                 int      StringIndex                = 0;                // How far into the raw strings we are
                 int      VerifiedStringIndex        = 0;                // Sum of all verified (thus far) steps
@@ -268,8 +268,8 @@ internal enum AssembleTimeTypes  : byte {
 
                 bool     HasSteps                   = TokenizedBuffer.Contains(";");
 
-                List<List<(string[] DeltaTokens, int Hierachy)>> StepMatrixes    = [];
-                List<(string[] DeltaTokens, int Hierachy)> StepMatrix = [];
+                List<List<(string[] DeltaTokens, int Hierachy, int Terms)>> StepMatrixes    = [];
+                List<(string[] DeltaTokens, int Hierachy, int Terms)> StepMatrix = [];
                 int      HierachyDeltaCheckpoint    = 0;
 
                 
@@ -284,24 +284,16 @@ internal enum AssembleTimeTypes  : byte {
 
                 // Clone method for final step
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                static List<(string[], int)> CloneChunk(List<(string[], int)> source) {
-                    int count = source.Count;
-                    List<(string[], int)> clone = new(count);
-
-                    for (int i = 0; i < count; i++) {
-                        var (arr, val) = source[i];
-                        string[] newArr = new string[arr.Length];
-                        for (int j = 0; j < arr.Length; j++)
-                            newArr[j] = arr[j];
-                        clone.Add((newArr, val));
-                    }
-
+                static List<(string[] DeltaTokens, int Hierachy, int Terms)> CloneChunk(List<(string[] DeltaTokens, int Hierachy, int Terms)> source) {
+                    var clone = new List<(string[] DeltaTokens, int Hierachy, int Terms)>(source.Count);
+                    foreach (var (tokens, hierachy, terms) in source)
+                        clone.Add((tokens.ToArray(), hierachy, terms));
                     return clone;
                 }
 
                 do {
                     Hierachy = -1;
-                    StepMatrixes.Add([([], 0)]);
+                    StepMatrix.Add(([], 0, 0));
                     for (int i = 0; i < TokenizedBuffer.Length; StringIndex += TokenizedBuffer[i].Length, i++) {
                         if (TokenizedBuffer[i][0] == '\"') {
                             if ((Hierachy == -1) || (ContainerBuffer[Hierachy] != '\"')) {
@@ -351,7 +343,7 @@ internal enum AssembleTimeTypes  : byte {
                                     break;
 
                                 case '(':
-                                    StepMatrix.Add((new string[i - TokenizedCheckPoint], Hierachy + 1));
+                                    StepMatrix.Add((new string[i - TokenizedCheckPoint], Hierachy + 1, nCapturedItemsBuffer[1 + Hierachy]));
                                     Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
                                     HierachyDeltaCheckpoint = i;
 
@@ -382,7 +374,7 @@ internal enum AssembleTimeTypes  : byte {
                                             return (null, ContextFetcherEnums.MALFORMED);
                                         }
 
-                                        StepMatrix.Add((new string[i - TokenizedCheckPoint], Hierachy + 1));
+                                        StepMatrix.Add((new string[i - TokenizedCheckPoint], Hierachy + 1, nCapturedItemsBuffer[1 + Hierachy]));
                                         Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
                                         HierachyDeltaCheckpoint = i;
 
@@ -391,7 +383,7 @@ internal enum AssembleTimeTypes  : byte {
                                     }
 
                                 case '[':
-                                    StepMatrix.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1));
+                                    StepMatrix.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1, nCapturedItemsBuffer[1 + Hierachy]));
                                     Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
                                     HierachyDeltaCheckpoint = i;
 
@@ -413,7 +405,7 @@ internal enum AssembleTimeTypes  : byte {
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     } else {
 
-                                        StepMatrix.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1));
+                                        StepMatrix.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1, nCapturedItemsBuffer[1 + Hierachy]));
                                         Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
                                         HierachyDeltaCheckpoint = i;
 
@@ -434,7 +426,7 @@ internal enum AssembleTimeTypes  : byte {
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     }
 
-                                    StepMatrix.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1));
+                                    StepMatrix.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1, nCapturedItemsBuffer[1 + Hierachy]));
                                     Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
                                     HierachyDeltaCheckpoint = i;
 
@@ -456,7 +448,7 @@ internal enum AssembleTimeTypes  : byte {
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     } else {
 
-                                        StepMatrix.Add((new string[i - TokenizedCheckPoint], Hierachy + 1));
+                                        StepMatrix.Add((new string[i - TokenizedCheckPoint], Hierachy + 1, nCapturedItemsBuffer[1 + Hierachy]));
                                         Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
                                         HierachyDeltaCheckpoint = i;
 
@@ -473,18 +465,18 @@ internal enum AssembleTimeTypes  : byte {
                                             );
                                             return (null, ContextFetcherEnums.MALFORMED);
                                         }
+
+                                        StepMatrix.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1, nCapturedItemsBuffer[1 + Hierachy]));
+                                        Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
+                                        HierachyDeltaCheckpoint = i;
+
                                         ResolvingTermsBuffer[0] = false;
                                         nCapturedItemsBuffer[0] = 0;
                                         VerifiedStringIndex = StringIndex + 1;
 
-                                        StepMatrix.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1));
-                                        Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
-                                        HierachyDeltaCheckpoint = i;
-
                                         StepMatrixes.Add(CloneChunk(StepMatrix));
                                         TokenizedCheckPoint = i + 1;
-                                    } else if (ContainerBuffer[Hierachy] == '\"') break;
-                                    else {
+                                    } else {
                                         HasSteps |= true;
                                         /*
                                             * May look like (1 + 2;)    <-- invalid termination

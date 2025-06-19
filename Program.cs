@@ -47,7 +47,7 @@ internal static class Program {
         };
         ActiveScope = LabelDataBase["rs"];
 
-        (List<List<(string[], int)>>? Result, ContextFetcherEnums Code) = FetchContext(SourceFileContentBuffer[^1], 0, SourceFileNameBuffer[^1]);
+        (List<List<(string[], int, int)>>? Result, ContextFetcherEnums Code) = FetchContext(SourceFileContentBuffer[^1], 0, SourceFileNameBuffer[^1]);
         return 0;
     }
 
