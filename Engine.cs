@@ -1,4 +1,5 @@
-﻿using System.ComponentModel;
+﻿using System.Collections.Generic;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -38,13 +39,6 @@ namespace Numinous {
             PARTIAL,    // int foo = defined_later;
             OK          // int foo = 2;
         }
-
-        internal struct AssembleTimeValue {
-            internal AssembleTimeTypes Type;
-            internal AssemleTimeValueStatus Status;
-            object Value;
-        }
-
 
         internal enum ContextFetcherEnums {
             OK,
@@ -86,6 +80,7 @@ namespace Numinous {
         internal struct DatabaseItem {
             internal object value;
             internal object parent;
+            internal AssembleTimeTypes type;
         }
 
         internal static class Engine {
@@ -161,14 +156,29 @@ namespace Numinous {
                 ";", ":", "#", "\\", "\"", "{", "}", "?", ">", "<", "!", ".", ","
             ];
 
-            internal static List<string> ReadValueReorderer(string[] Tokens) {
-                List<string> Response = [];
+            // Best if inline, we want it to just use the result of tokenizing immediately.
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            internal static List<string> SolveDefines(List<string> tokens) {
+                bool DidReplace;
 
-                
+                do {
+                    DidReplace = false;
+                    List<string> UpdatedTokens = [];
 
+                    for (int i = 0; i < tokens.Count; i++) {
+                        string token = tokens[i];
+                        Program.ActiveScope.TryGetValue(token, out DatabaseItem CapturedValue);
+                        if (CapturedValue.type == AssembleTimeTypes.EXP) {
+                            UpdatedTokens.AddRange((List<string>)CapturedValue.value);
+                            DidReplace = true;
+                        } else {
+                            UpdatedTokens.Add(token);
+                        }
+                    }
 
-
-                return Response;
+                    tokens = UpdatedTokens;
+                } while (DidReplace);
+                return tokens;
             }
 
             /// <summary>
@@ -187,7 +197,7 @@ namespace Numinous {
                 int      ContainerBufferTaleStringIndex  = 0;                // Last Open Encapsulation
                 string   AccumulatedContext     = Source[Index];    // Accumolated Context for Error Reporting
 
-                string[] TokenizedBuffer        = [.. Tokenize(Source[Index])];
+                string[] TokenizedBuffer        = [.. SolveDefines(Tokenize(Source[Index]))];
                 char[]   ContainerBuffer        = new char[TokenizedBuffer.Length];
                 int[]    UnresolvedTermsBuffer  = new int[TokenizedBuffer.Length];
                 int[]    nCapturedItemsBuffer   = new int[TokenizedBuffer.Length];
@@ -383,7 +393,7 @@ namespace Numinous {
                     StringIndex         = VerifiedStringIndex;  // Reset for more accurate wiggling
 
                     AccumulatedContext += Source[Index];
-                    TokenizedBuffer     = [.. TokenizedBuffer, .. Tokenize(Source[Index])];
+                    TokenizedBuffer     = [.. TokenizedBuffer, .. SolveDefines(Tokenize(Source[Index]))];
 
                 } while (true);
 
@@ -585,6 +595,10 @@ Svenska           ""-l sw""
                 return builder.ToString();
             }
 
+            /// <summary>
+            /// The include method.
+            /// </summary>
+            /// <param name="Filepath"></param>
             internal static void AddContext(string Filepath) {
                 string[] Throwaway = File.ReadAllLines(Filepath);
                 if (Throwaway.Length == 0) {

@@ -1,1 +1,3 @@
-foo, bar = ash;
+a, b, c = c,
+		  b,
+		  a
