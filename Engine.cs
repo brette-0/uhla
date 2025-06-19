@@ -9,18 +9,8 @@ using Numinous.Langauges;
 namespace Numinous {
 
     namespace Engine {
-        internal ref struct NonLiteral {
-            internal object value;
-            internal object parent;
-        }
-
-        internal struct RunTimeVariable {
-            internal int  size;   // in bytes
-            internal bool signed; // false => unsigned
-            internal bool endian; // false => little
-        }
-
-        internal enum AssembleTimeTypes {
+internal enum AssembleTimeTypes  : byte {
+            WAIT,       // Waiting on first value (Evaluator Solving)
             INT,        // assemble time integer
             STRING,     // assemble time string
             EXP,        // expression (not a string)
@@ -34,42 +24,33 @@ namespace Numinous {
             BANK        // Bank
         }
 
-        internal enum AssemleTimeValueStatus {
+        internal enum AssemleTimeValueStatus : byte {
             DECLARED,   // int foo;
             PARTIAL,    // int foo = defined_later;
             OK          // int foo = 2;
         }
 
-        internal enum ContextFetcherEnums {
+        internal enum ContextFetcherEnums : byte {
             OK,
             MALFORMED,
             UNTERMINATED
         }
 
-        /// <summary>
-        /// This struct describes precisely the context of an error. Should describe what the bad region of a line is, specifying
-        /// line number and source filename.
-        /// </summary>
-        internal struct ErrorContext {
-            internal string SourceFilename;
-            internal int LineNumber;
-            internal int StepNumber;        // report with $"{ErrorLevel} : {ErrorType} at ({LineNumber}, {StepNumber})"
-                                            // we will place wiggly lines under the bad region
-
-            internal int IssueIndex;
-            internal int IssueLength;
-
+        internal struct RunTimeVariable {
+            internal int size;   // in bytes
+            internal bool signed; // false => unsigned
+            internal bool endian; // false => little
         }
 
-        internal enum ErrorLevels {
+        internal enum ErrorLevels : byte {
             LOG, WARN, ERROR
         }
 
-        internal enum ErrorTypes {
+        internal enum ErrorTypes : byte {
             None, SyntaxError, ParsingError, NothingToDo
         }
 
-        internal enum DecodingPhase {
+        internal enum DecodingPhase : byte {
             TERMINAL, TOKEN
         }
 
@@ -77,21 +58,68 @@ namespace Numinous {
             internal class Scope;
         }
 
-        internal struct DatabaseItem {
-            internal object value;
-            internal object parent;
-            internal AssembleTimeTypes type;
+        internal enum Operators : byte {
+            WAIT,       // waiting on operator
+
+            ABSOLUTE,
+            NEGATE,
+            BITNEGATE,
+            NONZERO,
+            HI,
+            LO,
+            HAS,
+            NULLHAS,
+            SWITCH,
+            MULT,
+            DIV,
+            MOD,
+            ADD,
+            SUB,
+            RIGHT,
+            LEFT,
+            BITMASK,
+            BITFLIP,
+            BITSET,
+            GT,
+            LT,
+            GTE,
+            LTE,
+            SERIAL,
+            EQUAL,
+            INEQUAL,
+            AND,
+            OR,
+            NULL,
+            CHECK,
+            ELSE,
+            SET,
+            INC,
+            DEC,
+            SETMULT,
+            SETDIV,
+            SETMOD,
+            SETMASK,
+            SETFLIP,
+            SETSET,
+            SETRIGHT,
+            SETLEFT,
+            SPLIT
+        }
+
+        internal enum Expectations : byte {
+            VALUE,
+            OPERATOR
         }
 
         internal static class Engine {
-
             /// <summary>
             /// Used for reordering the Tokens into the mutation chronology.
             /// Parenthesis, indexing, attributes and scope routing are handling differently.
             /// Incrementor and Decrementor is also handled seperately
             /// </summary>
             internal static readonly List<string>[] OrderedOperators = [
-                /* Unary            */ ["+", "-", "~", "!"],
+                /* Unary            */ ["+", "-", "~", "!", ">", "<"],
+                /* Property         */ [".", "?."],
                 /* Switch           */ ["switch"],
                 /* Multiplicative   */ ["*", "/", "%"],
                 /* Additive         */ ["+", "-"],
@@ -106,8 +134,43 @@ namespace Numinous {
                 /* Null coalesce    */ ["??"],
                 /* Ternary          */ ["?", ":"],                                                                  // Violates VOV
                 /* Assignment       */ ["=", "+=", "-=", "*=", "/=", "%=", "|=", "&=", "^=", "??=", ">>=", "<<="],  // Modifies in post
-                /* Term             */ [","]
+                /* Term             */ [","],
+                /* Reserved         */ ["#", "\'"]                                                                  // throw error
             ];
+
+            internal static class Evaluator {
+
+                static internal (bool, object) Evaluate(AssembleTimeTypes Type, string[] Tokens) {
+                    (bool, object)      Response = default;
+                    
+
+                    
+                    return Response;
+                }
+               
+                internal static bool isNonLiteral(char First) =>
+                    First switch {
+                        '0' or '1' or '2' or '3' or '4' or '5' or '6' or '7' or '8' or '9' or '$' or '%' or '&' or '+' or '-' or '!' or '^' or '*' or '[' or ']' or '{' or '}' or '\'' or '#' or '~' or ':' or ',' or '<' or '.' or '>' or '/' or '?' => false,
+                        _ => true,
+                    };
+                
+
+                internal static int GetHierachy(string Operator) {
+                    int i = 0;
+                    for (; i < OrderedOperators.Length; i++) if (OrderedOperators[i].Contains(Operator)) break;
+                    return i;
+                }
+
+                internal struct EvaluatorBuffer_t {         
+                    
+
+                    public EvaluatorBuffer_t() {
+
+                    }
+                }
+
+                internal static List<EvaluatorBuffer_t> EvaluationBuffers = [];
+            }
 
             internal static readonly string[] Reserved = [
                 // directives
@@ -167,15 +230,14 @@ namespace Numinous {
 
                     for (int i = 0; i < tokens.Count; i++) {
                         string token = tokens[i];
-                        Program.ActiveScope.TryGetValue(token, out DatabaseItem CapturedValue);
-                        if (CapturedValue.type == AssembleTimeTypes.EXP) {
-                            UpdatedTokens.AddRange((List<string>)CapturedValue.value);
+                        if (Program.ActiveScope.TryGetValue(token, out object CapturedValue) && ((Dictionary<string, AssembleTimeTypes>)CapturedValue)["type"] == AssembleTimeTypes.EXP) {
+                            UpdatedTokens.AddRange(((Dictionary<string, List<string>>)CapturedValue)["self"]);
                             DidReplace = true;
                         } else {
                             UpdatedTokens.Add(token);
                         }
                     }
-
+                    
                     tokens = UpdatedTokens;
                 } while (DidReplace);
                 return tokens;
@@ -189,23 +251,26 @@ namespace Numinous {
             /// <param name="Source"></param>
             /// <param name="Index"></param>
             /// <returns></returns>
-            internal static (List<string[]>?, ContextFetcherEnums Code) FetchContext(string[] Source, int Index, string Filename) {
-                List<string[]> Tokens           = [];
-                int      StartingIndex          = Index;            // Beginning Line Number for Error Reports
-                int      StringIndex            = 0;                // How far into the raw strings we are
-                int      VerifiedStringIndex    = 0;                // Sum of all verified (thus far) steps
-                int      ContainerBufferTaleStringIndex  = 0;                // Last Open Encapsulation
-                string   AccumulatedContext     = Source[Index];    // Accumolated Context for Error Reporting
+            internal static (List<List<(string[] DeltaTokens, int Hierachy)>>?, ContextFetcherEnums Code) FetchContext(string[] Source, int Index, string Filename) {
+                int      StartingIndex              = Index;            // Beginning Line Number for Error Reports
+                int      StringIndex                = 0;                // How far into the raw strings we are
+                int      VerifiedStringIndex        = 0;                // Sum of all verified (thus far) steps
+                int      ContainerBufferTaleStringIndex  = 0;           // Last Open Encapsulation
+                string   AccumulatedContext         = Source[Index];    // Accumolated Context for Error Reporting
 
-                string[] TokenizedBuffer        = [.. SolveDefines(Tokenize(Source[Index]))];
-                char[]   ContainerBuffer        = new char[TokenizedBuffer.Length];
-                int[]    UnresolvedTermsBuffer  = new int[TokenizedBuffer.Length];
-                int[]    nCapturedItemsBuffer   = new int[TokenizedBuffer.Length];
-                bool[]   ResolvingTermsBuffer   = new bool[TokenizedBuffer.Length]; // begin collecting, post assignment begin resolving
+                string[] TokenizedBuffer            = [.. SolveDefines(Tokenize(Source[Index]))];
+                char[]   ContainerBuffer            = new char[TokenizedBuffer.Length];
+                int[]    UnresolvedTermsBuffer      = new int[TokenizedBuffer.Length];
+                int[]    nCapturedItemsBuffer       = new int[TokenizedBuffer.Length];
+                bool[]   ResolvingTermsBuffer       = new bool[TokenizedBuffer.Length]; // begin collecting, post assignment begin resolving
                 int      Hierachy;
-                int      TokenizedCheckPoint    = 0;
+                int      TokenizedCheckPoint        = 0;
 
-                bool     HasSteps               = TokenizedBuffer.Contains(";");
+                bool     HasSteps                   = TokenizedBuffer.Contains(";");
+
+                List<List<(string[] DeltaTokens, int Hierachy)>> StepMatrixes    = [];
+                List<(string[] DeltaTokens, int Hierachy)> StepMatrix = [];
+                int      HierachyDeltaCheckpoint    = 0;
 
                 
                 // Used to unify between string and char operator identifiers
@@ -217,8 +282,26 @@ namespace Numinous {
                     }
                 }
 
+                // Clone method for final step
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                static List<(string[], int)> CloneChunk(List<(string[], int)> source) {
+                    int count = source.Count;
+                    List<(string[], int)> clone = new(count);
+
+                    for (int i = 0; i < count; i++) {
+                        var (arr, val) = source[i];
+                        string[] newArr = new string[arr.Length];
+                        for (int j = 0; j < arr.Length; j++)
+                            newArr[j] = arr[j];
+                        clone.Add((newArr, val));
+                    }
+
+                    return clone;
+                }
+
                 do {
                     Hierachy = -1;
+                    StepMatrixes.Add([([], 0)]);
                     for (int i = 0; i < TokenizedBuffer.Length; StringIndex += TokenizedBuffer[i].Length, i++) {
                         if (TokenizedBuffer[i][0] == '\"') {
                             if ((Hierachy == -1) || (ContainerBuffer[Hierachy] != '\"')) {
@@ -251,7 +334,7 @@ namespace Numinous {
                                     if (Hierachy != -1 && ContainerBuffer[Hierachy] != '(') {
                                         Terminal.Error(
                                             ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Comma, only parenthesis '()' and string parenthesis '\"\"' may contain commas")]}.",
-                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, StringIndex + 1, 1)
+                                            StartingIndex, HasSteps ? StepMatrix.Count : null, ApplyWiggle(AccumulatedContext, StringIndex + 1, 1)
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     }
@@ -261,13 +344,17 @@ namespace Numinous {
                                     if (UnresolvedTermsBuffer[1 + Hierachy] == -1) {
                                         Terminal.Error(
                                             ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Comma, the amount of terms to resolve is")]} {1 + nCapturedItemsBuffer[1 + Hierachy]}.",
-                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, StringIndex + 1, 1)
+                                            StartingIndex, HasSteps ? StepMatrix.Count : null, ApplyWiggle(AccumulatedContext, StringIndex + 1, 1)
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     }
                                     break;
 
                                 case '(':
+                                    StepMatrix.Add((new string[i - TokenizedCheckPoint], Hierachy + 1));
+                                    Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
+                                    HierachyDeltaCheckpoint = i;
+
                                     ++Hierachy;
                                     nCapturedItemsBuffer[1 + Hierachy] = 0;         // New set of terms (begin 0)
                                     ResolvingTermsBuffer[1 + Hierachy] = false;     // Mark as fetching
@@ -283,22 +370,31 @@ namespace Numinous {
                                          */
                                         Terminal.Error(
                                             ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Parenthesis in")]} {Filename}",
-                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, ContainerBufferTaleStringIndex + 1, StringIndex - ContainerBufferTaleStringIndex)
+                                            StartingIndex, HasSteps ? StepMatrix.Count : null, ApplyWiggle(AccumulatedContext, ContainerBufferTaleStringIndex + 1, StringIndex - ContainerBufferTaleStringIndex)
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     } else {
                                         if (UnresolvedTermsBuffer[1 + Hierachy] != 0) {
                                             Terminal.Error(
                                                 ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Terms left unaccounted for")]}: {1 + nCapturedItemsBuffer[1 + Hierachy] - UnresolvedTermsBuffer[1 + Hierachy]}",
-                                                StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, StringIndex, 1)
+                                                StartingIndex, HasSteps ? StepMatrix.Count : null, ApplyWiggle(AccumulatedContext, StringIndex, 1)
                                             );
                                             return (null, ContextFetcherEnums.MALFORMED);
                                         }
+
+                                        StepMatrix.Add((new string[i - TokenizedCheckPoint], Hierachy + 1));
+                                        Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
+                                        HierachyDeltaCheckpoint = i;
+
                                         Hierachy--;
                                         continue;
                                     }
 
                                 case '[':
+                                    StepMatrix.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1));
+                                    Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
+                                    HierachyDeltaCheckpoint = i;
+
                                     Hierachy++;
                                     ContainerBuffer[Hierachy] = '[';
                                     ContainerBufferTaleStringIndex = StringIndex;
@@ -312,15 +408,36 @@ namespace Numinous {
                                          */
                                         Terminal.Error(
                                             ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Bracket in")]} {Filename}",
-                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, ContainerBufferTaleStringIndex + 1, StringIndex - ContainerBufferTaleStringIndex)
+                                            StartingIndex, HasSteps ? StepMatrix.Count : null, ApplyWiggle(AccumulatedContext, ContainerBufferTaleStringIndex + 1, StringIndex - ContainerBufferTaleStringIndex)
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     } else {
+
+                                        StepMatrix.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1));
+                                        Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
+                                        HierachyDeltaCheckpoint = i;
+
                                         Hierachy--;
                                         continue;
                                     }
 
+                                // braces are code block only, unless in format string
                                 case '{':
+                                    if (Hierachy == -1 || ContainerBuffer[Hierachy] != '$') {
+                                        /*
+                                         * May look like (H=0)  {1 + 1}
+                                         */
+                                        Terminal.Error(
+                                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Brace in")]} {Filename}",
+                                            StartingIndex, HasSteps ? StepMatrix.Count : null, ApplyWiggle(AccumulatedContext, ContainerBufferTaleStringIndex + 1, StringIndex - ContainerBufferTaleStringIndex)
+                                        );
+                                        return (null, ContextFetcherEnums.MALFORMED);
+                                    }
+
+                                    StepMatrix.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1));
+                                    Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
+                                    HierachyDeltaCheckpoint = i;
+
                                     Hierachy++;
                                     ContainerBuffer[Hierachy] = '[';
                                     ContainerBufferTaleStringIndex = StringIndex;
@@ -334,10 +451,15 @@ namespace Numinous {
                                          */
                                         Terminal.Error(
                                             ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Brace in")]} {Filename}",
-                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, ContainerBufferTaleStringIndex + 1, StringIndex - ContainerBufferTaleStringIndex)
+                                            StartingIndex, HasSteps ? StepMatrix.Count : null, ApplyWiggle(AccumulatedContext, ContainerBufferTaleStringIndex + 1, StringIndex - ContainerBufferTaleStringIndex)
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     } else {
+
+                                        StepMatrix.Add((new string[i - TokenizedCheckPoint], Hierachy + 1));
+                                        Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
+                                        HierachyDeltaCheckpoint = i;
+
                                         Hierachy--;
                                         continue;
                                     }
@@ -347,15 +469,19 @@ namespace Numinous {
                                         if (UnresolvedTermsBuffer[0] != 0) {
                                             Terminal.Error(
                                                 ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Terms left unaccounted for")]}: {1 + nCapturedItemsBuffer[0] - UnresolvedTermsBuffer[0]}",
-                                                StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, StringIndex, 1)
+                                                StartingIndex, HasSteps ? StepMatrix.Count : null, ApplyWiggle(AccumulatedContext, StringIndex, 1)
                                             );
                                             return (null, ContextFetcherEnums.MALFORMED);
                                         }
                                         ResolvingTermsBuffer[0] = false;
                                         nCapturedItemsBuffer[0] = 0;
                                         VerifiedStringIndex = StringIndex + 1;
-                                        Tokens.Add(new string[i - TokenizedCheckPoint]);
-                                        Array.Copy(TokenizedBuffer, TokenizedCheckPoint, Tokens[^1], 0, i - TokenizedCheckPoint);
+
+                                        StepMatrix.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1));
+                                        Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
+                                        HierachyDeltaCheckpoint = i;
+
+                                        StepMatrixes.Add(CloneChunk(StepMatrix));
                                         TokenizedCheckPoint = i + 1;
                                     } else if (ContainerBuffer[Hierachy] == '\"') break;
                                     else {
@@ -367,7 +493,7 @@ namespace Numinous {
 
                                         Terminal.Error(
                                             ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Line Termination in")]} {Filename}",
-                                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle(AccumulatedContext, StringIndex, 1)
+                                            StartingIndex, HasSteps ? StepMatrix.Count : null, ApplyWiggle(AccumulatedContext, StringIndex, 1)
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     }
@@ -381,7 +507,7 @@ namespace Numinous {
                     if (++Index == Source.Length) {
                         Terminal.Error(
                             ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Could not Fetch Required Context from")]} {Filename}",
-                            StartingIndex, HasSteps ? Tokens.Count : null, ApplyWiggle($"{AccumulatedContext} ", StringIndex, 1)        
+                            StartingIndex, HasSteps ? StepMatrix.Count : null, ApplyWiggle($"{AccumulatedContext} ", StringIndex, 1)        
                         );
                         return (null, ContextFetcherEnums.UNTERMINATED);
                     }
@@ -398,12 +524,12 @@ namespace Numinous {
                 } while (true);
 
 
-                return (Tokens, ContextFetcherEnums.OK);
+                return (StepMatrixes, ContextFetcherEnums.OK);
             }
 
             internal static class Terminal {
                 [Flags]
-                internal enum AssemblyFlags {
+                internal enum AssemblyFlags : byte {
                     Complete = 0x80,              // indicates that no context is required, as a task was completed here
                     Failed   = 0x40
                 }

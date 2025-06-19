@@ -40,17 +40,21 @@ internal static class Program {
         SourceFileContentBuffer.Add(InputFile);
 
         // rs "Root Scope" has itself as key, value and parent - sitting in the root pointing to itself.
-        LabelDataBase["rs"] = new DatabaseItem {value = LabelDataBase, parent = LabelDataBase};
-        ActiveScope = (Dictionary<string, DatabaseItem>)LabelDataBase["rs"].value;
-        
-        (List<string[]>? Result, ContextFetcherEnums Code) = FetchContext(SourceFileContentBuffer[^1], 0, SourceFileNameBuffer[^1]);
+        LabelDataBase["rs"] = new() {
+            { "self",    LabelDataBase },
+            { "parent",  LabelDataBase },
+            { "type",    AssembleTimeTypes.SCOPE },
+        };
+        ActiveScope = LabelDataBase["rs"];
+
+        (List<List<(string[], int)>>? Result, ContextFetcherEnums Code) = FetchContext(SourceFileContentBuffer[^1], 0, SourceFileNameBuffer[^1]);
         return 0;
     }
 
     internal static List<string[]> SourceFileContentBuffer = [];
     internal static List<string>   SourceFileNameBuffer    = [];
 
-    internal static Dictionary<string, DatabaseItem> LabelDataBase = [];
-    internal static Dictionary<string, DatabaseItem> ActiveScope = [];      // Generated default should never be used.
+    internal static Dictionary<string, Dictionary<string, object>> LabelDataBase = [];
+    internal static Dictionary<string, object> ActiveScope = [];
     internal static Languages ActiveLanguage;
 }
