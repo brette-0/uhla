@@ -145,58 +145,45 @@ internal enum AssembleTimeTypes  : byte {
                 internal int Terms;
             }
 
-            internal static class Evaluator {
+            static internal (bool, object) Evaluate(AssembleTimeTypes Type, List<DeltaTokens_t> Tokens, int MaxHierachy) {
+                (bool, object) Response = default;
 
-                static internal (bool, object) Evaluate(AssembleTimeTypes Type, List<DeltaTokens_t> Tokens, int MaxHierachy) {
-                    (bool, object)      Response = default;
-                    
-                    while(MaxHierachy >= -1) {
-                        int i; for (i = 0; i < Tokens.Count; i++) {
-                            if (Tokens[i].Hierarchy == MaxHierachy) break;
-                        }
-
-                        if (i == Tokens.Count) {
-                            MaxHierachy--;
-                            continue;
-                        }
-                        // resolve what is inside : capture object, type and object_reference
-
-                        if (MaxHierachy == -1) break;  // resolve, don't merge (you can't merge this with anything)
-
-
-                        // to merge, append two to one
-                        // return multiple terms as array of (type, value)
-                        DeltaTokens_t MutToks = new() { 
-                            DeltaTokens = [.. Tokens[i - 1].DeltaTokens, .. Tokens[i].DeltaTokens, .. Tokens[i + 1].DeltaTokens],
-                            Hierarchy = Tokens[i - 1].Hierarchy,
-                            Terms = Tokens[i - 1].Terms,
-                        };
-
-                        // merge 3 tokens into 1
-                        Tokens[i - 1] = MutToks;
-                        Tokens.RemoveAt(i);
-                        Tokens.RemoveAt(i);
+                while (MaxHierachy >= -1) {
+                    int i; for (i = 0; i < Tokens.Count; i++) {
+                        if (Tokens[i].Hierarchy == MaxHierachy) break;
                     }
-                    
-                    return Response;
+
+                    if (i == Tokens.Count) {
+                        MaxHierachy--;
+                        continue;
+                    }
+                    // resolve what is inside : capture object, type and object_reference
+
+                    if (MaxHierachy == -1) break;  // resolve, don't merge (you can't merge this with anything)
+
+
+                    // to merge, append two to one
+                    // return multiple terms as array of (type, value)
+                    DeltaTokens_t MutToks = new() {
+                        DeltaTokens = [.. Tokens[i - 1].DeltaTokens, .. Tokens[i].DeltaTokens, .. Tokens[i + 1].DeltaTokens],
+                        Hierarchy = Tokens[i - 1].Hierarchy,
+                        Terms = Tokens[i - 1].Terms,
+                    };
+
+                    // merge 3 tokens into 1
+                    Tokens[i - 1] = MutToks;
+                    Tokens.RemoveAt(i);
+                    Tokens.RemoveAt(i);
                 }
-               
-                internal static bool isNonLiteral(char First) =>
+
+                return Response;
+            }
+
+            internal static bool isNonLiteral(char First) =>
                     First switch {
                         '0' or '1' or '2' or '3' or '4' or '5' or '6' or '7' or '8' or '9' or '$' or '%' or '&' or '+' or '-' or '!' or '^' or '*' or '[' or ']' or '{' or '}' or '\'' or '#' or '~' or ':' or ',' or '<' or '.' or '>' or '/' or '?' => false,
                         _ => true,
                     };
-                
-                internal struct EvaluatorBuffer_t {         
-                    
-
-                    public EvaluatorBuffer_t() {
-
-                    }
-                }
-
-                internal static List<EvaluatorBuffer_t> EvaluationBuffers = [];
-            }
 
             internal static int GetHierachy(string Operator) {
                 int i = 0;
