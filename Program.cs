@@ -47,7 +47,7 @@ internal static class Program {
         };
         ActiveScope = LabelDataBase["rs"];
 
-        (List<(List<(string[] DeltaTokens, int Hierachy, int Terms)>, int MaxHierachy)>? Result, ContextFetcherEnums Code) = FetchContext(SourceFileContentBuffer[^1], 0, SourceFileNameBuffer[^1]);
+        (var response, var Status) = FetchContext(SourceFileContentBuffer[^1], 0, SourceFileNameBuffer[^1]);
         return 0;
     }
 

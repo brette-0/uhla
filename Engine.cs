@@ -139,12 +139,44 @@ internal enum AssembleTimeTypes  : byte {
                 /* Reserved         */ ["#", "\'"]                                                                  // throw error
             ];
 
+            internal struct DeltaTokens_t {
+                internal string[] DeltaTokens;
+                internal int Hierarchy;
+                internal int Terms;
+            }
+
             internal static class Evaluator {
 
-                static internal (bool, object) Evaluate(AssembleTimeTypes Type, List<(string[] DeltaTokens, int Hierarchy, int Terms)> Tokens) {
+                static internal (bool, object) Evaluate(AssembleTimeTypes Type, List<DeltaTokens_t> Tokens, int MaxHierachy) {
                     (bool, object)      Response = default;
                     
+                    while(MaxHierachy >= -1) {
+                        int i; for (i = 0; i < Tokens.Count; i++) {
+                            if (Tokens[i].Hierarchy == MaxHierachy) break;
+                        }
 
+                        if (i == Tokens.Count) {
+                            MaxHierachy--;
+                            continue;
+                        }
+                        // resolve what is inside : capture object, type and object_reference
+
+                        if (MaxHierachy == -1) break;  // resolve, don't merge (you can't merge this with anything)
+
+
+                        // to merge, append two to one
+                        // return multiple terms as array of (type, value)
+                        DeltaTokens_t MutToks = new() { 
+                            DeltaTokens = [.. Tokens[i - 1].DeltaTokens, .. Tokens[i].DeltaTokens, .. Tokens[i + 1].DeltaTokens],
+                            Hierarchy = Tokens[i - 1].Hierarchy,
+                            Terms = Tokens[i - 1].Terms,
+                        };
+
+                        // merge 3 tokens into 1
+                        Tokens[i - 1] = MutToks;
+                        Tokens.RemoveAt(i);
+                        Tokens.RemoveAt(i);
+                    }
                     
                     return Response;
                 }
@@ -155,13 +187,6 @@ internal enum AssembleTimeTypes  : byte {
                         _ => true,
                     };
                 
-
-                internal static int GetHierachy(string Operator) {
-                    int i = 0;
-                    for (; i < OrderedOperators.Length; i++) if (OrderedOperators[i].Contains(Operator)) break;
-                    return i;
-                }
-
                 internal struct EvaluatorBuffer_t {         
                     
 
@@ -171,6 +196,12 @@ internal enum AssembleTimeTypes  : byte {
                 }
 
                 internal static List<EvaluatorBuffer_t> EvaluationBuffers = [];
+            }
+
+            internal static int GetHierachy(string Operator) {
+                int i = 0;
+                for (; i < OrderedOperators.Length; i++) if (OrderedOperators[i].Contains(Operator)) break;
+                return i;
             }
 
             internal static readonly string[] Reserved = [
@@ -252,7 +283,7 @@ internal enum AssembleTimeTypes  : byte {
             /// <param name="Source"></param>
             /// <param name="Index"></param>
             /// <returns></returns>
-            internal static (List<(List<(string[] DeltaTokens, int Hierachy, int Terms)>, int MaxHierachy)>?, ContextFetcherEnums Code) FetchContext(string[] Source, int Index, string Filename) {
+            internal static (List<(List<DeltaTokens_t> DeltaTokens, int MaxHierachy)>?, ContextFetcherEnums Code) FetchContext(string[] Source, int Index, string Filename) {
                 int      StartingIndex              = Index;            // Beginning Line Number for Error Reports
                 int      StringIndex                = 0;                // How far into the raw strings we are
                 int      VerifiedStringIndex        = 0;                // Sum of all verified (thus far) steps
@@ -264,48 +295,54 @@ internal enum AssembleTimeTypes  : byte {
                 int[]    UnresolvedTermsBuffer      = new int[TokenizedBuffer.Length];
                 int[]    nCapturedItemsBuffer       = new int[TokenizedBuffer.Length];
                 bool[]   ResolvingTermsBuffer       = new bool[TokenizedBuffer.Length]; // begin collecting, post assignment begin resolving
-                int      Hierachy, MaxHierachy;
+                int      Hierarchy, MaxHierachy;
                 int      TokenizedCheckPoint        = 0;
 
                 bool     HasSteps                   = TokenizedBuffer.Contains(";");
+                int      LastNonEmptyTokenIndex     = 0;
 
-                List<(List<(string[] DeltaTokens, int Hierachy, int Terms)> Tokens, int MaxHierachy)> StepMatrixes    = [];
-                (List<(string[] DeltaTokens, int Hierachy, int Terms)> Tokens, int MaxHierachy) StepMatrix = ([], 0);
+                List<(List<DeltaTokens_t> Tokens, int MaxHierachy)> StepMatrixes    = [];
+                (List<DeltaTokens_t> Tokens, int MaxHierachy) StepMatrix = ([], 0);
                 int      HierachyDeltaCheckpoint    = 0;
 
                 
                 // Used to unify between string and char operator identifiers
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 void UnifiedModularCompareAssignment() {
-                    if (!ResolvingTermsBuffer[1 + Hierachy]) {
-                        UnresolvedTermsBuffer[1 + Hierachy] = nCapturedItemsBuffer[1 + Hierachy];
-                        ResolvingTermsBuffer[1 + Hierachy] = true;
+                    if (!ResolvingTermsBuffer[1 + Hierarchy]) {
+                        UnresolvedTermsBuffer[1 + Hierarchy] = nCapturedItemsBuffer[1 + Hierarchy];
+                        ResolvingTermsBuffer[1 + Hierarchy] = true;
                     }
                 }
 
                 // Clone method for final step
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                static (List<(string[] DeltaTokens, int Hierachy, int Terms)>, int MaxHierachy) CloneChunk(
-                    (List<(string[] DeltaTokens, int Hierachy, int Terms)> Matrix, int MaxHierachy) source) {
-                    var original = source.Matrix;
-                    var clone = new List<(string[] DeltaTokens, int Hierachy, int Terms)>(original.Count);
-                    foreach (var (tokens, hierachy, terms) in original)
-                        clone.Add((tokens.ToArray(), hierachy, terms));
-                    return (clone, source.MaxHierachy);
+                static (List<DeltaTokens_t>, int MaxHierarchy) CloneChunk((List<DeltaTokens_t>, int MaxHierarchy) source) {
+                    var clone = new List<DeltaTokens_t>(source.Item1.Count);
+                    foreach (var item in source.Item1)
+                        clone.Add(new DeltaTokens_t {
+                            DeltaTokens = (string[])item.DeltaTokens.Clone(),
+                            Hierarchy = item.Hierarchy,
+                            Terms = item.Terms
+                        });
+                    return (clone, source.MaxHierarchy);
                 }
 
                 do {
-                    MaxHierachy = Hierachy = -1;
+                    MaxHierachy = Hierarchy = -1;
                     for (int i = 0; i < TokenizedBuffer.Length; StringIndex += TokenizedBuffer[i].Length, i++) {
+                        if (TokenizedBuffer[i][0] == ' ' || TokenizedBuffer[i][0] == '\t') continue;
+                        LastNonEmptyTokenIndex = i;
+
                         if (TokenizedBuffer[i][0] == '\"') {
-                            if ((Hierachy == -1) || (ContainerBuffer[Hierachy] != '\"')) {
-                                ContainerBuffer[++Hierachy] = '\"';
+                            if ((Hierarchy == -1) || (ContainerBuffer[Hierarchy] != '\"')) {
+                                ContainerBuffer[++Hierarchy] = '\"';
                             } else {
-                                ContainerBuffer[Hierachy] = '\x00';  // clear to indicate closed string
-                                Hierachy--;
+                                ContainerBuffer[Hierarchy] = '\x00';  // clear to indicate closed string
+                                Hierarchy--;
                             }
                         }
-                        else if (Hierachy != -1 && ContainerBuffer[Hierachy] == '\"') continue;
+                        else if (Hierarchy != -1 && ContainerBuffer[Hierarchy] == '\"') continue;
                         else if (TokenizedBuffer[i] == "+=")  UnifiedModularCompareAssignment();
                         else if (TokenizedBuffer[i] == "-=")  UnifiedModularCompareAssignment();
                         else if (TokenizedBuffer[i] == "*=")  UnifiedModularCompareAssignment();
@@ -318,30 +355,26 @@ internal enum AssembleTimeTypes  : byte {
                         else if (TokenizedBuffer[i] == "<<=") UnifiedModularCompareAssignment();
                         else if (TokenizedBuffer[i] == "??=") UnifiedModularCompareAssignment();
 
-                        else if (TokenizedBuffer[i] == "$\"") ContainerBuffer[++Hierachy] = '$';
+                        else if (TokenizedBuffer[i] == "$\"") ContainerBuffer[++Hierarchy] = '$';
                         else switch (TokenizedBuffer[i][0]) {
-                                case ' ':
-                                case '\t':
-                                    continue;
-
                                 case '=':
                                     UnifiedModularCompareAssignment();
                                     break;
 
                                 case ',':
-                                    if (Hierachy != -1 && ContainerBuffer[Hierachy] != '(') {
+                                    if (Hierarchy != -1 && ContainerBuffer[Hierarchy] != '(') {
                                         Terminal.Error(
                                             ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Comma, only parenthesis '()' and string parenthesis '\"\"' may contain commas")]}.",
                                             StartingIndex, HasSteps ? StepMatrix.Tokens.Count : null, ApplyWiggle(AccumulatedContext, StringIndex + 1, 1)
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     }
-                                    if (ResolvingTermsBuffer[1 + Hierachy]) UnresolvedTermsBuffer[1 + Hierachy]--;
-                                    else nCapturedItemsBuffer[1 + Hierachy]++;
+                                    if (ResolvingTermsBuffer[1 + Hierarchy]) UnresolvedTermsBuffer[1 + Hierarchy]--;
+                                    else nCapturedItemsBuffer[1 + Hierarchy]++;
 
-                                    if (UnresolvedTermsBuffer[1 + Hierachy] == -1) {
+                                    if (UnresolvedTermsBuffer[1 + Hierarchy] == -1) {
                                         Terminal.Error(
-                                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Comma, the amount of terms to resolve is")]} {1 + nCapturedItemsBuffer[1 + Hierachy]}.",
+                                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Comma, the amount of terms to resolve is")]} {1 + nCapturedItemsBuffer[1 + Hierarchy]}.",
                                             StartingIndex, HasSteps ? StepMatrix.Tokens.Count : null, ApplyWiggle(AccumulatedContext, StringIndex + 1, 1)
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
@@ -349,20 +382,24 @@ internal enum AssembleTimeTypes  : byte {
                                     break;
 
                                 case '(':
-                                    StepMatrix.Tokens.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1, nCapturedItemsBuffer[1 + Hierachy]));
+                                    StepMatrix.Tokens.Add(new() { 
+                                        DeltaTokens = new string[i - HierachyDeltaCheckpoint], 
+                                        Hierarchy = Hierarchy + 1, 
+                                        Terms = nCapturedItemsBuffer[1 + Hierarchy] 
+                                    });
                                     Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
-                                    HierachyDeltaCheckpoint = i + 1;
+                                    HierachyDeltaCheckpoint = i;
 
-                                    if (++Hierachy > MaxHierachy) MaxHierachy = Hierachy;
+                                    if (++Hierarchy > MaxHierachy) MaxHierachy = Hierarchy;
 
-                                    nCapturedItemsBuffer[1 + Hierachy] = 0;         // New set of terms (begin 0)
-                                    ResolvingTermsBuffer[1 + Hierachy] = false;     // Mark as fetching
-                                    ContainerBuffer[Hierachy] = '(';                // Log last used container
+                                    nCapturedItemsBuffer[1 + Hierarchy] = 0;         // New set of terms (begin 0)
+                                    ResolvingTermsBuffer[1 + Hierarchy] = false;     // Mark as fetching
+                                    ContainerBuffer[Hierarchy] = '(';                // Log last used container
                                     ContainerBufferTaleStringIndex = StringIndex;
                                     continue;
 
                                 case ')':
-                                    if (Hierachy == -1 || ContainerBuffer[Hierachy] != '(') {
+                                    if (Hierarchy == -1 || ContainerBuffer[Hierarchy] != '(') {
                                         /*
                                          * May look like [1 + 2)    <-- invalid termination
                                          * Syntax Error : Unexpected Parenthesis (1, 2) :\n{line information}
@@ -373,35 +410,43 @@ internal enum AssembleTimeTypes  : byte {
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     } else {
-                                        if (UnresolvedTermsBuffer[1 + Hierachy] != 0) {
+                                        if (UnresolvedTermsBuffer[1 + Hierarchy] != 0) {
                                             Terminal.Error(
-                                                ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Terms left unaccounted for")]}: {1 + nCapturedItemsBuffer[1 + Hierachy] - UnresolvedTermsBuffer[1 + Hierachy]}",
+                                                ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Terms left unaccounted for")]}: {1 + nCapturedItemsBuffer[1 + Hierarchy] - UnresolvedTermsBuffer[1 + Hierarchy]}",
                                                 StartingIndex, HasSteps ? StepMatrix.Tokens.Count : null, ApplyWiggle(AccumulatedContext, StringIndex, 1)
                                             );
                                             return (null, ContextFetcherEnums.MALFORMED);
                                         }
 
-                                        StepMatrix.Tokens.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1, nCapturedItemsBuffer[1 + Hierachy]));
+                                        StepMatrix.Tokens.Add(new() {
+                                            DeltaTokens = new string[i - HierachyDeltaCheckpoint],
+                                            Hierarchy = Hierarchy + 1,
+                                            Terms = nCapturedItemsBuffer[1 + Hierarchy]
+                                        });
                                         Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
-                                        HierachyDeltaCheckpoint = i + 1;
+                                        HierachyDeltaCheckpoint = i;
 
-                                        Hierachy--;
+                                        Hierarchy--;
                                         continue;
                                     }
 
                                 case '[':
-                                    StepMatrix.Tokens.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1, nCapturedItemsBuffer[1 + Hierachy]));
+                                    StepMatrix.Tokens.Add(new() {
+                                        DeltaTokens = new string[i - HierachyDeltaCheckpoint],
+                                        Hierarchy = Hierarchy + 1,
+                                        Terms = nCapturedItemsBuffer[1 + Hierarchy]
+                                    }); 
                                     Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
-                                    HierachyDeltaCheckpoint = i + 1;
+                                    HierachyDeltaCheckpoint = i;
                                     // We need to ensure we do not skip the [ as it counts as the index operator
 
-                                    if (++Hierachy > MaxHierachy) MaxHierachy = Hierachy;
-                                    ContainerBuffer[Hierachy] = '[';
+                                    if (++Hierarchy > MaxHierachy) MaxHierachy = Hierarchy;
+                                    ContainerBuffer[Hierarchy] = '[';
                                     ContainerBufferTaleStringIndex = StringIndex;
                                     continue;
 
                                 case ']':
-                                    if (Hierachy == -1 || ContainerBuffer[Hierachy] != '[') {
+                                    if (Hierarchy == -1 || ContainerBuffer[Hierarchy] != '[') {
                                         /*
                                          * May look like {1 + 2]    <-- invalid termination
                                          * Syntax Error : Unexpected Bracket (1, 2) :\n{line information}
@@ -413,17 +458,21 @@ internal enum AssembleTimeTypes  : byte {
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     } else {
 
-                                        StepMatrix.Tokens.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1, nCapturedItemsBuffer[1 + Hierachy]));
+                                        StepMatrix.Tokens.Add(new() {
+                                            DeltaTokens = new string[i - HierachyDeltaCheckpoint],
+                                            Hierarchy = Hierarchy + 1,
+                                            Terms = nCapturedItemsBuffer[1 + Hierarchy]
+                                        });
                                         Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
-                                        HierachyDeltaCheckpoint = i + 1;
+                                        HierachyDeltaCheckpoint = i;
 
-                                        Hierachy--;
+                                        Hierarchy--;
                                         continue;
                                     }
 
                                 // braces are code block only, unless in format string
                                 case '{':
-                                    if (Hierachy == -1 || ContainerBuffer[Hierachy] != '$') {
+                                    if (Hierarchy == -1 || ContainerBuffer[Hierarchy] != '$') {
                                         /*
                                          * May look like (H=0)  {1 + 1}
                                          */
@@ -434,17 +483,21 @@ internal enum AssembleTimeTypes  : byte {
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     }
 
-                                    StepMatrix.Tokens.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1, nCapturedItemsBuffer[1 + Hierachy]));
+                                    StepMatrix.Tokens.Add(new() {
+                                        DeltaTokens = new string[i - HierachyDeltaCheckpoint],
+                                        Hierarchy = Hierarchy + 1,
+                                        Terms = nCapturedItemsBuffer[1 + Hierarchy]
+                                    });
                                     Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
-                                    HierachyDeltaCheckpoint = i + 1;
+                                    HierachyDeltaCheckpoint = i ;
 
-                                    if (++Hierachy > MaxHierachy) MaxHierachy = Hierachy;
-                                    ContainerBuffer[Hierachy] = '[';
+                                    if (++Hierarchy > MaxHierachy) MaxHierachy = Hierarchy;
+                                    ContainerBuffer[Hierarchy] = '[';
                                     ContainerBufferTaleStringIndex = StringIndex;
                                     continue;
 
                                 case '}':
-                                    if (Hierachy == -1 || ContainerBuffer[Hierachy] != '[') {
+                                    if (Hierarchy == -1 || ContainerBuffer[Hierarchy] != '[') {
                                         /*
                                          * May look like (1 + 2}    <-- invalid termination
                                          * Syntax Error : Unexpected Brace (1, 2) :\n{line information}
@@ -455,17 +508,20 @@ internal enum AssembleTimeTypes  : byte {
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     } else {
-
-                                        StepMatrix.Tokens.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1, nCapturedItemsBuffer[1 + Hierachy]));
+                                        StepMatrix.Tokens.Add(new() {
+                                            DeltaTokens = new string[i - HierachyDeltaCheckpoint],
+                                            Hierarchy = Hierarchy + 1,
+                                            Terms = nCapturedItemsBuffer[1 + Hierarchy]
+                                        });
                                         Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
-                                        HierachyDeltaCheckpoint = i + 1;
+                                        HierachyDeltaCheckpoint = i;
 
-                                        Hierachy--;
+                                        Hierarchy--;
                                         continue;
                                     }
 
                                 case ';':
-                                    if (Hierachy == -1) {
+                                    if (Hierarchy == -1) {
                                         if (UnresolvedTermsBuffer[0] != 0) {
                                             Terminal.Error(
                                                 ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Terms left unaccounted for")]}: {1 + nCapturedItemsBuffer[0] - UnresolvedTermsBuffer[0]}",
@@ -478,7 +534,11 @@ internal enum AssembleTimeTypes  : byte {
                                         nCapturedItemsBuffer[0] = 0;
                                         VerifiedStringIndex = StringIndex + 1;
 
-                                        StepMatrix.Tokens.Add((new string[i - HierachyDeltaCheckpoint], Hierachy + 1, nCapturedItemsBuffer[1 + Hierachy]));
+                                        StepMatrix.Tokens.Add(new() {
+                                            DeltaTokens = new string[i - HierachyDeltaCheckpoint],
+                                            Hierarchy = Hierarchy + 1,
+                                            Terms = nCapturedItemsBuffer[1 + Hierarchy]
+                                        });
                                         Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
                                         HierachyDeltaCheckpoint = i + 1;
 
@@ -503,7 +563,11 @@ internal enum AssembleTimeTypes  : byte {
                             }
                     }
 
-                    if ((UnresolvedTermsBuffer[0] == 0) && Hierachy == -1 && TokenizedBuffer[^1][0] != ',') break;
+                    int  CheckForUnary = GetHierachy(TokenizedBuffer[LastNonEmptyTokenIndex]);
+                    bool TokenindicatesContinuation = CheckForUnary != GetHierachy("++") && CheckForUnary != OrderedOperators.Length;
+
+
+                    if ((UnresolvedTermsBuffer[0] == 0) && (Hierarchy == -1) && !TokenindicatesContinuation) break;
 
                     // if no more context can be supplied, return unterminated and log error to user
                     if (++Index == Source.Length) {
@@ -525,7 +589,11 @@ internal enum AssembleTimeTypes  : byte {
 
                 } while (true);
 
-                StepMatrix.Tokens.Add((new string[TokenizedBuffer.Length - HierachyDeltaCheckpoint], 0, nCapturedItemsBuffer[0]));
+                StepMatrix.Tokens.Add(new() {
+                    DeltaTokens = new string[TokenizedBuffer.Length - HierachyDeltaCheckpoint],
+                    Hierarchy = Hierarchy + 1,
+                    Terms = nCapturedItemsBuffer[1 + Hierarchy]
+                });
                 Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, TokenizedBuffer.Length - HierachyDeltaCheckpoint);
                 StepMatrix.MaxHierachy = MaxHierachy;
                 StepMatrixes.Add(CloneChunk(StepMatrix));
