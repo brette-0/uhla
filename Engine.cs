@@ -9,7 +9,7 @@ using Numinous.Langauges;
 namespace Numinous {
 
     namespace Engine {
-internal enum AssembleTimeTypes  : byte {
+        internal enum AssembleTimeTypes  : byte {
             WAIT,       // Waiting on first value (Evaluator Solving)
             INT,        // assemble time integer
             STRING,     // assemble time string
@@ -21,7 +21,18 @@ internal enum AssembleTimeTypes  : byte {
             FLAG,       // CPU Status Flag
             PROC,       // Procedure
             INTER,      // Interrupt
-            BANK        // Bank
+            BANK,       // Bank
+
+            CINT,       // Constant int
+            CSTRING,    // Constant string
+            CEXP,       // Constant expression
+            CSCOPE,     // Constant Scope reference
+            CRT,        // Constant runtime reference
+            CREG,       // Constant register reference
+            CFLAG,      // Constant flag reference
+            CPROC,      // Constant procedure reference
+            CINTER,     // Constant interrupt reference
+            CBANK,      // Constant bank reference
         }
 
         internal enum AssemleTimeValueStatus : byte {
@@ -37,9 +48,9 @@ internal enum AssembleTimeTypes  : byte {
         }
 
         internal struct RunTimeVariable {
-            internal int size;   // in bytes
-            internal bool signed; // false => unsigned
-            internal bool endian; // false => little
+            internal int size;      // in bytes
+            internal bool signed;   // false => unsigned
+            internal bool endian;   // false => little
         }
 
         internal enum ErrorLevels : byte {
@@ -51,59 +62,7 @@ internal enum AssembleTimeTypes  : byte {
         }
 
         internal enum DecodingPhase : byte {
-            TERMINAL, TOKEN
-        }
-
-        namespace Types {
-            internal class Scope;
-        }
-
-        internal enum Operators : byte {
-            WAIT,       // waiting on operator
-
-            ABSOLUTE,
-            NEGATE,
-            BITNEGATE,
-            NONZERO,
-            HI,
-            LO,
-            HAS,
-            NULLHAS,
-            SWITCH,
-            MULT,
-            DIV,
-            MOD,
-            ADD,
-            SUB,
-            RIGHT,
-            LEFT,
-            BITMASK,
-            BITFLIP,
-            BITSET,
-            GT,
-            LT,
-            GTE,
-            LTE,
-            SERIAL,
-            EQUAL,
-            INEQUAL,
-            AND,
-            OR,
-            NULL,
-            CHECK,
-            ELSE,
-            SET,
-            INC,
-            DEC,
-            SETMULT,
-            SETDIV,
-            SETMOD,
-            SETMASK,
-            SETFLIP,
-            SETSET,
-            SETRIGHT,
-            SETLEFT,
-            SPLIT
+            TERMINAL, TOKEN, EVALUATION
         }
 
         internal enum Expectations : byte {
@@ -145,7 +104,33 @@ internal enum AssembleTimeTypes  : byte {
                 internal int Terms;
             }
 
-            static internal (bool, object) Evaluate(AssembleTimeTypes Type, List<DeltaTokens_t> Tokens, int MaxHierachy) {
+            /// <summary>
+            /// This will either push back an object reference, or a constant object literal.
+            /// This will ignore all forms of containers - expects no type, just detects and works with it.
+            /// If the Resolve is null, it means an error occured.
+            /// </summary>
+            /// <param name="Tokens"></param>
+            /// <returns></returns>
+            static internal (string? Representation, AssembleTimeTypes ResolveType) LinearEvaluate(List<string> Tokens) {
+                int PendingOperations = Tokens.Count(t => GetHierachy(t) != OrderedOperators.Length);
+                bool ExpectValueToggle = true;
+
+                List<(object value, AssembleTimeTypes type)> Data = [];
+
+                // decode until we are clear of any operations
+                while (PendingOperations > 0) {
+                    if (ExpectValueToggle) {
+
+
+                        continue;
+                    } 
+                }
+
+
+                return default;
+            }
+
+            static internal (bool, object) DeltaEvaluate(AssembleTimeTypes Type, List<DeltaTokens_t> Tokens, int MaxHierachy) {
                 (bool, object) Response = default;
 
                 while (MaxHierachy >= -1) {
@@ -179,7 +164,7 @@ internal enum AssembleTimeTypes  : byte {
                 return Response;
             }
 
-            internal static bool isNonLiteral(char First) =>
+            internal static bool IsNonLiteral(char First) =>
                     First switch {
                         '0' or '1' or '2' or '3' or '4' or '5' or '6' or '7' or '8' or '9' or '$' or '%' or '&' or '+' or '-' or '!' or '^' or '*' or '[' or ']' or '{' or '}' or '\'' or '#' or '~' or ':' or ',' or '<' or '.' or '>' or '/' or '?' => false,
                         _ => true,
@@ -459,7 +444,8 @@ internal enum AssembleTimeTypes  : byte {
 
                                 // braces are code block only, unless in format string
                                 case '{':
-                                    if (Hierarchy == -1 || ContainerBuffer[Hierarchy] != '$') {
+                                    if (Hierarchy == -1) break;                 // begin of a code brace
+                                    if (ContainerBuffer[Hierarchy] != '$') {
                                         /*
                                          * May look like (H=0)  {1 + 1}
                                          */
