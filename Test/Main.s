@@ -1,3 +1,1 @@
-a, b, c = c,
-		  b,
-		  a
+thing
