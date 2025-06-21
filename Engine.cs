@@ -7,7 +7,6 @@ using System.Text.RegularExpressions;
 using Numinous.Langauges;
 
 namespace Numinous {
-
     namespace Engine {
         internal enum AssembleTimeTypes  : byte {
             WAIT,       // Waiting on first value (Evaluator Solving)
@@ -33,6 +32,11 @@ namespace Numinous {
             CPROC,      // Constant procedure reference
             CINTER,     // Constant interrupt reference
             CBANK,      // Constant bank reference
+
+            MACRO,      // void macro
+            MINT,       // int macro
+            MSTRING,    // string macro
+            MEXP,       // expression macro
         }
 
         internal enum AssemleTimeValueStatus : byte {
@@ -354,7 +358,7 @@ namespace Numinous {
                         LastNonEmptyTokenIndex = i;
 
                         if (TokenizedBuffer[i][0] == '\"') {
-                            if ((Hierarchy == -1) || (ContainerBuffer[Hierarchy] != '\"')) {
+                            if (Hierarchy == -1 || (ContainerBuffer[Hierarchy] != '\"' && ContainerBuffer[Hierarchy] != '$')) {
                                 ContainerBuffer[++Hierarchy] = '\"';
                             } else {
                                 ContainerBuffer[Hierarchy] = '\x00';  // clear to indicate closed string
