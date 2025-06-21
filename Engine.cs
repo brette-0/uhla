@@ -275,7 +275,10 @@ namespace Numinous {
 
                     for (int i = 0; i < tokens.Count; i++) {
                         string token = tokens[i];
-                        if (Program.ActiveScope.TryGetValue(token, out object CapturedValue) && ((Dictionary<string, AssembleTimeTypes>)CapturedValue)["type"] == AssembleTimeTypes.EXP) {
+                        if (Program.ActiveScope.TryGetValue(token, out object CapturedValue) && (
+                            ((Dictionary<string, AssembleTimeTypes>)CapturedValue)["type"] == AssembleTimeTypes.EXP ||
+                            ((Dictionary<string, AssembleTimeTypes>)CapturedValue)["type"] == AssembleTimeTypes.CEXP
+                        )) {
                             UpdatedTokens.AddRange(((Dictionary<string, List<string>>)CapturedValue)["self"]);
                             DidReplace = true;
                         } else {

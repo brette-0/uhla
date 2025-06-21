@@ -43,8 +43,16 @@ internal static class Program {
         LabelDataBase["rs"] = new() {
             { "self",    LabelDataBase },
             { "parent",  LabelDataBase },
-            { "type",    AssembleTimeTypes.SCOPE },
+            { "type",    AssembleTimeTypes.CSCOPE },
         };
+
+        // make language a compiler variable
+        LabelDataBase["lang"] = new() {
+            {"self",    ActiveLanguage.ToString() },
+            {"parent",  LabelDataBase},
+            {"type",    AssembleTimeTypes.CEXP },
+        };
+
         ActiveScope = LabelDataBase["rs"];
 
         (var response, var Status) = FetchContext(SourceFileContentBuffer[^1], 0, SourceFileNameBuffer[^1]);
