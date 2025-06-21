@@ -83,8 +83,7 @@ namespace Numinous {
             /// If the Resolve is null, it means an error occured.
             /// Container may be either
             ///     (   - Any value push back
-            ///     {   - Code block OR switch case OR format string
-            ///     "   - string
+            ///     {   - format string
             ///     [   - Index
             /// </summary>
             /// <param name="Tokens"></param>
@@ -152,69 +151,65 @@ namespace Numinous {
                 "." or "?."
                 => 1,
 
-                /* Switch*/
-                "switch"
-                => 2,
-
                 /* Multiplicative*/
                 "*" or "/" or "%"
-                => 3,
+                => 2,
 
                 /* Additive*/
                 "+" or "-"
-                => 4,
+                => 3,
 
                 /* Shift*/
                 ">>" or "<<"
-                => 55,
+                => 4,
 
                 /* Boolean And*/
                 "&"
-                => 6,
+                => 5,
 
                 /* Boolean Xor*/
                 "^"
-                => 7,
+                => 6,
 
                 /* Boolean Or*/
                 "|"
-                => 8,
+                => 7,
 
                 /* Relational*/
                 ">" or "<" or ">=" or "<=" or "<=>"
-                => 9,
+                => 8,
 
                 /* Equality*/
                 "==" or "!="
-                => 10,
+                => 9,
 
                 /* Conditional And*/
                 "&&"
-                => 11,
+                => 10,
 
                 /* Conditional Or*/
                 "||"
-                => 12,
+                => 11,
 
                 /* Null coalesce*/
                 "??"
-                => 13,
+                => 12,
 
                 /* Ternary*/
                 "?" or ":"
-                => 14,
+                => 13,
 
                 /* Assignment*/
                 "=" or "+=" or "-=" or "*=" or "/=" or "%=" or "|=" or "&=" or "^=" or "??=" or ">>=" or "<<="
-                => 15,
+                => 14,
 
                 /* Term*/
                 ","
-                => 16,
+                => 15,
 
                 /* Reserved*/
                 "#" or "'"
-                => 17,
+                => 16,
 
                 /* Not found*/
                 _
@@ -230,7 +225,7 @@ namespace Numinous {
                 "ref", "void", "int", "string", "exp", "bank", "proc", "reg", "flag", "scope", "namespace",
                 
                 // conditional assembly
-                "if", "else", "loop", "break", "switch", "case", "return",
+                "if", "else", "loop", "break", "return",
                 
                 // runtime type filters
                 "ux", "ix", "lx", "bx", "ulx", "ilx", "ubx", "ibx", "num", 
@@ -493,7 +488,7 @@ namespace Numinous {
 
                                 // braces are code block only, unless in format string
                                 case '{':
-                                    if (Hierarchy != -1 && ContainerBuffer[Hierarchy] != '$' && TokenizedBuffer[LastNonEmptyTokenIndex] != "switch") {
+                                    if (Hierarchy != -1 && ContainerBuffer[Hierarchy] != '$') {
                                         /*
                                          * May look like ({1 + 1}) or (+ {})
                                          */
