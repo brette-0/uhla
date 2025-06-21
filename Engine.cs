@@ -71,34 +71,7 @@ namespace Numinous {
         }
 
         internal static class Engine {
-            /// <summary>
-            /// Used for reordering the Tokens into the mutation chronology.
-            /// Parenthesis, indexing, attributes and scope routing are handling differently.
-            /// Incrementor and Decrementor is also handled seperately
-            /// </summary>
-            internal static readonly List<string>[] OrderedOperators = [
-                /* Index            */ ["["],
-                /* Unary            */ ["+", "-", "~", "!", ">", "<"],
-                /* Property         */ [".", "?."],
-                /* Switch           */ ["switch"],
-                /* Multiplicative   */ ["*", "/", "%"],
-                /* Additive         */ ["+", "-"],
-                /* Shift            */ [">>", "<<"],
-                /* Boolean And      */ ["&"],
-                /* Boolean Xor      */ ["^"],
-                /* Boolean Or       */ ["|"],
-                /* Relational       */ [">", "<", ">=", "<=", "<=>"],
-                /* Equality         */ ["==", "!="],
-                /* Conditional And  */ ["&&"],
-                /* Conditional Or   */ ["||"],
-                /* Null coalesce    */ ["??"],
-                /* Ternary          */ ["?", ":"],                                                                  // Violates VOV
-                /* Assignment       */ ["=", "+=", "-=", "*=", "/=", "%=", "|=", "&=", "^=", "??=", ">>=", "<<="],  // Modifies in post
-                /* Term             */ [","],
-                /* Reserved         */ ["#", "\'"]                                                                  // throw error
-            ];
-
-            internal struct DeltaTokens_t {
+           internal struct DeltaTokens_t {
                 internal string[] DeltaTokens;
                 internal int Hierarchy;
                 internal int Terms;
@@ -112,7 +85,7 @@ namespace Numinous {
             /// <param name="Tokens"></param>
             /// <returns></returns>
             static internal (string? Representation, AssembleTimeTypes ResolveType) LinearEvaluate(List<string> Tokens) {
-                int PendingOperations = Tokens.Count(t => GetHierachy(t) != OrderedOperators.Length);
+                int PendingOperations = Tokens.Count(t => GetHierachy(t) != -1);
                 bool ExpectValueToggle = true;
 
                 List<(object value, AssembleTimeTypes type)> Data = [];
@@ -170,11 +143,80 @@ namespace Numinous {
                         _ => true,
                     };
 
-            internal static int GetHierachy(string Operator) {
-                int i = 0;
-                for (; i < OrderedOperators.Length; i++) if (OrderedOperators[i].Contains(Operator)) break;
-                return i;
-            }
+            internal static int GetHierachy(string op) => op switch {
+                /* Property*/
+                "." or "?."
+                => 1,
+
+                /* Switch*/
+                "switch"
+                => 2,
+
+                /* Multiplicative*/
+                "*" or "/" or "%"
+                => 3,
+
+                /* Additive*/
+                "+" or "-"
+                => 4,
+
+                /* Shift*/
+                ">>" or "<<"
+                => 55,
+
+                /* Boolean And*/
+                "&"
+                => 6,
+
+                /* Boolean Xor*/
+                "^"
+                => 7,
+
+                /* Boolean Or*/
+                "|"
+                => 8,
+
+                /* Relational*/
+                ">" or "<" or ">=" or "<=" or "<=>"
+                => 9,
+
+                /* Equality*/
+                "==" or "!="
+                => 10,
+
+                /* Conditional And*/
+                "&&"
+                => 11,
+
+                /* Conditional Or*/
+                "||"
+                => 12,
+
+                /* Null coalesce*/
+                "??"
+                => 13,
+
+                /* Ternary*/
+                "?" or ":"
+                => 14,
+
+                /* Assignment*/
+                "=" or "+=" or "-=" or "*=" or "/=" or "%=" or "|=" or "&=" or "^=" or "??=" or ">>=" or "<<="
+                => 15,
+
+                /* Term*/
+                ","
+                => 16,
+
+                /* Reserved*/
+                "#" or "'"
+                => 17,
+
+                /* Not found*/
+                _
+                => -1
+            };
+
 
             internal static readonly string[] Reserved = [
                 // directives
@@ -536,7 +578,7 @@ namespace Numinous {
                     }
 
                     int  CheckForUnary = GetHierachy(TokenizedBuffer[LastNonEmptyTokenIndex]);
-                    bool TokenindicatesContinuation = CheckForUnary != GetHierachy("++") && CheckForUnary != OrderedOperators.Length;
+                    bool TokenindicatesContinuation = CheckForUnary != GetHierachy("++") && CheckForUnary != -1;
 
 
                     if ((UnresolvedTermsBuffer[0] == 0) && (Hierarchy == -1) && !TokenindicatesContinuation) break;
