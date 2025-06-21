@@ -81,10 +81,15 @@ namespace Numinous {
             /// This will either push back an object reference, or a constant object literal.
             /// This will ignore all forms of containers - expects no type, just detects and works with it.
             /// If the Resolve is null, it means an error occured.
+            /// Container may be either
+            ///     (   - Any value push back
+            ///     {   - Code block OR switch case OR format string
+            ///     "   - string
+            ///     [   - Index
             /// </summary>
             /// <param name="Tokens"></param>
             /// <returns></returns>
-            static internal (string? Representation, AssembleTimeTypes ResolveType) LinearEvaluate(List<string> Tokens) {
+            static internal (string? Representation, AssembleTimeTypes ResolveType, char Container) LinearEvaluate(List<string> Tokens) {
                 int PendingOperations = Tokens.Count(t => GetHierachy(t) != -1);
                 bool ExpectValueToggle = true;
 
@@ -93,8 +98,7 @@ namespace Numinous {
                 // decode until we are clear of any operations
                 while (PendingOperations > 0) {
                     if (ExpectValueToggle) {
-
-
+                        
                         continue;
                     } 
                 }
@@ -306,9 +310,9 @@ namespace Numinous {
 
                 string[] TokenizedBuffer            = [.. SolveDefines(Tokenize(Source[Index]))];
                 char[]   ContainerBuffer            = new char[TokenizedBuffer.Length];
-                int[]    UnresolvedTermsBuffer      = new int[TokenizedBuffer.Length];
-                int[]    nCapturedItemsBuffer       = new int[TokenizedBuffer.Length];
-                bool[]   ResolvingTermsBuffer       = new bool[TokenizedBuffer.Length]; // begin collecting, post assignment begin resolving
+                int[]    UnresolvedTermsBuffer      = new  int[TokenizedBuffer.Length + 1];
+                int[]    nCapturedItemsBuffer       = new  int[TokenizedBuffer.Length + 1];
+                bool[]   ResolvingTermsBuffer       = new bool[TokenizedBuffer.Length + 1]; // begin collecting, post assignment begin resolving
                 int      Hierarchy, MaxHierachy;
                 int      TokenizedCheckPoint        = 0;
 
@@ -317,7 +321,7 @@ namespace Numinous {
 
                 List<(List<DeltaTokens_t> Tokens, int MaxHierachy)> StepMatrixes    = [];
                 (List<DeltaTokens_t> Tokens, int MaxHierachy) StepMatrix = ([], 0);
-                int      HierachyDeltaCheckpoint    = 0;
+                int      HierarchyDeltaCheckpoint    = 0;
 
                 
                 // Used to unify between string and char operator identifiers
@@ -345,6 +349,9 @@ namespace Numinous {
                 do {
                     MaxHierachy = Hierarchy = -1;
                     for (int i = 0; i < TokenizedBuffer.Length; StringIndex += TokenizedBuffer[i].Length, i++) {
+                        // capture tokens inside without checking for anything until code brace ends. Overrules everything.
+                        // cannot evalute as we have not gauranteed intentional access if is conditional and the condition evaluates to negative.
+                        if (Hierarchy == 0 && ContainerBuffer[Hierarchy] == '{' && TokenizedBuffer[i][0] != '}') continue;
                         if (TokenizedBuffer[i][0] == ' ' || TokenizedBuffer[i][0] == '\t') continue;
                         LastNonEmptyTokenIndex = i;
 
@@ -373,7 +380,7 @@ namespace Numinous {
                         else switch (TokenizedBuffer[i][0]) {
                                 case '=':
                                     UnifiedModularCompareAssignment();
-                                    break;
+                                    continue;
 
                                 case ',':
                                     if (Hierarchy != -1 && ContainerBuffer[Hierarchy] != '(') {
@@ -393,16 +400,16 @@ namespace Numinous {
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     }
-                                    break;
+                                    continue;
 
                                 case '(':
                                     StepMatrix.Tokens.Add(new() { 
-                                        DeltaTokens = new string[i - HierachyDeltaCheckpoint], 
+                                        DeltaTokens = new string[i - HierarchyDeltaCheckpoint], 
                                         Hierarchy = Hierarchy + 1, 
                                         Terms = nCapturedItemsBuffer[1 + Hierarchy] 
                                     });
-                                    Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
-                                    HierachyDeltaCheckpoint = i;
+                                    Array.Copy(TokenizedBuffer, HierarchyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierarchyDeltaCheckpoint);
+                                    HierarchyDeltaCheckpoint = i;
 
                                     if (++Hierarchy > MaxHierachy) MaxHierachy = Hierarchy;
 
@@ -433,12 +440,12 @@ namespace Numinous {
                                         }
 
                                         StepMatrix.Tokens.Add(new() {
-                                            DeltaTokens = new string[i - HierachyDeltaCheckpoint],
+                                            DeltaTokens = new string[i - HierarchyDeltaCheckpoint],
                                             Hierarchy = Hierarchy + 1,
                                             Terms = nCapturedItemsBuffer[1 + Hierarchy]
                                         });
-                                        Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
-                                        HierachyDeltaCheckpoint = i;
+                                        Array.Copy(TokenizedBuffer, HierarchyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierarchyDeltaCheckpoint);
+                                        HierarchyDeltaCheckpoint = i;
 
                                         Hierarchy--;
                                         continue;
@@ -446,12 +453,12 @@ namespace Numinous {
 
                                 case '[':
                                     StepMatrix.Tokens.Add(new() {
-                                        DeltaTokens = new string[i - HierachyDeltaCheckpoint],
+                                        DeltaTokens = new string[i - HierarchyDeltaCheckpoint],
                                         Hierarchy = Hierarchy + 1,
                                         Terms = nCapturedItemsBuffer[1 + Hierarchy]
                                     }); 
-                                    Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
-                                    HierachyDeltaCheckpoint = i;
+                                    Array.Copy(TokenizedBuffer, HierarchyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierarchyDeltaCheckpoint);
+                                    HierarchyDeltaCheckpoint = i;
                                     // We need to ensure we do not skip the [ as it counts as the index operator
 
                                     if (++Hierarchy > MaxHierachy) MaxHierachy = Hierarchy;
@@ -473,12 +480,12 @@ namespace Numinous {
                                     } else {
 
                                         StepMatrix.Tokens.Add(new() {
-                                            DeltaTokens = new string[i - HierachyDeltaCheckpoint],
+                                            DeltaTokens = new string[i - HierarchyDeltaCheckpoint],
                                             Hierarchy = Hierarchy + 1,
                                             Terms = nCapturedItemsBuffer[1 + Hierarchy]
                                         });
-                                        Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
-                                        HierachyDeltaCheckpoint = i;
+                                        Array.Copy(TokenizedBuffer, HierarchyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierarchyDeltaCheckpoint);
+                                        HierarchyDeltaCheckpoint = i;
 
                                         Hierarchy--;
                                         continue;
@@ -498,12 +505,12 @@ namespace Numinous {
                                     }
 
                                     StepMatrix.Tokens.Add(new() {
-                                        DeltaTokens = new string[i - HierachyDeltaCheckpoint],
+                                        DeltaTokens = new string[i - HierarchyDeltaCheckpoint],
                                         Hierarchy = Hierarchy + 1,
                                         Terms = nCapturedItemsBuffer[1 + Hierarchy]
                                     });
-                                    Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
-                                    HierachyDeltaCheckpoint = i ;
+                                    Array.Copy(TokenizedBuffer, HierarchyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierarchyDeltaCheckpoint);
+                                    HierarchyDeltaCheckpoint = i ;
 
                                     if (++Hierarchy > MaxHierachy) MaxHierachy = Hierarchy;
                                     ContainerBuffer[Hierarchy] = '{';
@@ -511,7 +518,7 @@ namespace Numinous {
                                     continue;
 
                                 case '}':
-                                    if (Hierarchy == -1 || ContainerBuffer[Hierarchy] != '[') {
+                                    if (Hierarchy == -1 || ContainerBuffer[Hierarchy] != '{') {
                                         /*
                                          * May look like (1 + 2}    <-- invalid termination
                                          * Syntax Error : Unexpected Brace (1, 2) :\n{line information}
@@ -523,12 +530,12 @@ namespace Numinous {
                                         return (null, ContextFetcherEnums.MALFORMED);
                                     } else {
                                         StepMatrix.Tokens.Add(new() {
-                                            DeltaTokens = new string[i - HierachyDeltaCheckpoint],
+                                            DeltaTokens = new string[i - HierarchyDeltaCheckpoint],
                                             Hierarchy = Hierarchy + 1,
                                             Terms = nCapturedItemsBuffer[1 + Hierarchy]
                                         });
-                                        Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
-                                        HierachyDeltaCheckpoint = i;
+                                        Array.Copy(TokenizedBuffer, HierarchyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierarchyDeltaCheckpoint);
+                                        HierarchyDeltaCheckpoint = i;
 
                                         Hierarchy--;
                                         continue;
@@ -549,12 +556,12 @@ namespace Numinous {
                                         VerifiedStringIndex = StringIndex + 1;
 
                                         StepMatrix.Tokens.Add(new() {
-                                            DeltaTokens = new string[i - HierachyDeltaCheckpoint],
+                                            DeltaTokens = new string[i - HierarchyDeltaCheckpoint],
                                             Hierarchy = Hierarchy + 1,
                                             Terms = nCapturedItemsBuffer[1 + Hierarchy]
                                         });
-                                        Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierachyDeltaCheckpoint);
-                                        HierachyDeltaCheckpoint = i + 1;
+                                        Array.Copy(TokenizedBuffer, HierarchyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, i - HierarchyDeltaCheckpoint);
+                                        HierarchyDeltaCheckpoint = i + 1;
 
                                         StepMatrix.MaxHierachy = MaxHierachy;
                                         StepMatrixes.Add(CloneChunk(StepMatrix));
@@ -595,7 +602,7 @@ namespace Numinous {
                     ResolvingTermsBuffer[0] = false;
                     nCapturedItemsBuffer[0] = 0;
                     TokenizedBuffer = [.. TokenizedBuffer.TakeLast(TokenizedBuffer.Length - TokenizedCheckPoint)];
-                    TokenizedCheckPoint = 0;
+                    TokenizedCheckPoint = HierarchyDeltaCheckpoint = 0;
                     StringIndex         = VerifiedStringIndex;  // Reset for more accurate wiggling
 
                     AccumulatedContext += Source[Index];
@@ -604,11 +611,11 @@ namespace Numinous {
                 } while (true);
 
                 StepMatrix.Tokens.Add(new() {
-                    DeltaTokens = new string[TokenizedBuffer.Length - HierachyDeltaCheckpoint],
+                    DeltaTokens = new string[TokenizedBuffer.Length - HierarchyDeltaCheckpoint],
                     Hierarchy = Hierarchy + 1,
                     Terms = nCapturedItemsBuffer[1 + Hierarchy]
                 });
-                Array.Copy(TokenizedBuffer, HierachyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, TokenizedBuffer.Length - HierachyDeltaCheckpoint);
+                Array.Copy(TokenizedBuffer, HierarchyDeltaCheckpoint, StepMatrix.Tokens[^1].DeltaTokens, 0, TokenizedBuffer.Length - HierarchyDeltaCheckpoint);
                 StepMatrix.MaxHierachy = MaxHierachy;
                 StepMatrixes.Add(CloneChunk(StepMatrix));
 
@@ -749,7 +756,22 @@ Svenska           ""-l sw""
                     return (InputPath, OutPutPath, Flags);
                 }
 
-                internal static void WriteInfo(ErrorLevels ErrorLevel, ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context) {
+// in event of left in message, don't show on release
+#if DEBUG
+                internal static void Debug(string message) => Console.WriteLine(message);
+#else
+                internal static void debug() {}
+#endif
+
+#if DEBUG
+                internal static void WriteInfo(ErrorLevels ErrorLevel, ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context,
+                    int     lineNumber = 0, 
+                    string  filePath = "", 
+                    string  memberName = "")
+#else
+                internal static void WriteInfo(ErrorLevels ErrorLevel, ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context) 
+#endif
+                {
                     Languages UseLanguage = Program.ActiveLanguage;
                     if (Program.ActiveLanguage == Languages.Null) UseLanguage = Program.ActiveLanguage = Language.CaptureSystemLanguage();
                     if (Program.ActiveLanguage == Languages.Null) UseLanguage = Program.ActiveLanguage = Program.ActiveLanguage = Languages.English_UK;
@@ -777,12 +799,37 @@ Svenska           ""-l sw""
                     Context = Context == null ? "" : $": {Context}";
 
                     // Something Error During Something Phase :: Could not do a thing (1, 2) : ah, the issue is here.
+#if DEBUG
                     Console.WriteLine($"{ErrorTypeString} {ErrorTypeConnective} {DecodePhaseString} :: {Message} {LocationString}{Context}");
-                    
+                    Console.WriteLine($"[{filePath}:{lineNumber}] {memberName}");
+#else
+                    Console.WriteLine($"{ErrorTypeString} {ErrorTypeConnective} {DecodePhaseString} :: {Message} {LocationString}{Context}");
+#endif
+
                 Exit:
                     Console.ResetColor();
                 }
 
+#if DEBUG
+                    
+                internal static void   Log(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context,
+                    [CallerLineNumber] int lineNumber = 0,
+                    [CallerFilePath] string filePath = "",
+                    [CallerMemberName] string memberName = "") => WriteInfo(ErrorLevels.LOG,   ErrorType, Phase, Message, LineNumber, StepNumber, Context, lineNumber, filePath, memberName);
+                
+
+                internal static void  Warn(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context,
+                    [CallerLineNumber] int lineNumber = 0,
+                    [CallerFilePath] string filePath = "",
+                    [CallerMemberName] string memberName = "") => WriteInfo(ErrorLevels.WARN,  ErrorType, Phase, Message, LineNumber, StepNumber, Context, lineNumber, filePath, memberName);
+
+
+                internal static void Error(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context,
+                    [CallerLineNumber] int lineNumber = 0,
+                    [CallerFilePath] string filePath = "",
+                    [CallerMemberName] string memberName = "") => WriteInfo(ErrorLevels.ERROR, ErrorType, Phase, Message, LineNumber, StepNumber, Context, lineNumber, filePath, memberName);
+
+#else
                 internal static void   Log(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context) {
                     WriteInfo(ErrorLevels.LOG,   ErrorType, Phase, Message, LineNumber, StepNumber, Context);
                 }
@@ -794,6 +841,7 @@ Svenska           ""-l sw""
                 internal static void Error(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context) {
                     WriteInfo(ErrorLevels.ERROR, ErrorType, Phase, Message, LineNumber, StepNumber, Context);
                 }
+#endif
             }
 
             internal static string ApplyWiggle(string input, int start, int length) {
