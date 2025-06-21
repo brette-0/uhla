@@ -86,9 +86,9 @@ namespace Numinous {
             /// This will ignore all forms of containers - expects no type, just detects and works with it.
             /// If the Resolve is null, it means an error occured.
             /// Container may be either
-            ///     (   - Any value push back
-            ///     {   - format string
-            ///     [   - Index
+            ///     (   - push back object ref tuple where possible, returning constant values where not
+            ///     {   - push back cexp of tuple
+            ///     [   - push back cint with creg
             /// </summary>
             /// <param name="Tokens"></param>
             /// <returns></returns>
@@ -385,9 +385,9 @@ namespace Numinous {
                                     continue;
 
                                 case ',':
-                                    if (Hierarchy != -1 && ContainerBuffer[Hierarchy] != '(') {
+                                    if (Hierarchy != -1 && ContainerBuffer[Hierarchy] == '[') {
                                         Terminal.Error(
-                                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Comma, only parenthesis '()' and string parenthesis '\"\"' may contain commas")]}.",
+                                            ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Brackets may only contain one term")]}.",
                                             StartingIndex, HasSteps ? StepMatrix.Tokens.Count : null, ApplyWiggle(AccumulatedContext, StringIndex + 1, 1)
                                         );
                                         return (null, ContextFetcherEnums.MALFORMED);
