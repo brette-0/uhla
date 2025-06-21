@@ -444,10 +444,9 @@ namespace Numinous {
 
                                 // braces are code block only, unless in format string
                                 case '{':
-                                    if (Hierarchy == -1) break;                 // begin of a code brace
-                                    if (ContainerBuffer[Hierarchy] != '$') {
+                                    if (Hierarchy != -1 && ContainerBuffer[Hierarchy] != '$' && TokenizedBuffer[LastNonEmptyTokenIndex] != "switch") {
                                         /*
-                                         * May look like (H=0)  {1 + 1}
+                                         * May look like ({1 + 1}) or (+ {})
                                          */
                                         Terminal.Error(
                                             ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Unexpected Brace in")]} {Filename}",
@@ -465,7 +464,7 @@ namespace Numinous {
                                     HierachyDeltaCheckpoint = i ;
 
                                     if (++Hierarchy > MaxHierachy) MaxHierachy = Hierarchy;
-                                    ContainerBuffer[Hierarchy] = '[';
+                                    ContainerBuffer[Hierarchy] = '{';
                                     ContainerBufferTaleStringIndex = StringIndex;
                                     continue;
 
