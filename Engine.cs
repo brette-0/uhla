@@ -111,6 +111,33 @@ namespace Numinous {
                 List<AssembleTimeTypes> TypeBuffer  = [];
 
                 Dictionary<string, (object data, AssembleTimeTypes type)> ActiveScope = Program.ActiveScope;
+
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                void UnifiedConstAppendSystem(int Int) {
+                    for (int u = UnaryBuffer.Count - 1; u >= 0; u--) {
+                        switch (UnaryBuffer[u]) {
+                            case Unary.ABS:
+                                Int = Math.Abs(Int);
+                                break;
+
+                            case Unary.NEG:
+                                Int = -Int;
+                                break;
+
+                            case Unary.BIT:
+                                Int = ~Int;
+                                break;
+
+                            case Unary.NOT:
+                                Int = 0 == Int ? 0 : 1;
+                                break;
+                        }
+
+                        DataBuffer.Add((new Dictionary<string, (object data, AssembleTimeTypes type)> {
+                            {"self", (Int, AssembleTimeTypes.CINT) }
+                        }, AssembleTimeTypes.CINT));
+                    }
+                }
                 
                 for (int i = 1; i < Tokens.Count - 1; i++) {
                     if (Tokens[i][0] == ' ' || Tokens[i][0] == '\t') continue;
@@ -138,7 +165,6 @@ namespace Numinous {
                                     return default;
                                 }
 
-                                int intermediate = 0;
                                 switch (Tokens[i][0]) {
                                     case '\"':
                                         i += 2;
@@ -153,14 +179,14 @@ namespace Numinous {
 
                                         object UnaryCapture = StringCapture;
                                         AssembleTimeTypes ResultType = AssembleTimeTypes.CSTRING;
-                                        
+
                                         if (Mutated) {
                                             // error, cant mutate a literal
                                             return default;
                                         }
 
-                                        for (int u = 0; u < UnaryBuffer.Count; u++) {
-                                            switch (UnaryBuffer[^u]) {
+                                        for (int u = UnaryBuffer.Count - 1; u >= 0; u--) {
+                                            switch (UnaryBuffer[u]) {
                                                 case Unary.ABS:
                                                     if (ResultType == AssembleTimeTypes.CINT) {
                                                         UnaryCapture = Math.Abs((int)UnaryCapture);
@@ -183,9 +209,9 @@ namespace Numinous {
                                                         UnaryCapture = ~(int)UnaryCapture;
                                                     } else {
                                                         UnaryCapture = ((string)UnaryCapture).Length;
-                                                        ResultType   = AssembleTimeTypes.CINT;
+                                                        ResultType = AssembleTimeTypes.CINT;
                                                     }
-   
+
                                                     break;
 
                                                 case Unary.NOT:
@@ -209,6 +235,13 @@ namespace Numinous {
                                                 { "length", (StringCapture.Length,  AssembleTimeTypes.CINT) },
                                             }, AssembleTimeTypes.CSTRING));
                                         }
+
+                                        // no need to bounds check this
+                                        if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
+                                            // error, post mut. Same issue as pre-mut on literal
+                                            return default;
+                                        }
+
                                         break;
 
                                     case '0':
@@ -221,17 +254,17 @@ namespace Numinous {
                                         switch (Tokens[i][1]) {
                                             case 'x':
                                                 // hexadecimal int literal
-                                                DataBuffer.Add((Convert.ToInt32(Tokens[i][2..], 16), AssembleTimeTypes.CINT));
+                                                UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 16));
                                                 continue;
 
                                             case 'b':
                                                 // binary int literal
-                                                DataBuffer.Add((Convert.ToInt32(Tokens[i][2..], 2), AssembleTimeTypes.CINT));
+                                                UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 2));
                                                 continue;
 
                                             case 'd':
                                                 // octal int literal
-                                                DataBuffer.Add((Convert.ToInt32(Tokens[i][2..], 8), AssembleTimeTypes.CINT));
+                                                UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 8));
                                                 continue;
 
                                             default:
@@ -255,7 +288,7 @@ namespace Numinous {
                                         }
 
                                         // decimal int literal
-                                        DataBuffer.Add((Convert.ToInt32(Tokens[i], 10), AssembleTimeTypes.CINT));
+                                        UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i].ToLowerInvariant(), 8));
                                         break;
                                             
                                     case '$':
@@ -266,7 +299,7 @@ namespace Numinous {
                                         }
 
                                         // hexadecimal int literal
-                                        DataBuffer.Add((Convert.ToInt32(Tokens[i][2..], 16), AssembleTimeTypes.CINT));
+                                        UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 16));
                                         break;
 
                                     case '%':
@@ -277,7 +310,7 @@ namespace Numinous {
                                         }
 
                                         // binary int literal
-                                        DataBuffer.Add((Convert.ToInt32(Tokens[i][2..], 2), AssembleTimeTypes.CINT));
+                                        UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 2));
                                         break;
 
                                     case '£':
@@ -288,7 +321,7 @@ namespace Numinous {
                                         }
 
                                         // octal int literal
-                                        DataBuffer.Add((Convert.ToInt32(Tokens[i][2..], 8), AssembleTimeTypes.CINT));
+                                        UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 8));
                                         break;
 
                                     default:
