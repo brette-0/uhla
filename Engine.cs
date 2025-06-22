@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.XPath;
+using Microsoft.VisualBasic;
 using Numinous.Langauges;
 
 namespace Numinous {
@@ -23,6 +24,9 @@ namespace Numinous {
             INTER,      // Interrupt
             BANK,       // Bank
 
+
+            CONSTANTS,
+
             CINT,       // Constant int
             CSTRING,    // Constant string
             CSCOPE,     // Constant Scope reference
@@ -33,7 +37,8 @@ namespace Numinous {
             CINTER,     // Constant interrupt reference
             CBANK,      // Constant bank reference
 
-            MACRO,      // void macro
+            MACRO = 0x80,
+                        // void macro
             MINT,       // int macro
             MSTRING,    // string macro
             MEXP,       // expression macro
@@ -112,6 +117,7 @@ namespace Numinous {
 
                 Dictionary<string, (object data, AssembleTimeTypes type)> ActiveScope = Program.ActiveScope;
 
+
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 void UnifiedConstAppendSystem(int Int) {
                     for (int u = UnaryBuffer.Count - 1; u >= 0; u--) {
@@ -151,15 +157,14 @@ namespace Numinous {
                             case "!":  if (Mutated) goto Error; UnaryBuffer.Add(Unary.NOT); break;
 
                             case "\\":
-
-                                break;
-                            case "\"":
                                 ActiveScope = (Dictionary<string, (object data, AssembleTimeTypes type)>)ActiveScope["parent"].data;
                                 Mutated = true;
                                 break;
 
-
                             default:
+                                // mark to want operator
+                                ExpectValueToggle = false;
+
                                 if (GetHierachy(Tokens[i]) != -1) {
                                     // error, attempted to mutate a non unary operator (just as bad, but needs a different check)
                                     return default;
@@ -325,14 +330,65 @@ namespace Numinous {
                                         break;
 
                                     default:
-                                        if (ActiveScope.TryGetValue(Tokens[i], out (object data, AssembleTimeTypes type) value)){
-                                            DataBuffer.Add(value);      // object reference
+                                        // non literal
+                                        if (ActiveScope.TryGetValue(Tokens[i], out (object data, AssembleTimeTypes type) value)) {
+                                            UnaryCapture = value.data;
+                                            ResultType = value.type;
+
+                                            for (int u = UnaryBuffer.Count - 1; u >= 0; u--) {
+                                                switch (UnaryBuffer[u]) {
+                                                    case Unary.INC:
+                                                        if (ResultType == AssembleTimeTypes.INT) {
+                                                            UnaryCapture = 1 + (int)UnaryCapture;
+                                                            ActiveScope[Tokens[i]] = (UnaryCapture, ResultType);
+                                                        } else {
+                                                            // erorr, cant do this to anything but an int
+                                                            return default;
+                                                        }
+                                                        break;
+
+                                                    case Unary.DEC:
+                                                        if (ResultType == AssembleTimeTypes.INT) {
+                                                            UnaryCapture = -1 + (int)UnaryCapture;
+                                                            ActiveScope[Tokens[i]] = (UnaryCapture, ResultType);
+                                                        } else {
+                                                            // erorr, cant do this to anything but an int
+                                                            return default;
+                                                        }
+                                                        break;
+
+                                                    case Unary.ABS:
+                                                        if (ResultType == AssembleTimeTypes.INT) {
+                                                            UnaryCapture = Math.Abs((int)UnaryCapture);
+                                                        }
+                                                        break;
+
+                                                    case Unary.NEG:
+                                                        if (ResultType == AssembleTimeTypes.INT) {
+                                                            UnaryCapture = -(int)UnaryCapture;
+                                                        }
+                                                        break;
+
+                                                    case Unary.BIT:
+                                                        if (ResultType == AssembleTimeTypes.INT) {
+                                                            UnaryCapture = ~(int)UnaryCapture;
+                                                        }
+                                                        break;
+
+                                                    case Unary.NOT:
+                                                        if (ResultType == AssembleTimeTypes.INT) {
+                                                            UnaryCapture = 0 == (int)UnaryCapture ? 0 : 1;
+                                                        }
+                                                        break;
+                                                }
+                                            }
+
+                                            DataBuffer.Add((UnaryCapture, ResultType));
+                                            continue;
                                         } else {
                                             // error, invalid token
                                             return default;
                                         }
-                                        break;
-                                        // non literal
                                 }
                                 break;
 
@@ -341,6 +397,13 @@ namespace Numinous {
                     } else {
                         ActiveScope = Program.ActiveScope;
                         UnaryBuffer.Clear();
+
+                        if (Tokens[i] == "++") {
+                            if (AssembleTimeTypes.INT == DataBuffer[^1].type) {
+                                DataBuffer[^1] = (1 + (int)DataBuffer[^1].data, AssembleTimeTypes.INT);
+                                Mutated = true;
+                            }
+                        }
                     }
                 }
 
