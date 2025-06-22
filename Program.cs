@@ -60,7 +60,7 @@ internal static class Program {
     internal static List<string[]> SourceFileContentBuffer = [];
     internal static List<string>   SourceFileNameBuffer    = [];
 
-    internal static Dictionary<string, Dictionary<string, (object data, AssembleTimeTypes type)>> LabelDataBase = [];
-    internal static Dictionary<string, (object data, AssembleTimeTypes type)> ActiveScope = [];
+    internal static Dictionary<string, Dictionary<string, (object? data, AssembleTimeTypes type)>> LabelDataBase = [];
+    internal static Dictionary<string, (object? data, AssembleTimeTypes type)> ActiveScope = [];
     internal static Languages ActiveLanguage;
 }

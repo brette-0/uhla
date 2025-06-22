@@ -10,8 +10,59 @@ using Numinous.Langauges;
 
 namespace Numinous {
     namespace Engine {
+        internal enum Operators : byte {
+            PROPERTY,
+            NULLPROPERTY,
+
+            MULT,
+            DIV,
+            MOD,
+
+            ADD,
+            SUB,
+
+            RIGHT,
+            LEFT,
+
+            BITMASK,
+
+            BITFLIP,
+
+            BITSET,
+
+            GT,
+            LT,
+            GOET,
+            LOET,
+            SERIAL,
+
+            EQUAL,
+            INEQUAL,
+
+            AND,
+            
+            OR,
+            
+            NULL,
+            CHECK,
+            ELSE,
+
+            SET,
+            INCREASE,
+            DECREASE,
+            MULTIPLY,
+            DIVIDE,
+            MODULATE,
+            NULLSET,
+            ASSIGNMASK,
+            ASSIGNSET,
+            ASSIGNFLIP,
+
+            TERM
+        }
+
         internal enum AssembleTimeTypes  : byte {
-            WAIT,       // Waiting on first value (Evaluator Solving)
+            PROPERTY,   // Property (Evaluator Solving)
             INT,        // assemble time integer
             STRING,     // assemble time string
             DEFINE,     // define, capture then tokenize for CF
@@ -112,10 +163,23 @@ namespace Numinous {
                 bool Mutated                        = false;    // does not affect object reference perpetuation.
                 List<Unary> UnaryBuffer             = [];
 
-                List<(object data, AssembleTimeTypes type)> DataBuffer             = [];
+                List<(object? data, AssembleTimeTypes type)> DataBuffer             = [];
                 List<AssembleTimeTypes> TypeBuffer  = [];
 
-                Dictionary<string, (object data, AssembleTimeTypes type)> ActiveScope = Program.ActiveScope;
+                Dictionary<string, (object? data, AssembleTimeTypes type)> ActiveScope = Program.ActiveScope;
+                List<(Operators Operator, int Level)> OperatorBuffer = [];
+
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                (object? ObjectReturn, bool OK) ComputeOperation(Operators Op, object L, object R, AssembleTimeTypes LT, AssembleTimeTypes RT) {
+                    switch (Op) {
+                        case Operators.PROPERTY:
+                            switch (LT) {
+
+                            }
+                            break;
+                    }
+                    return default;
+                }
 
 
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -144,7 +208,7 @@ namespace Numinous {
                         }, AssembleTimeTypes.CINT));
                     }
                 }
-                
+
                 for (int i = 1; i < Tokens.Count - 1; i++) {
                     if (Tokens[i][0] == ' ' || Tokens[i][0] == '\t') continue;
                     if (ExpectValueToggle) {
@@ -157,7 +221,7 @@ namespace Numinous {
                             case "!":  if (Mutated) goto Error; UnaryBuffer.Add(Unary.NOT); break;
 
                             case "\\":
-                                ActiveScope = (Dictionary<string, (object data, AssembleTimeTypes type)>)ActiveScope["parent"].data;
+                                ActiveScope = (Dictionary<string, (object? data, AssembleTimeTypes type)>)ActiveScope["parent"].data;
                                 Mutated = true;
                                 break;
 
@@ -260,17 +324,29 @@ namespace Numinous {
                                             case 'x':
                                                 // hexadecimal int literal
                                                 UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 16));
-                                                continue;
+                                                if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
+                                                    // error, post mut. Same issue as pre-mut on literal
+                                                    return default;
+                                                }
+                                                break;
 
                                             case 'b':
                                                 // binary int literal
                                                 UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 2));
-                                                continue;
+                                                if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
+                                                    // error, post mut. Same issue as pre-mut on literal
+                                                    return default;
+                                                }
+                                                break;
 
                                             case 'd':
                                                 // octal int literal
+                                                if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
+                                                    // error, post mut. Same issue as pre-mut on literal
+                                                    return default;
+                                                }
                                                 UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 8));
-                                                continue;
+                                                break;
 
                                             default:
                                                 break;
@@ -294,8 +370,12 @@ namespace Numinous {
 
                                         // decimal int literal
                                         UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i].ToLowerInvariant(), 8));
+                                        if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
+                                            // error, post mut. Same issue as pre-mut on literal
+                                            return default;
+                                        }
                                         break;
-                                            
+
                                     case '$':
 
                                         if (Mutated) {
@@ -305,6 +385,10 @@ namespace Numinous {
 
                                         // hexadecimal int literal
                                         UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 16));
+                                        if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
+                                            // error, post mut. Same issue as pre-mut on literal
+                                            return default;
+                                        }
                                         break;
 
                                     case '%':
@@ -316,6 +400,10 @@ namespace Numinous {
 
                                         // binary int literal
                                         UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 2));
+                                        if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
+                                            // error, post mut. Same issue as pre-mut on literal
+                                            return default;
+                                        }
                                         break;
 
                                     case '£':
@@ -327,6 +415,10 @@ namespace Numinous {
 
                                         // octal int literal
                                         UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 8));
+                                        if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
+                                            // error, post mut. Same issue as pre-mut on literal
+                                            return default;
+                                        }
                                         break;
 
                                     default:
@@ -383,8 +475,87 @@ namespace Numinous {
                                                 }
                                             }
 
+                                            // property capture
+
+                                            for(; i < Tokens.Count - 1; i++) {
+                                                if (Tokens[i][0] == ' ' || Tokens[i][0] == '\t') continue;
+                                                // we can optimise the underneath later?
+                                                if (Tokens[i][0] == '.' || Tokens[i] == "?.") {
+                                                    Mutated = false;                            // free up for mutation, might be pointless
+
+                                                    if (Tokens[i].Length == 1) {
+                                                        if (UnaryCapture == null) {
+                                                            // sorry link, I can't sell credit. come back when your a little mmmmmmmmm richer
+                                                            // error : null cannot have members
+                                                            return default;
+                                                        }
+
+                                                        // set i to equal the property (could be at a?. b)
+                                                        for (; i < Tokens.Count - 1; i++) {
+                                                            if (Tokens[i][0] == ' ' || Tokens[i][0] == '\t') continue;
+                                                            if (GetHierachy(Tokens[i]) == -1) break;
+                                                        }
+                                                        if (((Dictionary<string, (object data, AssembleTimeTypes type)>)UnaryCapture).TryGetValue($"{Tokens[i]}", out (object data, AssembleTimeTypes type) PropertyAccess)) {
+                                                            UnaryCapture = PropertyAccess.data;
+                                                            ResultType = PropertyAccess.type;
+                                                        } else {
+                                                            // error, no property found
+                                                            return default;
+                                                        }
+                                                    } else {
+                                                        // ?.
+                                                        if (UnaryCapture == null) continue;         // null has no object, so its just const typed null from here
+                                                        // ah shit here we go again (fetch data)
+                                                        
+                                                        // set i to equal the property (could be at a. b)
+                                                        for (; i < Tokens.Count - 1; i++) {
+                                                            if (Tokens[i][0] == ' ' || Tokens[i][0] == '\t') continue;
+                                                            if (GetHierachy(Tokens[i]) == -1) break;
+                                                        }
+                                                        if (((Dictionary<string, (object data, AssembleTimeTypes type)>)UnaryCapture).TryGetValue($"{Tokens[i]}", out (object data, AssembleTimeTypes type) PropertyAccess)){
+                                                            UnaryCapture = PropertyAccess.data;
+                                                            ResultType   = PropertyAccess.type;
+                                                        } else {
+                                                            // error, no property found
+                                                            return default;
+                                                        }
+                                                    }
+                                                }
+
+                                                if (Tokens[i] == "++" || Tokens[i] == "--") {
+                                                    if (Mutated) {
+                                                        // error, post mut after pre mut is illegal
+                                                        return default;
+                                                    }
+
+                                                    if (ResultType != AssembleTimeTypes.INT) {
+                                                        // error attempting to mut const goto Error? or is not int so illegal operation
+                                                        return default;
+                                                    }
+
+                                                    // mutate property
+                                                    if (Tokens[i][0] == '+') {
+                                                        ((Dictionary<string, (object? data, AssembleTimeTypes type)>)UnaryCapture)["self"] = (
+                                                            1 + (int)(((Dictionary<string, (object? data, AssembleTimeTypes type)>)UnaryCapture)["self"].data),
+                                                            ((Dictionary<string, (object? data, AssembleTimeTypes type)>)UnaryCapture)["self"].type
+                                                        );
+                                                        UnaryCapture = 1 + (int)UnaryCapture;
+                                                    } else {
+                                                        ((Dictionary<string, (object? data, AssembleTimeTypes type)>)UnaryCapture)["self"] = (
+                                                            -1 + (int)(((Dictionary<string, (object? data, AssembleTimeTypes type)>)UnaryCapture)["self"].data),
+                                                            ((Dictionary<string, (object? data, AssembleTimeTypes type)>)UnaryCapture)["self"].type
+                                                        );
+                                                        UnaryCapture = -1 + (int)UnaryCapture;
+                                                    }
+
+                                                    continue;
+                                                }
+                                            }
+
                                             DataBuffer.Add((UnaryCapture, ResultType));
-                                            continue;
+
+                                            // object post mod
+                                            break;
                                         } else {
                                             // error, invalid token
                                             return default;
@@ -394,6 +565,40 @@ namespace Numinous {
 
                             Error: return default;
                         }
+                        // everything must reach here, this is to complete operations. 
+                        /*
+                         * if we have at least two operators, calculate the delta of their heirarchies. if its negative, compute the higher
+                         * adjust the buffers as needed. At the end OperatorBuffer should always have 1 operator, leaving 2 in data.
+                         * once we capture the last value, we'll always move to check final operator looking for a final ++ or --
+                         * 
+                         * if thats found then that's fine, but there won't be another operator if the user is of sound mind.
+                         * which should prompt a clean loop termination, leaving the final task to be resolved and compared against target type
+                         * 
+                         * error checking should be easy
+                         */
+
+                        if (OperatorBuffer.Count <= 1) continue;    // not enough captured to safely perform an operation
+
+                        // if O[n-1] < O[n], then we can perform O on T[n-1] and T[n]
+                        while (OperatorBuffer[^2].Level < OperatorBuffer[^1].Level) {
+                            byte LT = (byte)DataBuffer[^2].type;
+                            byte RT = (byte)DataBuffer[^1].type;
+
+                            // create reckless compatibility between const/nonconst types
+                            if (LT > (byte)AssembleTimeTypes.CONSTANTS) LT -= (byte)AssembleTimeTypes.CONSTANTS;
+                            if (RT > (byte)AssembleTimeTypes.CONSTANTS) RT -= (byte)AssembleTimeTypes.CONSTANTS;
+
+                            if (LT != RT) {
+                                // error type noncompat
+                                return default;
+                            }
+
+                            
+                        }
+
+
+
+
                     } else {
                         ActiveScope = Program.ActiveScope;
                         UnaryBuffer.Clear();
@@ -422,11 +627,85 @@ namespace Numinous {
                                 Mutated = true;
                             }
                         }
+
+                        int Level = GetHierachy(Tokens[i]);
+                        Operators Operator = Tokens[i] switch {
+                            // Multiplicative
+                            "*"     => Operators.MULT,
+                            "/"     => Operators.DIV,
+                            "%"     => Operators.MOD,
+
+                            // Additive
+                            "+"     => Operators.ADD,
+                            "-"     => Operators.SUB,
+
+                            // Shift
+                            ">>"    => Operators.RIGHT,
+                            "<<"    => Operators.LEFT,
+
+                            // Boolean And
+                            "&"     => Operators.BITMASK,
+
+                            // Boolean Xor
+                            "^"     => Operators.BITFLIP,
+
+                            // Boolean Or
+                            "|"     => Operators.BITSET,
+
+                            // Relational
+                            ">"     => Operators.GT,
+                            "<"     => Operators.LT,
+                            ">="    => Operators.GOET,
+                            "<="    => Operators.LOET,
+                            "<=>"   => Operators.SERIAL,
+
+                            // Equality
+                            "=="    => Operators.EQUAL,
+                            "!="    => Operators.INEQUAL,
+
+                            // Conditional And
+                            "&&"    => Operators.AND,
+
+                            // Conditional Or
+                            "||"    => Operators.OR,
+
+                            // Null coalesce
+                            "??"    => Operators.NULL,
+
+                            // Ternary
+                            "?"     => Operators.CHECK,
+                            ":"     => Operators.ELSE,
+
+                            // Assignment
+                            "="     => Operators.SET,
+                            "+="    => Operators.INCREASE,
+                            "-="    => Operators.DECREASE,
+                            "*="    => Operators.MULTIPLY,
+                            "/="    => Operators.DIVIDE,
+                            "%="    => Operators.MODULATE,
+                            "|="    => Operators.ASSIGNSET,
+                            "&="    => Operators.ASSIGNMASK,
+                            "^="    => Operators.ASSIGNFLIP,
+                            "??="   => Operators.NULLSET,
+                            ">>="   => Operators.RIGHT,
+                            "<<="   => Operators.LEFT,
+
+                            // Term
+                            ","     => Operators.TERM,
+
+                            // Default fallback
+                            _ => throw new ArgumentOutOfRangeException(nameof(Tokens), $"Unsupported operator: {Tokens[i]}")
+
+                        };
+
+                        OperatorBuffer.Add((Operator, Level));
+                        Mutated = false;                        // unlock mutation for next term
+                        ExpectValueToggle = true;               // engage wait for next value
                     }
                 }
 
                 
-                AssembleTimeTypes FinalType = AssembleTimeTypes.WAIT;
+                AssembleTimeTypes FinalType = AssembleTimeTypes.PROPERTY;
                 string result = "";
 
                 return Tokens[^1][0] switch {
