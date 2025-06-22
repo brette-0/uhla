@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.ComponentModel;
+using System.Reflection.Metadata.Ecma335;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -147,12 +148,25 @@ namespace Numinous {
                                         }
                                         if (StringCapture[^1] != '\"') {
                                             // error string literal did not terminate
-                                            goto Error;
+                                            return default;
                                         }
+
+                                        
+                                        if (Mutated) {
+                                            // error, cant mutate a literal
+                                            return default;
+                                        }
+
                                         DataBuffer.Add((StringCapture, AssembleTimeTypes.CSTRING));
                                         break;
 
                                     case '0':
+
+                                        if (Mutated) {
+                                            // error, cant mutate a literal
+                                            return default;
+                                        }
+
                                         switch (Tokens[i][1]) {
                                             case 'x':
                                                 // hexadecimal int literal
@@ -183,21 +197,45 @@ namespace Numinous {
                                     case '7':
                                     case '8':
                                     case '9':
+
+                                        if (Mutated) {
+                                            // error, cant mutate a literal
+                                            return default;
+                                        }
+
                                         // decimal int literal
                                         DataBuffer.Add((Convert.ToInt32(Tokens[i], 10), AssembleTimeTypes.CINT));
                                         break;
                                             
                                     case '$':
+
+                                        if (Mutated) {
+                                            // error, cant mutate a literal
+                                            return default;
+                                        }
+
                                         // hexadecimal int literal
                                         DataBuffer.Add((Convert.ToInt32(Tokens[i][2..], 16), AssembleTimeTypes.CINT));
                                         break;
 
                                     case '%':
+
+                                        if (Mutated) {
+                                            // error, cant mutate a literal
+                                            return default;
+                                        }
+
                                         // binary int literal
                                         DataBuffer.Add((Convert.ToInt32(Tokens[i][2..], 2), AssembleTimeTypes.CINT));
                                         break;
 
                                     case '£':
+
+                                        if (Mutated) {
+                                            // error, cant mutate a literal
+                                            return default;
+                                        }
+
                                         // octal int literal
                                         DataBuffer.Add((Convert.ToInt32(Tokens[i][2..], 8), AssembleTimeTypes.CINT));
                                         break;
@@ -207,7 +245,7 @@ namespace Numinous {
                                             DataBuffer.Add(value);      // object reference
                                         } else {
                                             // error, invalid token
-                                            goto Error;
+                                            return default;
                                         }
                                         break;
                                         // non literal
