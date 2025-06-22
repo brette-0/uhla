@@ -4,7 +4,7 @@ using System.Reflection.Metadata.Ecma335;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
-
+using System.Xml.XPath;
 using Numinous.Langauges;
 
 namespace Numinous {
@@ -151,13 +151,64 @@ namespace Numinous {
                                             return default;
                                         }
 
+                                        object UnaryCapture = StringCapture;
+                                        AssembleTimeTypes ResultType = AssembleTimeTypes.CSTRING;
                                         
                                         if (Mutated) {
                                             // error, cant mutate a literal
                                             return default;
                                         }
 
-                                        DataBuffer.Add((StringCapture, AssembleTimeTypes.CSTRING));
+                                        for (int u = 0; u < UnaryBuffer.Count; u++) {
+                                            switch (UnaryBuffer[^u]) {
+                                                case Unary.ABS:
+                                                    if (ResultType == AssembleTimeTypes.CINT) {
+                                                        UnaryCapture = Math.Abs((int)UnaryCapture);
+                                                    } else {
+                                                        UnaryCapture = ((string)UnaryCapture).ToUpper();
+                                                    }
+                                                    break;
+
+                                                case Unary.NEG:
+                                                    if (ResultType == AssembleTimeTypes.CINT) {
+                                                        UnaryCapture = -(int)UnaryCapture;
+                                                    } else {
+                                                        UnaryCapture = ((string)UnaryCapture).ToLower();
+                                                    }
+
+                                                    break;
+
+                                                case Unary.BIT:
+                                                    if (ResultType == AssembleTimeTypes.CINT) {
+                                                        UnaryCapture = ~(int)UnaryCapture;
+                                                    } else {
+                                                        UnaryCapture = ((string)UnaryCapture).Length;
+                                                        ResultType   = AssembleTimeTypes.CINT;
+                                                    }
+   
+                                                    break;
+
+                                                case Unary.NOT:
+                                                    if (ResultType == AssembleTimeTypes.CINT) {
+                                                        UnaryCapture = 0 == (int)UnaryCapture ? 0 : 1;
+                                                    } else {
+                                                        UnaryCapture = new string(' ', ((string)UnaryCapture).Length);
+                                                    }
+
+                                                    break;
+                                            }
+                                        }
+
+                                        if (ResultType == AssembleTimeTypes.CINT) {
+                                            DataBuffer.Add((new Dictionary<string, (object data, AssembleTimeTypes type)> {
+                                                { "self", (UnaryCapture,            AssembleTimeTypes.CINT) },
+                                            }, AssembleTimeTypes.CINT));
+                                        } else {
+                                            DataBuffer.Add((new Dictionary<string, (object data, AssembleTimeTypes type)> {
+                                                { "self",   (UnaryCapture,          AssembleTimeTypes.CSTRING) },
+                                                { "length", (StringCapture.Length,  AssembleTimeTypes.CINT) },
+                                            }, AssembleTimeTypes.CSTRING));
+                                        }
                                         break;
 
                                     case '0':
