@@ -106,7 +106,7 @@ namespace Numinous {
                 bool Mutated                        = false;    // does not affect object reference perpetuation.
                 List<Unary> UnaryBuffer             = [];
 
-                List<object> DataBuffer             = [];
+                List<(object data, AssembleTimeTypes type)> DataBuffer             = [];
                 List<AssembleTimeTypes> TypeBuffer  = [];
 
                 Dictionary<string, (object data, AssembleTimeTypes type)> ActiveScope = Program.ActiveScope;
@@ -139,23 +139,34 @@ namespace Numinous {
 
                                 int intermediate = 0;
                                 switch (Tokens[i][0]) {
-                                        
+                                    case '\"':
+                                        i += 2;
+                                        string StringCapture = $"\"{Tokens[i - 1]}";
+                                        for (; i < Tokens.Count - 1 && Tokens[i - 1] != "\""; i++) {
+                                            StringCapture += Tokens[i];
+                                        }
+                                        if (StringCapture[^1] != '\"') {
+                                            // error string literal did not terminate
+                                            goto Error;
+                                        }
+                                        DataBuffer.Add((StringCapture, AssembleTimeTypes.CSTRING));
+                                        break;
 
                                     case '0':
                                         switch (Tokens[i][1]) {
                                             case 'x':
                                                 // hexadecimal int literal
-                                                DataBuffer.Add(Convert.ToInt32(Tokens[i][2..], 16));
+                                                DataBuffer.Add((Convert.ToInt32(Tokens[i][2..], 16), AssembleTimeTypes.CINT));
                                                 continue;
 
                                             case 'b':
                                                 // binary int literal
-                                                DataBuffer.Add(Convert.ToInt32(Tokens[i][2..], 2));
+                                                DataBuffer.Add((Convert.ToInt32(Tokens[i][2..], 2), AssembleTimeTypes.CINT));
                                                 continue;
 
                                             case 'd':
                                                 // octal int literal
-                                                DataBuffer.Add(Convert.ToInt32(Tokens[i][2..], 8));
+                                                DataBuffer.Add((Convert.ToInt32(Tokens[i][2..], 8), AssembleTimeTypes.CINT));
                                                 continue;
 
                                             default:
@@ -173,27 +184,27 @@ namespace Numinous {
                                     case '8':
                                     case '9':
                                         // decimal int literal
-                                        DataBuffer.Add(Convert.ToInt32(Tokens[i], 10));
+                                        DataBuffer.Add((Convert.ToInt32(Tokens[i], 10), AssembleTimeTypes.CINT));
                                         break;
                                             
                                     case '$':
                                         // hexadecimal int literal
-                                        DataBuffer.Add(Convert.ToInt32(Tokens[i][2..], 16));
+                                        DataBuffer.Add((Convert.ToInt32(Tokens[i][2..], 16), AssembleTimeTypes.CINT));
                                         break;
 
                                     case '%':
                                         // binary int literal
-                                        DataBuffer.Add(Convert.ToInt32(Tokens[i][2..], 2));
+                                        DataBuffer.Add((Convert.ToInt32(Tokens[i][2..], 2), AssembleTimeTypes.CINT));
                                         break;
 
                                     case '£':
                                         // octal int literal
-                                        DataBuffer.Add(Convert.ToInt32(Tokens[i][2..], 8));
+                                        DataBuffer.Add((Convert.ToInt32(Tokens[i][2..], 8), AssembleTimeTypes.CINT));
                                         break;
 
                                     default:
                                         if (ActiveScope.TryGetValue(Tokens[i], out (object data, AssembleTimeTypes type) value)){
-                                            DataBuffer.Add(value.data);     // object reference
+                                            DataBuffer.Add(value);      // object reference
                                         } else {
                                             // error, invalid token
                                             goto Error;
@@ -205,6 +216,9 @@ namespace Numinous {
 
                             Error: return default;
                         }
+                    } else {
+                        ActiveScope = Program.ActiveScope;
+                        UnaryBuffer.Clear();
                     }
                 }
 
