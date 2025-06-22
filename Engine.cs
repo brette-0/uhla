@@ -12,7 +12,7 @@ namespace Numinous {
             WAIT,       // Waiting on first value (Evaluator Solving)
             INT,        // assemble time integer
             STRING,     // assemble time string
-            EXP,        // expression (not a string)
+            DEFINE,     // define, capture then tokenize for CF
             VOID,       // void macro
             SCOPE,      // scope type
             RT,         // Runtime Variable
@@ -24,7 +24,6 @@ namespace Numinous {
 
             CINT,       // Constant int
             CSTRING,    // Constant string
-            CEXP,       // Constant expression
             CSCOPE,     // Constant Scope reference
             CRT,        // Constant runtime reference
             CREG,       // Constant register reference
@@ -81,6 +80,15 @@ namespace Numinous {
                 internal int Terms;
             }
 
+            internal enum Unary : byte {
+                INC,
+                DEC,
+                ABS,
+                NEG,
+                BIT,
+                NOT
+            };
+
             /// <summary>
             /// This will either push back an object reference, or a constant object literal.
             /// This will ignore all forms of containers - expects no type, just detects and works with it.
@@ -93,21 +101,124 @@ namespace Numinous {
             /// <param name="Tokens"></param>
             /// <returns></returns>
             static internal (string? Representation, AssembleTimeTypes ResolveType, char Container) LinearEvaluate(List<string> Tokens) {
-                int PendingOperations = Tokens.Count(t => GetHierachy(t) != -1);
-                bool ExpectValueToggle = true;
+                int PendingOperations               = Tokens.Count(t => GetHierachy(t) != -1);
+                bool ExpectValueToggle              = true;
+                bool Mutated                        = false;    // does not affect object reference perpetuation.
+                List<Unary> UnaryBuffer             = [];
 
-                List<(object value, AssembleTimeTypes type)> Data = [];
+                List<object> DataBuffer             = [];
+                List<AssembleTimeTypes> TypeBuffer  = [];
 
-                // decode until we are clear of any operations
-                while (PendingOperations > 0) {
+                Dictionary<string, (object data, AssembleTimeTypes type)> ActiveScope = Program.ActiveScope;
+                
+                for (int i = 1; i < Tokens.Count - 1; i++) {
+                    if (Tokens[i][0] == ' ' || Tokens[i][0] == '\t') continue;
                     if (ExpectValueToggle) {
-                        
-                        continue;
-                    } 
+                        switch (Tokens[i]) {
+                            case "++": if (Mutated) goto Error; UnaryBuffer.Add(Unary.INC); break;
+                            case "--": if (Mutated) goto Error; UnaryBuffer.Add(Unary.DEC); break;
+                            case "+":  if (Mutated) goto Error; UnaryBuffer.Add(Unary.ABS); break;
+                            case "-":  if (Mutated) goto Error; UnaryBuffer.Add(Unary.NEG); break;
+                            case "~":  if (Mutated) goto Error; UnaryBuffer.Add(Unary.BIT); break;
+                            case "!":  if (Mutated) goto Error; UnaryBuffer.Add(Unary.NOT); break;
+
+                            case "\\":
+
+                                break;
+                            case "\"":
+                                ActiveScope = (Dictionary<string, (object data, AssembleTimeTypes type)>)ActiveScope["parent"].data;
+                                Mutated = true;
+                                break;
+
+
+                            default:
+                                if (GetHierachy(Tokens[i]) != -1) {
+                                    // error, attempted to mutate a non unary operator (just as bad, but needs a different check)
+                                    return default;
+                                }
+
+                                int intermediate = 0;
+                                switch (Tokens[i][0]) {
+                                        
+
+                                    case '0':
+                                        switch (Tokens[i][1]) {
+                                            case 'x':
+                                                // hexadecimal int literal
+                                                DataBuffer.Add(Convert.ToInt32(Tokens[i][2..], 16));
+                                                continue;
+
+                                            case 'b':
+                                                // binary int literal
+                                                DataBuffer.Add(Convert.ToInt32(Tokens[i][2..], 2));
+                                                continue;
+
+                                            case 'd':
+                                                // octal int literal
+                                                DataBuffer.Add(Convert.ToInt32(Tokens[i][2..], 8));
+                                                continue;
+
+                                            default:
+                                                break;
+                                        }
+                                        goto case '9';
+
+                                    case '1':
+                                    case '2':
+                                    case '3':
+                                    case '4':
+                                    case '5':
+                                    case '6':
+                                    case '7':
+                                    case '8':
+                                    case '9':
+                                        // decimal int literal
+                                        DataBuffer.Add(Convert.ToInt32(Tokens[i], 10));
+                                        break;
+                                            
+                                    case '$':
+                                        // hexadecimal int literal
+                                        DataBuffer.Add(Convert.ToInt32(Tokens[i][2..], 16));
+                                        break;
+
+                                    case '%':
+                                        // binary int literal
+                                        DataBuffer.Add(Convert.ToInt32(Tokens[i][2..], 2));
+                                        break;
+
+                                    case '£':
+                                        // octal int literal
+                                        DataBuffer.Add(Convert.ToInt32(Tokens[i][2..], 8));
+                                        break;
+
+                                    default:
+                                        if (ActiveScope.TryGetValue(Tokens[i], out (object data, AssembleTimeTypes type) value)){
+                                            DataBuffer.Add(value.data);     // object reference
+                                        } else {
+                                            // error, invalid token
+                                            goto Error;
+                                        }
+                                        break;
+                                        // non literal
+                                }
+                                break;
+
+                            Error: return default;
+                        }
+                    }
                 }
 
+                
+                AssembleTimeTypes FinalType = AssembleTimeTypes.WAIT;
+                string result = "";
 
-                return default;
+                return Tokens[^1][0] switch {
+                    ')'  => ($"{result}",       FinalType,                  Tokens[^1][0]),
+                    ']'  => ($"[{result}]",     AssembleTimeTypes.CINT,     Tokens[^1][0]),
+                    '}'  => ($"{result}",       AssembleTimeTypes.CSTRING,  Tokens[^1][0]),// feeds into a fstring, will result a string component
+                    '\"' => ($"\"{result}\"",   AssembleTimeTypes.CSTRING,  Tokens[^1][0]),// returns cstring with static members
+                    _    => default,
+                };
             }
 
             static internal (bool, object) DeltaEvaluate(AssembleTimeTypes Type, List<DeltaTokens_t> Tokens, int MaxHierachy) {
@@ -279,11 +390,9 @@ namespace Numinous {
 
                     for (int i = 0; i < tokens.Count; i++) {
                         string token = tokens[i];
-                        if (Program.ActiveScope.TryGetValue(token, out object CapturedValue) && (
-                            ((Dictionary<string, AssembleTimeTypes>)CapturedValue)["type"] == AssembleTimeTypes.EXP ||
-                            ((Dictionary<string, AssembleTimeTypes>)CapturedValue)["type"] == AssembleTimeTypes.CEXP
-                        )) {
-                            UpdatedTokens.AddRange(((Dictionary<string, List<string>>)CapturedValue)["self"]);
+                        if (Program.ActiveScope.TryGetValue(token, out (object data, AssembleTimeTypes type) CapturedValue) && CapturedValue.type == AssembleTimeTypes.DEFINE) {
+                            string Capture = (string)CapturedValue.data;
+                            UpdatedTokens.AddRange(Tokenize(Capture));
                             DidReplace = true;
                         } else {
                             UpdatedTokens.Add(token);

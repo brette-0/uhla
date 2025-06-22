@@ -41,16 +41,14 @@ internal static class Program {
 
         // rs "Root Scope" has itself as key, value and parent - sitting in the root pointing to itself.
         LabelDataBase["rs"] = new() {
-            { "self",    LabelDataBase },
-            { "parent",  LabelDataBase },
-            { "type",    AssembleTimeTypes.CSCOPE },
+            {"self",    (LabelDataBase, AssembleTimeTypes.CSCOPE) },
+            {"parent",  (LabelDataBase, AssembleTimeTypes.CSCOPE) },
         };
 
         // make language a compiler variable
         LabelDataBase["lang"] = new() {
-            {"self",    ActiveLanguage.ToString() },
-            {"parent",  LabelDataBase},
-            {"type",    AssembleTimeTypes.CEXP },
+            {"self",    (ActiveLanguage.ToString() , AssembleTimeTypes.CSTRING) },
+            {"parent",  (LabelDataBase,              AssembleTimeTypes.CSCOPE) },
         };
 
         ActiveScope = LabelDataBase["rs"];
@@ -62,7 +60,7 @@ internal static class Program {
     internal static List<string[]> SourceFileContentBuffer = [];
     internal static List<string>   SourceFileNameBuffer    = [];
 
-    internal static Dictionary<string, Dictionary<string, object>> LabelDataBase = [];
-    internal static Dictionary<string, object> ActiveScope = [];
+    internal static Dictionary<string, Dictionary<string, (object data, AssembleTimeTypes type)>> LabelDataBase = [];
+    internal static Dictionary<string, (object data, AssembleTimeTypes type)> ActiveScope = [];
     internal static Languages ActiveLanguage;
 }
