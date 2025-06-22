@@ -399,8 +399,26 @@ namespace Numinous {
                         UnaryBuffer.Clear();
 
                         if (Tokens[i] == "++") {
+                            if (Mutated) {
+                                // error, cant mutate twice
+                                return default;
+                            }
+
                             if (AssembleTimeTypes.INT == DataBuffer[^1].type) {
                                 DataBuffer[^1] = (1 + (int)DataBuffer[^1].data, AssembleTimeTypes.INT);
+                                Mutated = true;
+                            }
+                        }
+
+
+                        if (Tokens[i] == "--") {
+                            if (Mutated) {
+                                // error, cant mutate twice
+                                return default;
+                            }
+
+                            if (AssembleTimeTypes.INT == DataBuffer[^1].type) {
+                                DataBuffer[^1] = (-1 + (int)DataBuffer[^1].data, AssembleTimeTypes.INT);
                                 Mutated = true;
                             }
                         }
