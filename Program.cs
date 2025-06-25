@@ -40,15 +40,14 @@ internal static class Program {
         SourceFileContentBuffer.Add(InputFile);
 
         // rs "Root Scope" has itself as key, value and parent - sitting in the root pointing to itself.
-        LabelDataBase["rs"] = new() {
-            {"self",    (LabelDataBase, AssembleTimeTypes.CSCOPE) },
-            {"parent",  (LabelDataBase, AssembleTimeTypes.CSCOPE) },
+        LabelDataBase["rs"] = new Dictionary<string, (object data, AssembleTimeTypes type)>() {
+            {"self",    (LabelDataBase, AssembleTimeTypes.CSCOPE) },// const object ref
+            {"parent",  (LabelDataBase, AssembleTimeTypes.CSCOPE) },// const object ref
         };
 
         // make language a compiler variable
-        LabelDataBase["lang"] = new() {
-            {"self",    (ActiveLanguage.ToString() , AssembleTimeTypes.CSTRING) },
-            {"parent",  (LabelDataBase,              AssembleTimeTypes.CSCOPE) },
+        LabelDataBase["lang"] = new Dictionary<string, (object data, AssembleTimeTypes type)>() {
+            {"self",    (ActiveLanguage.ToString() , AssembleTimeTypes.CSTRING) }
         };
 
         ActiveScope = LabelDataBase["rs"];
@@ -60,7 +59,7 @@ internal static class Program {
     internal static List<string[]> SourceFileContentBuffer = [];
     internal static List<string>   SourceFileNameBuffer    = [];
 
-    internal static Dictionary<string, Dictionary<string, (object? data, AssembleTimeTypes type)>> LabelDataBase = [];
-    internal static Dictionary<string, (object? data, AssembleTimeTypes type)> ActiveScope = [];
+    internal static Dictionary<string, Dictionary<string, (object data, AssembleTimeTypes type)>> LabelDataBase = [];
+    internal static Dictionary<string, (object data, AssembleTimeTypes type)> ActiveScope = [];
     internal static Languages ActiveLanguage;
 }

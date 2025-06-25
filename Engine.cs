@@ -63,6 +63,7 @@ namespace Numinous {
 
         internal enum AssembleTimeTypes  : byte {
             PROPERTY,   // Property (Evaluator Solving)
+            TYPE,       // typeof result
             INT,        // assemble time integer
             STRING,     // assemble time string
             DEFINE,     // define, capture then tokenize for CF
@@ -146,576 +147,608 @@ namespace Numinous {
                 NOT
             };
 
-            /// <summary>
-            /// This will either push back an object reference, or a constant object literal.
-            /// This will ignore all forms of containers - expects no type, just detects and works with it.
-            /// If the Resolve is null, it means an error occured.
-            /// Container may be either
-            ///     (   - push back object ref tuple where possible, returning constant values where not
-            ///     {   - push back cexp of tuple
-            ///     [   - push back cint with creg
-            /// </summary>
-            /// <param name="Tokens"></param>
-            /// <returns></returns>
-            static internal (string? Representation, AssembleTimeTypes ResolveType, char Container) LinearEvaluate(List<string> Tokens) {
-                int PendingOperations               = Tokens.Count(t => GetHierachy(t) != -1);
-                bool ExpectValueToggle              = true;
-                bool Mutated                        = false;    // does not affect object reference perpetuation.
-                List<Unary> UnaryBuffer             = [];
+            ///// <summary>
+            ///// This will either push back an object reference, or a constant object literal.
+            ///// This will ignore all forms of containers - expects no type, just detects and works with it.
+            ///// If the Resolve is null, it means an error occured.
+            ///// Container may be either
+            /////     (   - push back object ref tuple where possible, returning constant values where not
+            /////     {   - push back cexp of tuple
+            /////     [   - push back cint with creg
+            ///// </summary>
+            ///// <param name="Tokens"></param>
+            ///// <returns></returns>
+            //static internal (string? Representation, AssembleTimeTypes ResolveType, char Container) LinearEvaluate(List<string> Tokens) {
+            //    int PendingOperations               = Tokens.Count(t => GetHierachy(t) != -1);
+            //    bool ExpectValueToggle              = true;
+            //    bool Mutated                        = false;    // does not affect object reference perpetuation.
+            //    List<Unary> UnaryBuffer             = [];
 
-                List<(object? data, AssembleTimeTypes type)> DataBuffer             = [];
-                List<AssembleTimeTypes> TypeBuffer  = [];
+            //    List<(object? data, AssembleTimeTypes type)> DataBuffer             = [];
+            //    List<AssembleTimeTypes> TypeBuffer  = [];
 
-                Dictionary<string, (object? data, AssembleTimeTypes type)> ActiveScope = Program.ActiveScope;
-                List<(Operators Operator, int Level)> OperatorBuffer = [];
+            //    Dictionary<string, (object data, AssembleTimeTypes type)> ActiveScope = Program.ActiveScope;
+            //    List<(Operators Operator, int Level)> OperatorBuffer = [];
 
-                [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                (object? ObjectReturn, bool OK) ComputeOperation(Operators Op, object L, object R, AssembleTimeTypes LT, AssembleTimeTypes RT) {
-                    switch (Op) {
-                        case Operators.PROPERTY:
-                            switch (LT) {
+            //    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            //    (object ObjectReturn, bool OK) ComputeOperation(Operators Op, object L, object R, AssembleTimeTypes LT, AssembleTimeTypes RT) {
+            //        switch (Op) {
+            //            case Operators.PROPERTY:
+            //                switch (LT) {
 
-                            }
-                            break;
-                    }
-                    return default;
-                }
+            //                }
+            //                break;
+            //        }
+            //        return default;
+            //    }
 
 
-                [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                void UnifiedConstAppendSystem(int Int) {
-                    for (int u = UnaryBuffer.Count - 1; u >= 0; u--) {
-                        switch (UnaryBuffer[u]) {
-                            case Unary.ABS:
-                                Int = Math.Abs(Int);
-                                break;
+            //    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            //    void UnifiedConstAppendSystem(int Int) {
+            //        for (int u = UnaryBuffer.Count - 1; u >= 0; u--) {
+            //            switch (UnaryBuffer[u]) {
+            //                case Unary.ABS:
+            //                    Int = Math.Abs(Int);
+            //                    break;
 
-                            case Unary.NEG:
-                                Int = -Int;
-                                break;
+            //                case Unary.NEG:
+            //                    Int = -Int;
+            //                    break;
 
-                            case Unary.BIT:
-                                Int = ~Int;
-                                break;
+            //                case Unary.BIT:
+            //                    Int = ~Int;
+            //                    break;
 
-                            case Unary.NOT:
-                                Int = 0 == Int ? 0 : 1;
-                                break;
-                        }
+            //                case Unary.NOT:
+            //                    Int = 0 == Int ? 0 : 1;
+            //                    break;
+            //            }
 
-                        DataBuffer.Add((new Dictionary<string, (object data, AssembleTimeTypes type)> {
-                            {"self", (Int, AssembleTimeTypes.CINT) }
-                        }, AssembleTimeTypes.CINT));
-                    }
-                }
+            //            DataBuffer.Add((new Dictionary<string, (object data, AssembleTimeTypes type)> {
+            //                {"self", (Int, AssembleTimeTypes.CINT) }
+            //            }, AssembleTimeTypes.CINT));
+            //        }
+            //    }
 
-                for (int i = 1; i < Tokens.Count - 1; i++) {
-                    if (Tokens[i][0] == ' ' || Tokens[i][0] == '\t') continue;
-                    if (ExpectValueToggle) {
-                        switch (Tokens[i]) {
-                            case "++": if (Mutated) goto Error; UnaryBuffer.Add(Unary.INC); break;
-                            case "--": if (Mutated) goto Error; UnaryBuffer.Add(Unary.DEC); break;
-                            case "+":  if (Mutated) goto Error; UnaryBuffer.Add(Unary.ABS); break;
-                            case "-":  if (Mutated) goto Error; UnaryBuffer.Add(Unary.NEG); break;
-                            case "~":  if (Mutated) goto Error; UnaryBuffer.Add(Unary.BIT); break;
-                            case "!":  if (Mutated) goto Error; UnaryBuffer.Add(Unary.NOT); break;
+            //    for (int i = 1; i < Tokens.Count - 1; i++) {
+            //        if (Tokens[i][0] == ' ' || Tokens[i][0] == '\t') continue;
+            //        if (ExpectValueToggle) {
+            //            switch (Tokens[i]) {
+            //                case "++": if (Mutated) goto Error; UnaryBuffer.Add(Unary.INC); break;
+            //                case "--": if (Mutated) goto Error; UnaryBuffer.Add(Unary.DEC); break;
+            //                case "+":  if (Mutated) goto Error; UnaryBuffer.Add(Unary.ABS); break;
+            //                case "-":  if (Mutated) goto Error; UnaryBuffer.Add(Unary.NEG); break;
+            //                case "~":  if (Mutated) goto Error; UnaryBuffer.Add(Unary.BIT); break;
+            //                case "!":  if (Mutated) goto Error; UnaryBuffer.Add(Unary.NOT); break;
 
-                            case "\\":
-                                ActiveScope = (Dictionary<string, (object? data, AssembleTimeTypes type)>)ActiveScope["parent"].data;
-                                Mutated = true;
-                                break;
+            //                case "\\":
+            //                    if (ActiveScope == Program.LabelDataBase["rs"]) {
+            //                        // warn, your accessing the parent of root - which is root, relative scope systems may fail.
+            //                    }
+            //                    ActiveScope = (Dictionary<string, (object data, AssembleTimeTypes type)>)ActiveScope["parent"].data;
+            //                    Mutated = true;
+            //                    break;
 
-                            default:
-                                // mark to want operator
-                                ExpectValueToggle = false;
+            //                default:
+            //                    // mark to want operator
+            //                    ExpectValueToggle = false;
 
-                                if (GetHierachy(Tokens[i]) != -1) {
-                                    // error, attempted to mutate a non unary operator (just as bad, but needs a different check)
-                                    return default;
-                                }
+            //                    if (GetHierachy(Tokens[i]) != -1) {
+            //                        // error, attempted to mutate a non unary operator (just as bad, but needs a different check)
+            //                        return default;
+            //                    }
 
-                                switch (Tokens[i][0]) {
-                                    case '\"':
-                                        i += 2;
-                                        string StringCapture = $"\"{Tokens[i - 1]}";
-                                        for (; i < Tokens.Count - 1 && Tokens[i - 1] != "\""; i++) {
-                                            StringCapture += Tokens[i];
-                                        }
-                                        if (StringCapture[^1] != '\"') {
-                                            // error string literal did not terminate
-                                            return default;
-                                        }
+            //                    switch (Tokens[i][0]) {
+            //                        case '\"':
+            //                            i += 2;
+            //                            string StringCapture = $"\"{Tokens[i - 1]}";
+            //                            for (; i < Tokens.Count - 1 && Tokens[i - 1] != "\""; i++) {
+            //                                StringCapture += Tokens[i];
+            //                            }
+            //                            if (StringCapture[^1] != '\"') {
+            //                                // error string literal did not terminate
+            //                                return default;
+            //                            }
 
-                                        object UnaryCapture = StringCapture;
-                                        AssembleTimeTypes ResultType = AssembleTimeTypes.CSTRING;
+            //                            object UnaryCapture = StringCapture;
+            //                            AssembleTimeTypes ResultType = AssembleTimeTypes.CSTRING;
 
-                                        if (Mutated) {
-                                            // error, cant mutate a literal
-                                            return default;
-                                        }
+            //                            if (Mutated) {
+            //                                // error, cant mutate a literal
+            //                                return default;
+            //                            }
 
-                                        for (int u = UnaryBuffer.Count - 1; u >= 0; u--) {
-                                            switch (UnaryBuffer[u]) {
-                                                case Unary.ABS:
-                                                    if (ResultType == AssembleTimeTypes.CINT) {
-                                                        UnaryCapture = Math.Abs((int)UnaryCapture);
-                                                    } else {
-                                                        UnaryCapture = ((string)UnaryCapture).ToUpper();
-                                                    }
-                                                    break;
+            //                            for (int u = UnaryBuffer.Count - 1; u >= 0; u--) {
+            //                                switch (UnaryBuffer[u]) {
+            //                                    case Unary.ABS:
+            //                                        if (ResultType == AssembleTimeTypes.CINT) {
+            //                                            UnaryCapture = Math.Abs((int)UnaryCapture);
+            //                                        } else {
+            //                                            UnaryCapture = ((string)UnaryCapture).ToUpper();
+            //                                        }
+            //                                        break;
 
-                                                case Unary.NEG:
-                                                    if (ResultType == AssembleTimeTypes.CINT) {
-                                                        UnaryCapture = -(int)UnaryCapture;
-                                                    } else {
-                                                        UnaryCapture = ((string)UnaryCapture).ToLower();
-                                                    }
+            //                                    case Unary.NEG:
+            //                                        if (ResultType == AssembleTimeTypes.CINT) {
+            //                                            UnaryCapture = -(int)UnaryCapture;
+            //                                        } else {
+            //                                            UnaryCapture = ((string)UnaryCapture).ToLower();
+            //                                        }
 
-                                                    break;
+            //                                        break;
 
-                                                case Unary.BIT:
-                                                    if (ResultType == AssembleTimeTypes.CINT) {
-                                                        UnaryCapture = ~(int)UnaryCapture;
-                                                    } else {
-                                                        UnaryCapture = ((string)UnaryCapture).Length;
-                                                        ResultType = AssembleTimeTypes.CINT;
-                                                    }
+            //                                    case Unary.BIT:
+            //                                        if (ResultType == AssembleTimeTypes.CINT) {
+            //                                            UnaryCapture = ~(int)UnaryCapture;
+            //                                        } else {
+            //                                            UnaryCapture = ((string)UnaryCapture).Length;
+            //                                            ResultType = AssembleTimeTypes.CINT;
+            //                                        }
 
-                                                    break;
+            //                                        break;
 
-                                                case Unary.NOT:
-                                                    if (ResultType == AssembleTimeTypes.CINT) {
-                                                        UnaryCapture = 0 == (int)UnaryCapture ? 0 : 1;
-                                                    } else {
-                                                        UnaryCapture = new string(' ', ((string)UnaryCapture).Length);
-                                                    }
+            //                                    case Unary.NOT:
+            //                                        if (ResultType == AssembleTimeTypes.CINT) {
+            //                                            UnaryCapture = 0 == (int)UnaryCapture ? 0 : 1;
+            //                                        } else {
+            //                                            UnaryCapture = new string(' ', ((string)UnaryCapture).Length);
+            //                                        }
 
-                                                    break;
-                                            }
-                                        }
+            //                                        break;
+            //                                }
+            //                            }
 
-                                        if (ResultType == AssembleTimeTypes.CINT) {
-                                            DataBuffer.Add((new Dictionary<string, (object data, AssembleTimeTypes type)> {
-                                                { "self", (UnaryCapture,            AssembleTimeTypes.CINT) },
-                                            }, AssembleTimeTypes.CINT));
-                                        } else {
-                                            DataBuffer.Add((new Dictionary<string, (object data, AssembleTimeTypes type)> {
-                                                { "self",   (UnaryCapture,          AssembleTimeTypes.CSTRING) },
-                                                { "length", (StringCapture.Length,  AssembleTimeTypes.CINT) },
-                                            }, AssembleTimeTypes.CSTRING));
-                                        }
+            //                            if (ResultType == AssembleTimeTypes.CINT) {
+            //                                DataBuffer.Add((new Dictionary<string, (object data, AssembleTimeTypes type)> {
+            //                                    { "self", (UnaryCapture,            AssembleTimeTypes.CINT) },
+            //                                }, AssembleTimeTypes.CINT));
+            //                            } else {
+            //                                DataBuffer.Add((new Dictionary<string, (object data, AssembleTimeTypes type)> {
+            //                                    { "self",   (UnaryCapture,          AssembleTimeTypes.CSTRING) },
+            //                                    { "length", (StringCapture.Length,  AssembleTimeTypes.CINT) },
+            //                                }, AssembleTimeTypes.CSTRING));
+            //                            }
 
-                                        // no need to bounds check this
-                                        if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
-                                            // error, post mut. Same issue as pre-mut on literal
-                                            return default;
-                                        }
+            //                            // no need to bounds check this
+            //                            if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
+            //                                // error, post mut. Same issue as pre-mut on literal
+            //                                return default;
+            //                            }
 
-                                        break;
+            //                            break;
 
-                                    case '0':
+            //                        case '0':
 
-                                        if (Mutated) {
-                                            // error, cant mutate a literal
-                                            return default;
-                                        }
+            //                            if (Mutated) {
+            //                                // error, cant mutate a literal
+            //                                return default;
+            //                            }
 
-                                        switch (Tokens[i][1]) {
-                                            case 'x':
-                                                // hexadecimal int literal
-                                                UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 16));
-                                                if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
-                                                    // error, post mut. Same issue as pre-mut on literal
-                                                    return default;
-                                                }
-                                                break;
+            //                            switch (Tokens[i][1]) {
+            //                                case 'x':
+            //                                    // hexadecimal int literal
+            //                                    UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 16));
+            //                                    if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
+            //                                        // error, post mut. Same issue as pre-mut on literal
+            //                                        return default;
+            //                                    }
+            //                                    break;
 
-                                            case 'b':
-                                                // binary int literal
-                                                UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 2));
-                                                if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
-                                                    // error, post mut. Same issue as pre-mut on literal
-                                                    return default;
-                                                }
-                                                break;
+            //                                case 'b':
+            //                                    // binary int literal
+            //                                    UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 2));
+            //                                    if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
+            //                                        // error, post mut. Same issue as pre-mut on literal
+            //                                        return default;
+            //                                    }
+            //                                    break;
 
-                                            case 'd':
-                                                // octal int literal
-                                                if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
-                                                    // error, post mut. Same issue as pre-mut on literal
-                                                    return default;
-                                                }
-                                                UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 8));
-                                                break;
+            //                                case 'd':
+            //                                    // octal int literal
+            //                                    if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
+            //                                        // error, post mut. Same issue as pre-mut on literal
+            //                                        return default;
+            //                                    }
+            //                                    UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 8));
+            //                                    break;
 
-                                            default:
-                                                break;
-                                        }
-                                        goto case '9';
+            //                                default:
+            //                                    break;
+            //                            }
+            //                            goto case '9';
 
-                                    case '1':
-                                    case '2':
-                                    case '3':
-                                    case '4':
-                                    case '5':
-                                    case '6':
-                                    case '7':
-                                    case '8':
-                                    case '9':
+            //                        case '1':
+            //                        case '2':
+            //                        case '3':
+            //                        case '4':
+            //                        case '5':
+            //                        case '6':
+            //                        case '7':
+            //                        case '8':
+            //                        case '9':
 
-                                        if (Mutated) {
-                                            // error, cant mutate a literal
-                                            return default;
-                                        }
+            //                            if (Mutated) {
+            //                                // error, cant mutate a literal
+            //                                return default;
+            //                            }
 
-                                        // decimal int literal
-                                        UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i].ToLowerInvariant(), 8));
-                                        if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
-                                            // error, post mut. Same issue as pre-mut on literal
-                                            return default;
-                                        }
-                                        break;
+            //                            // decimal int literal
+            //                            UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i].ToLowerInvariant(), 8));
+            //                            if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
+            //                                // error, post mut. Same issue as pre-mut on literal
+            //                                return default;
+            //                            }
+            //                            break;
 
-                                    case '$':
+            //                        case '$':
 
-                                        if (Mutated) {
-                                            // error, cant mutate a literal
-                                            return default;
-                                        }
+            //                            if (Mutated) {
+            //                                // error, cant mutate a literal
+            //                                return default;
+            //                            }
 
-                                        // hexadecimal int literal
-                                        UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 16));
-                                        if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
-                                            // error, post mut. Same issue as pre-mut on literal
-                                            return default;
-                                        }
-                                        break;
+            //                            // hexadecimal int literal
+            //                            UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 16));
+            //                            if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
+            //                                // error, post mut. Same issue as pre-mut on literal
+            //                                return default;
+            //                            }
+            //                            break;
 
-                                    case '%':
+            //                        case '%':
 
-                                        if (Mutated) {
-                                            // error, cant mutate a literal
-                                            return default;
-                                        }
+            //                            if (Mutated) {
+            //                                // error, cant mutate a literal
+            //                                return default;
+            //                            }
 
-                                        // binary int literal
-                                        UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 2));
-                                        if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
-                                            // error, post mut. Same issue as pre-mut on literal
-                                            return default;
-                                        }
-                                        break;
+            //                            // binary int literal
+            //                            UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 2));
+            //                            if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
+            //                                // error, post mut. Same issue as pre-mut on literal
+            //                                return default;
+            //                            }
+            //                            break;
 
-                                    case '£':
+            //                        case '£':
 
-                                        if (Mutated) {
-                                            // error, cant mutate a literal
-                                            return default;
-                                        }
+            //                            if (Mutated) {
+            //                                // error, cant mutate a literal
+            //                                return default;
+            //                            }
 
-                                        // octal int literal
-                                        UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 8));
-                                        if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
-                                            // error, post mut. Same issue as pre-mut on literal
-                                            return default;
-                                        }
-                                        break;
+            //                            // octal int literal
+            //                            UnifiedConstAppendSystem(Convert.ToInt32(Tokens[i][2..].ToLowerInvariant(), 8));
+            //                            if (Tokens[i + 1] == "++" || Tokens[i + 1] == "--") {
+            //                                // error, post mut. Same issue as pre-mut on literal
+            //                                return default;
+            //                            }
+            //                            break;
 
-                                    default:
-                                        // non literal
-                                        if (ActiveScope.TryGetValue(Tokens[i], out (object data, AssembleTimeTypes type) value)) {
-                                            UnaryCapture = value.data;
-                                            ResultType = value.type;
+            //                        default:
+            //                            // non literal
+            //                            if (ActiveScope.TryGetValue(Tokens[i], out (object data, AssembleTimeTypes type) value)) {
+            //                                UnaryCapture = value.data;
+            //                                ResultType   = value.type;
 
-                                            for (int u = UnaryBuffer.Count - 1; u >= 0; u--) {
-                                                switch (UnaryBuffer[u]) {
-                                                    case Unary.INC:
-                                                        if (ResultType == AssembleTimeTypes.INT) {
-                                                            UnaryCapture = 1 + (int)UnaryCapture;
-                                                            ActiveScope[Tokens[i]] = (UnaryCapture, ResultType);
-                                                        } else {
-                                                            // erorr, cant do this to anything but an int
-                                                            return default;
-                                                        }
-                                                        break;
+            //                                // ensure unaries are used on right types, mutating to const type, as long as not null
+            //                                if (UnaryBuffer.Count != 0) {
+            //                                    if (UnaryCapture == null) {
+            //                                        // error, cant access to modify value of null
+            //                                        return default;
+            //                                    }
 
-                                                    case Unary.DEC:
-                                                        if (ResultType == AssembleTimeTypes.INT) {
-                                                            UnaryCapture = -1 + (int)UnaryCapture;
-                                                            ActiveScope[Tokens[i]] = (UnaryCapture, ResultType);
-                                                        } else {
-                                                            // erorr, cant do this to anything but an int
-                                                            return default;
-                                                        }
-                                                        break;
+            //                                    if      (ResultType == AssembleTimeTypes.INT)    ResultType = AssembleTimeTypes.CINT;
+            //                                    else if (ResultType == AssembleTimeTypes.STRING) ResultType = AssembleTimeTypes.CSTRING;
+            //                                    else {
+            //                                        // return error, its inappropriate to use unaries on anything but int or string
+            //                                        return default;
+            //                                    }
+            //                                } else if (UnaryCapture == null) {
+            //                                    // when capturing null, it HAS to be an object reference. This could be assignment.
+            //                                    // but if its not thats fine, but we still need to propogate the ref.
+            //                                    // so far (MyNullObject) = 1 wont define as non-null, because we cant send back object ref
+            //                                    DataBuffer.Add((null, ResultType));
+            //                                    break;
+            //                                }
 
-                                                    case Unary.ABS:
-                                                        if (ResultType == AssembleTimeTypes.INT) {
-                                                            UnaryCapture = Math.Abs((int)UnaryCapture);
-                                                        }
-                                                        break;
+            //                                for (int u = UnaryBuffer.Count - 1; u >= 0; u--) {
+            //                                    switch (UnaryBuffer[u]) {
+            //                                        case Unary.INC:
+            //                                            if (ResultType == AssembleTimeTypes.CINT) {
+            //                                                UnaryCapture = 1 + (int)UnaryCapture!;
+            //                                                ActiveScope[Tokens[i]] = (UnaryCapture, ResultType);
+            //                                            } else {
+            //                                                // error, cant do this to anything but an int
+            //                                                return default;
+            //                                            }
+            //                                            break;
 
-                                                    case Unary.NEG:
-                                                        if (ResultType == AssembleTimeTypes.INT) {
-                                                            UnaryCapture = -(int)UnaryCapture;
-                                                        }
-                                                        break;
+            //                                        case Unary.DEC:
+            //                                            if (ResultType == AssembleTimeTypes.CINT) {
+            //                                                UnaryCapture = -1 + (int)UnaryCapture!;
+            //                                                ActiveScope[Tokens[i]] = (UnaryCapture, ResultType);
+            //                                            } else {
+            //                                                // error, cant do this to anything but an int
+            //                                                return default;
+            //                                            }
+            //                                            break;
 
-                                                    case Unary.BIT:
-                                                        if (ResultType == AssembleTimeTypes.INT) {
-                                                            UnaryCapture = ~(int)UnaryCapture;
-                                                        }
-                                                        break;
+            //                                        case Unary.ABS:
+            //                                            if (ResultType == AssembleTimeTypes.CINT) {
+            //                                                UnaryCapture = Math.Abs((int)UnaryCapture!);
+            //                                            } else if (ResultType == AssembleTimeTypes.CSTRING) {
+            //                                                UnaryCapture = ((string)UnaryCapture!).ToUpper();
+            //                                            }
+            //                                            break;
 
-                                                    case Unary.NOT:
-                                                        if (ResultType == AssembleTimeTypes.INT) {
-                                                            UnaryCapture = 0 == (int)UnaryCapture ? 0 : 1;
-                                                        }
-                                                        break;
-                                                }
-                                            }
+            //                                        case Unary.NEG:
+            //                                            if (ResultType == AssembleTimeTypes.CINT) {
+            //                                                UnaryCapture = -(int)UnaryCapture!;
+            //                                            } else if (ResultType == AssembleTimeTypes.CSTRING) {
+            //                                                UnaryCapture = ((string)UnaryCapture!).ToLower();
+            //                                            }
+            //                                            break;
 
-                                            // property capture
+            //                                        case Unary.BIT:
+            //                                            if (ResultType == AssembleTimeTypes.CINT) {
+            //                                                UnaryCapture = ~(int)UnaryCapture!;
+            //                                            } else if (ResultType == AssembleTimeTypes.CSTRING) {
+            //                                                UnaryCapture = ((string)UnaryCapture!).Length;
+            //                                            }
+            //                                            break;
 
-                                            for(; i < Tokens.Count - 1; i++) {
-                                                if (Tokens[i][0] == ' ' || Tokens[i][0] == '\t') continue;
-                                                // we can optimise the underneath later?
-                                                if (Tokens[i][0] == '.' || Tokens[i] == "?.") {
-                                                    Mutated = false;                            // free up for mutation, might be pointless
+            //                                        case Unary.NOT:
+            //                                            if (ResultType == AssembleTimeTypes.CINT) {
+            //                                                UnaryCapture = 0 == (int)UnaryCapture! ? 0 : 1;
+            //                                            } else if (ResultType == AssembleTimeTypes.CSTRING) {
+            //                                                UnaryCapture = new string(' ', ((string)UnaryCapture!).Length);
+            //                                            }
+            //                                            break;
+            //                                    }
+            //                                }
 
-                                                    if (Tokens[i].Length == 1) {
-                                                        if (UnaryCapture == null) {
-                                                            // sorry link, I can't sell credit. come back when your a little mmmmmmmmm richer
-                                                            // error : null cannot have members
-                                                            return default;
-                                                        }
+            //                                // property capture
 
-                                                        // set i to equal the property (could be at a?. b)
-                                                        for (; i < Tokens.Count - 1; i++) {
-                                                            if (Tokens[i][0] == ' ' || Tokens[i][0] == '\t') continue;
-                                                            if (GetHierachy(Tokens[i]) == -1) break;
-                                                        }
-                                                        if (((Dictionary<string, (object data, AssembleTimeTypes type)>)UnaryCapture).TryGetValue($"{Tokens[i]}", out (object data, AssembleTimeTypes type) PropertyAccess)) {
-                                                            UnaryCapture = PropertyAccess.data;
-                                                            ResultType = PropertyAccess.type;
-                                                        } else {
-                                                            // error, no property found
-                                                            return default;
-                                                        }
-                                                    } else {
-                                                        // ?.
-                                                        if (UnaryCapture == null) continue;         // null has no object, so its just const typed null from here
-                                                        // ah shit here we go again (fetch data)
+            //                                for(; i < Tokens.Count - 1; i++) {
+            //                                    if (Tokens[i][0] == ' ' || Tokens[i][0] == '\t') continue;
+            //                                    // we can optimise the underneath later?
+            //                                    if (Tokens[i][0] == '.' || Tokens[i] == "?.") {
+            //                                        Mutated = false;                            // free up for mutation, might be pointless
+
+            //                                        if (Tokens[i].Length == 1) {
+            //                                            if (UnaryCapture == null) {
+            //                                                // sorry link, I can't sell credit. come back when your a little mmmmmmmmm richer
+            //                                                // error : null cannot have members
+            //                                                return default;
+            //                                            }
+
+            //                                            // set i to equal the property (could be at a?. b)
+            //                                            for (; i < Tokens.Count - 1; i++) {
+            //                                                if (Tokens[i][0] == ' ' || Tokens[i][0] == '\t') continue;
+            //                                                if (GetHierachy(Tokens[i]) == -1) break;
+            //                                            }
+            //                                            if (((Dictionary<string, (object data, AssembleTimeTypes type)>)UnaryCapture).TryGetValue($"{Tokens[i]}", out (object data, AssembleTimeTypes type) PropertyAccess)) {
+            //                                                UnaryCapture = PropertyAccess.data;
+            //                                                ResultType = PropertyAccess.type;
+            //                                            } else {
+            //                                                // error, no property found
+            //                                                return default;
+            //                                            }
+            //                                        } else {
+            //                                            // ?.
+            //                                            if (UnaryCapture == null) continue;         // null has no object, so its just const typed null from here
+            //                                            // ah shit here we go again (fetch data)
                                                         
-                                                        // set i to equal the property (could be at a. b)
-                                                        for (; i < Tokens.Count - 1; i++) {
-                                                            if (Tokens[i][0] == ' ' || Tokens[i][0] == '\t') continue;
-                                                            if (GetHierachy(Tokens[i]) == -1) break;
-                                                        }
-                                                        if (((Dictionary<string, (object data, AssembleTimeTypes type)>)UnaryCapture).TryGetValue($"{Tokens[i]}", out (object data, AssembleTimeTypes type) PropertyAccess)){
-                                                            UnaryCapture = PropertyAccess.data;
-                                                            ResultType   = PropertyAccess.type;
-                                                        } else {
-                                                            // error, no property found
-                                                            return default;
-                                                        }
-                                                    }
-                                                }
+            //                                            // set i to equal the property (could be at a. b)
+            //                                            for (; i < Tokens.Count - 1; i++) {
+            //                                                if (Tokens[i][0] == ' ' || Tokens[i][0] == '\t') continue;
+            //                                                if (GetHierachy(Tokens[i]) == -1) break;
+            //                                            }
+            //                                            if (((Dictionary<string, (object data, AssembleTimeTypes type)>)UnaryCapture).TryGetValue($"{Tokens[i]}", out (object data, AssembleTimeTypes type) PropertyAccess)){
+            //                                                UnaryCapture = PropertyAccess.data;
+            //                                                ResultType   = PropertyAccess.type;
+            //                                            } else {
+            //                                                // error, no property found
+            //                                                return default;
+            //                                            }
+            //                                        }
+            //                                    }
 
-                                                if (Tokens[i] == "++" || Tokens[i] == "--") {
-                                                    if (Mutated) {
-                                                        // error, post mut after pre mut is illegal
-                                                        return default;
-                                                    }
+            //                                    if (Tokens[i] == "++" || Tokens[i] == "--") {
+            //                                        if (Mutated) {
+            //                                            // error, post mut after pre mut is illegal
+            //                                            return default;
+            //                                        }
 
-                                                    if (ResultType != AssembleTimeTypes.INT) {
-                                                        // error attempting to mut const goto Error? or is not int so illegal operation
-                                                        return default;
-                                                    }
+            //                                        if (ResultType != AssembleTimeTypes.INT) {
+            //                                            // error attempting to mut const goto Error? or is not int so illegal operation
+            //                                            return default;
+            //                                        }
 
-                                                    // mutate property
-                                                    if (Tokens[i][0] == '+') {
-                                                        ((Dictionary<string, (object? data, AssembleTimeTypes type)>)UnaryCapture)["self"] = (
-                                                            1 + (int)(((Dictionary<string, (object? data, AssembleTimeTypes type)>)UnaryCapture)["self"].data),
-                                                            ((Dictionary<string, (object? data, AssembleTimeTypes type)>)UnaryCapture)["self"].type
-                                                        );
-                                                        UnaryCapture = 1 + (int)UnaryCapture;
-                                                    } else {
-                                                        ((Dictionary<string, (object? data, AssembleTimeTypes type)>)UnaryCapture)["self"] = (
-                                                            -1 + (int)(((Dictionary<string, (object? data, AssembleTimeTypes type)>)UnaryCapture)["self"].data),
-                                                            ((Dictionary<string, (object? data, AssembleTimeTypes type)>)UnaryCapture)["self"].type
-                                                        );
-                                                        UnaryCapture = -1 + (int)UnaryCapture;
-                                                    }
+            //                                        // mutate property
+            //                                        if (Tokens[i][0] == '+') {
+            //                                            ((Dictionary<string, (object data, AssembleTimeTypes type)>)UnaryCapture!)["self"] = (
+            //                                                1 + (int)(((Dictionary<string, (object data, AssembleTimeTypes type)>)UnaryCapture)["self"].data),
+            //                                                ((Dictionary<string, (object? data, AssembleTimeTypes type)>)UnaryCapture)["self"].type
+            //                                            );
+            //                                            UnaryCapture = 1 + (int)UnaryCapture;
+            //                                        } else {
+            //                                            ((Dictionary<string, (object data, AssembleTimeTypes type)>)UnaryCapture!)["self"] = (
+            //                                                -1 + (int)(((Dictionary<string, (object data, AssembleTimeTypes type)>)UnaryCapture)["self"].data),
+            //                                                ((Dictionary<string, (object? data, AssembleTimeTypes type)>)UnaryCapture)["self"].type
+            //                                            );
+            //                                            UnaryCapture = -1 + (int)UnaryCapture;
+            //                                        }
 
-                                                    continue;
-                                                }
-                                            }
+            //                                        continue;
+            //                                    }
+            //                                }
 
-                                            DataBuffer.Add((UnaryCapture, ResultType));
+            //                                DataBuffer.Add((UnaryCapture, ResultType));
 
-                                            // object post mod
-                                            break;
-                                        } else {
-                                            // error, invalid token
-                                            return default;
-                                        }
-                                }
-                                break;
+            //                                // object post mod
+            //                                break;
+            //                            } else {
+            //                                // error, invalid token
+            //                                return default;
+            //                            }
+            //                    }
+            //                    break;
 
-                            Error: return default;
-                        }
-                        // everything must reach here, this is to complete operations. 
-                        /*
-                         * if we have at least two operators, calculate the delta of their heirarchies. if its negative, compute the higher
-                         * adjust the buffers as needed. At the end OperatorBuffer should always have 1 operator, leaving 2 in data.
-                         * once we capture the last value, we'll always move to check final operator looking for a final ++ or --
-                         * 
-                         * if thats found then that's fine, but there won't be another operator if the user is of sound mind.
-                         * which should prompt a clean loop termination, leaving the final task to be resolved and compared against target type
-                         * 
-                         * error checking should be easy
-                         */
+            //                Error: return default;
+            //            }
+            //            // everything must reach here, this is to complete operations. 
+            //            /*
+            //             * if we have at least two operators, calculate the delta of their heirarchies. if its negative, compute the higher
+            //             * adjust the buffers as needed. At the end OperatorBuffer should always have 1 operator, leaving 2 in data.
+            //             * once we capture the last value, we'll always move to check final operator looking for a final ++ or --
+            //             * 
+            //             * if thats found then that's fine, but there won't be another operator if the user is of sound mind.
+            //             * which should prompt a clean loop termination, leaving the final task to be resolved and compared against target type
+            //             * 
+            //             * error checking should be easy
+            //             */
 
-                        if (OperatorBuffer.Count <= 1) continue;    // not enough captured to safely perform an operation
+            //            if (OperatorBuffer.Count <= 1) continue;    // not enough captured to safely perform an operation
 
-                        // if O[n-1] < O[n], then we can perform O on T[n-1] and T[n]
-                        while (OperatorBuffer[^2].Level < OperatorBuffer[^1].Level) {
-                            byte LT = (byte)DataBuffer[^2].type;
-                            byte RT = (byte)DataBuffer[^1].type;
+            //            // if O[n-1] < O[n], then we can perform O on T[n-1] and T[n]
+            //            while (OperatorBuffer[^2].Level < OperatorBuffer[^1].Level) {
+            //                byte LT = (byte)DataBuffer[^2].type;
+            //                byte RT = (byte)DataBuffer[^1].type;
 
-                            // create reckless compatibility between const/nonconst types
-                            if (LT > (byte)AssembleTimeTypes.CONSTANTS) LT -= (byte)AssembleTimeTypes.CONSTANTS;
-                            if (RT > (byte)AssembleTimeTypes.CONSTANTS) RT -= (byte)AssembleTimeTypes.CONSTANTS;
+            //                // create reckless compatibility between const/nonconst types
+            //                if (LT > (byte)AssembleTimeTypes.CONSTANTS) LT -= (byte)AssembleTimeTypes.CONSTANTS;
+            //                if (RT > (byte)AssembleTimeTypes.CONSTANTS) RT -= (byte)AssembleTimeTypes.CONSTANTS;
 
-                            if (LT != RT) {
-                                // error type noncompat
-                                return default;
-                            }
+            //                if (LT != RT) {
+            //                    // error type noncompat
+            //                    return default;
+            //                }
 
                             
-                        }
+            //            }
 
 
 
 
-                    } else {
-                        ActiveScope = Program.ActiveScope;
-                        UnaryBuffer.Clear();
+            //        } else {
+            //            ActiveScope = Program.ActiveScope;
+            //            UnaryBuffer.Clear();
 
-                        if (Tokens[i] == "++") {
-                            if (Mutated) {
-                                // error, cant mutate twice
-                                return default;
-                            }
+            //            if (Tokens[i] == "++") {
+            //                if (Mutated) {
+            //                    // error, cant mutate twice
+            //                    return default;
+            //                }
 
-                            if (AssembleTimeTypes.INT == DataBuffer[^1].type) {
-                                DataBuffer[^1] = (1 + (int)DataBuffer[^1].data, AssembleTimeTypes.INT);
-                                Mutated = true;
-                            }
-                        }
+            //                if (AssembleTimeTypes.INT == DataBuffer[^1].type) {
+            //                    DataBuffer[^1] = (1 + (int)DataBuffer[^1].data, AssembleTimeTypes.INT);
+            //                    Mutated = true;
+            //                }
+            //            }
 
 
-                        if (Tokens[i] == "--") {
-                            if (Mutated) {
-                                // error, cant mutate twice
-                                return default;
-                            }
+            //            if (Tokens[i] == "--") {
+            //                if (Mutated) {
+            //                    // error, cant mutate twice
+            //                    return default;
+            //                }
 
-                            if (AssembleTimeTypes.INT == DataBuffer[^1].type) {
-                                DataBuffer[^1] = (-1 + (int)DataBuffer[^1].data, AssembleTimeTypes.INT);
-                                Mutated = true;
-                            }
-                        }
+            //                if (AssembleTimeTypes.INT == DataBuffer[^1].type) {
+            //                    DataBuffer[^1] = (-1 + (int)DataBuffer[^1].data, AssembleTimeTypes.INT);
+            //                    Mutated = true;
+            //                }
+            //            }
 
-                        int Level = GetHierachy(Tokens[i]);
-                        Operators Operator = Tokens[i] switch {
-                            // Multiplicative
-                            "*"     => Operators.MULT,
-                            "/"     => Operators.DIV,
-                            "%"     => Operators.MOD,
+            //            int Level = GetHierachy(Tokens[i]);
+            //            Operators Operator = Tokens[i] switch {
+            //                // Multiplicative
+            //                "*"     => Operators.MULT,
+            //                "/"     => Operators.DIV,
+            //                "%"     => Operators.MOD,
 
-                            // Additive
-                            "+"     => Operators.ADD,
-                            "-"     => Operators.SUB,
+            //                // Additive
+            //                "+"     => Operators.ADD,
+            //                "-"     => Operators.SUB,
 
-                            // Shift
-                            ">>"    => Operators.RIGHT,
-                            "<<"    => Operators.LEFT,
+            //                // Shift
+            //                ">>"    => Operators.RIGHT,
+            //                "<<"    => Operators.LEFT,
 
-                            // Boolean And
-                            "&"     => Operators.BITMASK,
+            //                // Boolean And
+            //                "&"     => Operators.BITMASK,
 
-                            // Boolean Xor
-                            "^"     => Operators.BITFLIP,
+            //                // Boolean Xor
+            //                "^"     => Operators.BITFLIP,
 
-                            // Boolean Or
-                            "|"     => Operators.BITSET,
+            //                // Boolean Or
+            //                "|"     => Operators.BITSET,
 
-                            // Relational
-                            ">"     => Operators.GT,
-                            "<"     => Operators.LT,
-                            ">="    => Operators.GOET,
-                            "<="    => Operators.LOET,
-                            "<=>"   => Operators.SERIAL,
+            //                // Relational
+            //                ">"     => Operators.GT,
+            //                "<"     => Operators.LT,
+            //                ">="    => Operators.GOET,
+            //                "<="    => Operators.LOET,
+            //                "<=>"   => Operators.SERIAL,
 
-                            // Equality
-                            "=="    => Operators.EQUAL,
-                            "!="    => Operators.INEQUAL,
+            //                // Equality
+            //                "=="    => Operators.EQUAL,
+            //                "!="    => Operators.INEQUAL,
 
-                            // Conditional And
-                            "&&"    => Operators.AND,
+            //                // Conditional And
+            //                "&&"    => Operators.AND,
 
-                            // Conditional Or
-                            "||"    => Operators.OR,
+            //                // Conditional Or
+            //                "||"    => Operators.OR,
 
-                            // Null coalesce
-                            "??"    => Operators.NULL,
+            //                // Null coalesce
+            //                "??"    => Operators.NULL,
 
-                            // Ternary
-                            "?"     => Operators.CHECK,
-                            ":"     => Operators.ELSE,
+            //                // Ternary
+            //                "?"     => Operators.CHECK,
+            //                ":"     => Operators.ELSE,
 
-                            // Assignment
-                            "="     => Operators.SET,
-                            "+="    => Operators.INCREASE,
-                            "-="    => Operators.DECREASE,
-                            "*="    => Operators.MULTIPLY,
-                            "/="    => Operators.DIVIDE,
-                            "%="    => Operators.MODULATE,
-                            "|="    => Operators.ASSIGNSET,
-                            "&="    => Operators.ASSIGNMASK,
-                            "^="    => Operators.ASSIGNFLIP,
-                            "??="   => Operators.NULLSET,
-                            ">>="   => Operators.RIGHT,
-                            "<<="   => Operators.LEFT,
+            //                // Assignment
+            //                "="     => Operators.SET,
+            //                "+="    => Operators.INCREASE,
+            //                "-="    => Operators.DECREASE,
+            //                "*="    => Operators.MULTIPLY,
+            //                "/="    => Operators.DIVIDE,
+            //                "%="    => Operators.MODULATE,
+            //                "|="    => Operators.ASSIGNSET,
+            //                "&="    => Operators.ASSIGNMASK,
+            //                "^="    => Operators.ASSIGNFLIP,
+            //                "??="   => Operators.NULLSET,
+            //                ">>="   => Operators.RIGHT,
+            //                "<<="   => Operators.LEFT,
 
-                            // Term
-                            ","     => Operators.TERM,
+            //                // Term
+            //                ","     => Operators.TERM,
 
-                            // Default fallback
-                            _ => throw new ArgumentOutOfRangeException(nameof(Tokens), $"Unsupported operator: {Tokens[i]}")
+            //                // Default fallback
+            //                _ => throw new ArgumentOutOfRangeException(nameof(Tokens), $"Unsupported operator: {Tokens[i]}")
 
-                        };
+            //            };
 
-                        OperatorBuffer.Add((Operator, Level));
-                        Mutated = false;                        // unlock mutation for next term
-                        ExpectValueToggle = true;               // engage wait for next value
-                    }
-                }
+            //            OperatorBuffer.Add((Operator, Level));
+            //            Mutated = false;                        // unlock mutation for next term
+            //            ExpectValueToggle = true;               // engage wait for next value
+            //        }
+            //    }
 
                 
-                AssembleTimeTypes FinalType = AssembleTimeTypes.PROPERTY;
-                string result = "";
+            //    AssembleTimeTypes FinalType = AssembleTimeTypes.PROPERTY;
+            //    string result = "";
 
-                return Tokens[^1][0] switch {
-                    ')'  => ($"{result}",       FinalType,                  Tokens[^1][0]),
-                    ']'  => ($"[{result}]",     AssembleTimeTypes.CINT,     Tokens[^1][0]),
-                    '}'  => ($"{result}",       AssembleTimeTypes.CSTRING,  Tokens[^1][0]),// feeds into a fstring, will result a string component
-                    '\"' => ($"\"{result}\"",   AssembleTimeTypes.CSTRING,  Tokens[^1][0]),// returns cstring with static members
-                    _    => default,
-                };
-            }
+            //    return Tokens[^1][0] switch {
+            //        ')'  => ($"{result}",       FinalType,                  Tokens[^1][0]),
+            //        ']'  => ($"[{result}]",     AssembleTimeTypes.CINT,     Tokens[^1][0]),
+            //        '}'  => ($"{result}",       AssembleTimeTypes.CSTRING,  Tokens[^1][0]),// feeds into a fstring, will result a string component
+            //        '\"' => ($"\"{result}\"",   AssembleTimeTypes.CSTRING,  Tokens[^1][0]),// returns cstring with static members
+            //        _    => default,
+            //    };
+            //}
 
             static internal (bool, object) DeltaEvaluate(AssembleTimeTypes Type, List<DeltaTokens_t> Tokens, int MaxHierachy) {
                 (bool, object) Response = default;
@@ -1206,6 +1239,7 @@ namespace Numinous {
                         return (null, ContextFetcherEnums.UNTERMINATED);
                     }
 
+                    StepMatrix.Tokens.Clear();                  // corrects token length math
                     ResolvingTermsBuffer[0] = false;
                     nCapturedItemsBuffer[0] = 0;
                     TokenizedBuffer = [.. TokenizedBuffer.TakeLast(TokenizedBuffer.Length - TokenizedCheckPoint)];

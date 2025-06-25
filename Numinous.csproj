@@ -8,6 +8,9 @@
     <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <Copyright>GPL V2</Copyright>
+    <PackageProjectUrl></PackageProjectUrl>
+    <RepositoryUrl>https://github.com/brette-0/Numinous</RepositoryUrl>
   </PropertyGroup>
 
   <ItemGroup>
