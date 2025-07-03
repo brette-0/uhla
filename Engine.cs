@@ -1,16 +1,25 @@
-﻿using System.Collections.Generic;
-using System.ComponentModel;
-using System.Reflection.Metadata.Ecma335;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Xml.XPath;
-using Microsoft.VisualBasic;
 using Numinous.Langauges;
 
 namespace Numinous {
     namespace Engine {
         internal enum Operators : byte {
+            STRING,
+            FSTRING,
+
+            OPAREN,
+            CPAREN,
+
+            OBRACK,
+            CBRACK,
+
+            OBRACE,
+            CBRACE,
+
+            DESCOPE,
+
             PROPERTY,
             NULLPROPERTY,
 
@@ -54,6 +63,9 @@ namespace Numinous {
             DIVIDE,
             MODULATE,
             NULLSET,
+            RIGHTSET,
+            LEFTSET,
+            
             ASSIGNMASK,
             ASSIGNSET,
             ASSIGNFLIP,
@@ -75,6 +87,7 @@ namespace Numinous {
             PROC,       // Procedure
             INTER,      // Interrupt
             BANK,       // Bank
+            EXP,        // Expression
 
 
             CONSTANTS,
@@ -88,6 +101,7 @@ namespace Numinous {
             CPROC,      // Constant procedure reference
             CINTER,     // Constant interrupt reference
             CBANK,      // Constant bank reference
+            CEXP,       // Constant Expression
 
             MACRO = 0x80,
                         // void macro
@@ -132,7 +146,210 @@ namespace Numinous {
         }
 
         internal static class Engine {
-           internal struct DeltaTokens_t {
+            /*
+             * Some notes:
+             *      Tabs aren't equal width in each IDE, so we can't 'check' how many and generate the difference with spaces.
+             *      Because of this we are going to have to store this infomration also.
+             *      
+             *      I propose we have a 'LastInformationIndex' which refers to where the last information what wasn't a space or tab was.
+             *      (if useful)
+             *      
+             *      The goal of this method will be to convert the regex tokenized string responses and convert them into a system of tokens.
+             *      the tokens are in object obfuscated form, but naturally should look something like Value Operator Value
+             *      
+             *      By storing information like
+             *      (
+             *          this + 
+             *              (
+             *                  that
+             *              )
+             *      )
+             *      
+             *      we can easily resolve the highest hierachies and inject the result in between the two outside it.
+             *      by repeating this process until we have resolved the lowest hierachy we should be able to resolve any expression.
+             *      
+             *      Resolving isn't what the CF does, but orders it so it can be done.
+             *      
+             *      The CF will also need to encode whitespace in, which will seriously violate VOV.
+             *      The Evaluator will need to check to exempt VOV from evaluation logic, but will need to be used in error report code.
+             *      
+             *      The rule has to be WVWO (repeating) where W is whitespace.
+             *      
+             *      Whitespace will have to be an CONSTEXPR that begins with a whitespace token.
+             *      
+             *      PER STEP
+             *          TOKENS
+             *              DELTA_TOKENS
+             *                  STRING_OFFSET
+             *                  DATA
+             *                      ?: OPERTOR
+             *                      ?: (ITEM, CEXP)
+             *                  IS_OPERATOR
+             *              HIERACHY
+             *              TERMS
+             *          MAX_HIERACHY
+             *          SUCCESS
+             *          
+             *          
+             *          TODO:
+             *              FETCH CONTEXT FROM NEXT LINE
+             *              ERROR REPORT
+             *              STEP SUPPORT
+             *          
+             */
+
+            internal static List<(List<(List<(int StringOffset, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> Tokens, int MaxHierachy, bool Success)> ContextFetcher(ref string[] SourceFileReference, ref int SourceLineReference) {
+                List<string> RegexTokens = RegexTokenize(SourceFileReference[SourceLineReference]);
+                List<(List<(int StringOffset, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> Response = [];
+                
+                List<(int StringOffset, object data, bool IsOperator)> DeltaTokens = [];
+
+                List<Operators> ContainerBuffer = [];
+                List<int>       nTermBuffer     = [0];
+
+                int MaxHierachy = 0;
+                
+                string WHITESPACE_CONSTEXP = "";
+                
+                for (int i = 0, si = 0; i < RegexTokens.Count; i++, si += RegexTokens[i].Length) {
+                    switch (RegexTokens[i]) {
+                        case " ":   WHITESPACE_CONSTEXP += ' '; continue;
+                        case "\t": WHITESPACE_CONSTEXP += '\t'; continue;
+
+                        default:
+                            if (WHITESPACE_CONSTEXP.Length != 0) {
+                                DeltaTokens.Add((
+                                    si,
+                                    new Dictionary<string, object> {
+                                        {"self",    WHITESPACE_CONSTEXP },
+                                        {"length",  WHITESPACE_CONSTEXP.Length },
+                                        {"type",    AssembleTimeTypes.CEXP}
+                                    },
+                                    false
+                                ));
+                                WHITESPACE_CONSTEXP = "";
+                            }
+                            break;
+                    }
+                    switch (RegexTokens[i]) {
+                        case "+":   DeltaTokens.Add((si, Operators.ADD,             true)); break;
+                        case "-":   DeltaTokens.Add((si, Operators.SUB,             true)); break;
+                        case "*":   DeltaTokens.Add((si, Operators.MULT,            true)); break;
+                        case "/":   DeltaTokens.Add((si, Operators.DIV,             true)); break;
+                        case "%":   DeltaTokens.Add((si, Operators.MOD,             true)); break;
+                        case ">>":  DeltaTokens.Add((si, Operators.RIGHT,           true)); break;
+                        case "<<":  DeltaTokens.Add((si, Operators.LEFT,            true)); break;
+                        case "&":   DeltaTokens.Add((si, Operators.BITMASK,         true)); break;
+                        case "^":   DeltaTokens.Add((si, Operators.BITFLIP,         true)); break;
+                        case "|":   DeltaTokens.Add((si, Operators.BITSET,          true)); break;
+                        case "==":  DeltaTokens.Add((si, Operators.EQUAL,           true)); break;
+                        case "!=":  DeltaTokens.Add((si, Operators.INEQUAL,         true)); break;
+                        case ">=":  DeltaTokens.Add((si, Operators.GOET,            true)); break;
+                        case "<=":  DeltaTokens.Add((si, Operators.LOET,            true)); break;
+                        case ">":   DeltaTokens.Add((si, Operators.GT,              true)); break;
+                        case "<":   DeltaTokens.Add((si, Operators.LT,              true)); break;
+                        case "<=>": DeltaTokens.Add((si, Operators.SERIAL,          true)); break;
+                        case "=":   DeltaTokens.Add((si, Operators.SET,             true)); break;
+                        case "+=":  DeltaTokens.Add((si, Operators.INCREASE,        true)); break;
+                        case "-=":  DeltaTokens.Add((si, Operators.DECREASE,        true)); break;
+                        case "*=":  DeltaTokens.Add((si, Operators.MULTIPLY,        true)); break;
+                        case "/=":  DeltaTokens.Add((si, Operators.DIVIDE,          true)); break;
+                        case "%=":  DeltaTokens.Add((si, Operators.MODULATE,        true)); break;
+                        case ">>=": DeltaTokens.Add((si, Operators.RIGHTSET,        true)); break;
+                        case "<<=": DeltaTokens.Add((si, Operators.LEFTSET,         true)); break;
+                        case "&=":  DeltaTokens.Add((si, Operators.ASSIGNMASK,      true)); break;
+                        case "|=":  DeltaTokens.Add((si, Operators.ASSIGNSET,       true)); break;
+                        case "^=":  DeltaTokens.Add((si, Operators.ASSIGNFLIP,      true)); break;
+                        case "??=": DeltaTokens.Add((si, Operators.NULLSET,         true)); break;
+                        case "??":  DeltaTokens.Add((si, Operators.NULL,            true)); break;
+                        case ".":   DeltaTokens.Add((si, Operators.PROPERTY,        true)); break;
+                        case "?.":  DeltaTokens.Add((si, Operators.NULLPROPERTY,    true)); break;
+                        case "?":   DeltaTokens.Add((si, Operators.CHECK,           true)); break;
+                        case ":":   DeltaTokens.Add((si, Operators.ELSE,            true)); break;
+
+                        // Container Code
+                        case "(":   OpenContainer(ref si, Operators.OPAREN);                break;
+                        case "[":   OpenContainer(ref si, Operators.OBRACK);                break;
+                        case "{":   OpenContainer(ref si, Operators.OBRACE);                break;
+
+                        case ")":   if (CloseContainer(ref si, Operators.CPAREN)) return default; break;
+                        case "]":   if (CloseContainer(ref si, Operators.CBRACK)) return default; break;
+                        case "}":   if (CloseContainer(ref si, Operators.CBRACE)) return default; break;
+
+
+                        // Term Catching
+                        case ",":
+                            nTermBuffer[^1]++;
+                            DeltaTokens.Add((si, Operators.TERM, true));
+                            break;
+
+                        default: 
+                            if (RegexTokens[i] == " " || RegexTokens[i] == "\t") continue;
+                            DeltaTokens.Add((
+                                si, 
+                                new Dictionary<string, (object data, AssembleTimeTypes type)> {
+                                    {"self", (RegexTokens[i], AssembleTimeTypes.CEXP) },
+                                }, 
+                                false
+                            ));
+                            break;
+
+                    }
+                }
+
+                void OpenContainer(ref int si, Operators Operator) {
+                    CopyDeltaTokens();
+                    ContainerBuffer.Add(Operator);                                  // register container type
+                    nTermBuffer.Add(0);
+
+                    DeltaTokens.Add((si, Operator, true));
+                    MaxHierachy = Math.Max(ContainerBuffer.Count, MaxHierachy);
+                }
+
+                bool CloseContainer(ref int si, Operators Operator) {
+                    if (ContainerBuffer.Count == 0 || ContainerBuffer[^1] != Operator) {
+                        // error, bracket was not opened last before this
+                        return true;
+                    }
+
+                    DeltaTokens.Add((si, Operator, true));
+                    CopyDeltaTokens();
+                    ContainerBuffer.RemoveAt(ContainerBuffer.Count - 1);
+                    nTermBuffer.RemoveAt(nTermBuffer.Count - 1);
+                    
+                    return false;
+                }
+
+                void CopyDeltaTokens() {
+                    // Clone Delta Tokens thus far
+                    var DeltaTokenShallowCopy = DeltaTokens
+                        .Select(t => (
+                            t.StringOffset,
+                            Clone(ref t.data),
+                            t.IsOperator
+                        )).ToList();
+
+                    DeltaTokens = [];                                                               // wipe delta tokens for next operation
+                    Response.Add((DeltaTokenShallowCopy, ContainerBuffer.Count, nTermBuffer[^1]));  // append copy to Response
+                }
+
+
+                return [];
+            }
+
+            internal static T Clone<T>(ref T ctx) => ctx switch {
+                ICloneable c => (T)c.Clone(),
+                string or ValueType => ctx,
+#if DEBUG
+                _ => throw new NotSupportedException($"Cannot clone type {ctx?.GetType()}")
+#else
+                _ => throw new NotSupportedException($"FATAL ERROR :: (REPORT THIS ON THE GITHUB) CANNOT CLONE TYPE {ctx?.GetType()}")
+#endif
+            };
+
+
+
+            internal struct DeltaTokens_t {
                 internal string[] DeltaTokens;
                 internal int Hierarchy;
                 internal int Terms;
@@ -921,7 +1138,7 @@ namespace Numinous {
                         string token = tokens[i];
                         if (Program.ActiveScope.TryGetValue(token, out (object data, AssembleTimeTypes type) CapturedValue) && CapturedValue.type == AssembleTimeTypes.DEFINE) {
                             string Capture = (string)CapturedValue.data;
-                            UpdatedTokens.AddRange(Tokenize(Capture));
+                            UpdatedTokens.AddRange(RegexTokenize(Capture));
                             DidReplace = true;
                         } else {
                             UpdatedTokens.Add(token);
@@ -948,7 +1165,7 @@ namespace Numinous {
                 int      ContainerBufferTaleStringIndex  = 0;           // Last Open Encapsulation
                 string   AccumulatedContext         = Source[Index];    // Accumolated Context for Error Reporting
 
-                string[] TokenizedBuffer            = [.. SolveDefines(Tokenize(Source[Index]))];
+                string[] TokenizedBuffer            = [.. SolveDefines(RegexTokenize(Source[Index]))];
                 char[]   ContainerBuffer            = new char[TokenizedBuffer.Length];
                 int[]    UnresolvedTermsBuffer      = new  int[TokenizedBuffer.Length + 1];
                 int[]    nCapturedItemsBuffer       = new  int[TokenizedBuffer.Length + 1];
@@ -1247,7 +1464,7 @@ namespace Numinous {
                     StringIndex         = VerifiedStringIndex;  // Reset for more accurate wiggling
 
                     AccumulatedContext += Source[Index];
-                    TokenizedBuffer     = [.. TokenizedBuffer, .. SolveDefines(Tokenize(Source[Index]))];
+                    TokenizedBuffer     = [.. TokenizedBuffer, .. SolveDefines(RegexTokenize(Source[Index]))];
 
                 } while (true);
 
@@ -1498,20 +1715,6 @@ Svenska           ""-l sw""
                 return builder.ToString();
             }
 
-            /// <summary>
-            /// The include method.
-            /// </summary>
-            /// <param name="Filepath"></param>
-            internal static void AddContext(string Filepath) {
-                string[] Throwaway = File.ReadAllLines(Filepath);
-                if (Throwaway.Length == 0) {
-                    Terminal.Warn(ErrorTypes.NothingToDo, DecodingPhase.TOKEN, $"{Language.Connectives[(Program.ActiveLanguage, "Source file")]} {Filepath} {Language.Connectives[(Program.ActiveLanguage, "has no contents")]}", null, null, null);
-                    return;
-                }
-                Program.SourceFileNameBuffer.Add(Filepath);
-                Program.SourceFileContentBuffer.Add(Throwaway);
-            }
-
 
             // Generated function : I don't know how regex works
             /// <summary>
@@ -1519,7 +1722,7 @@ Svenska           ""-l sw""
             /// </summary>
             /// <param name="input"></param>
             /// <returns></returns>
-            internal static List<string> Tokenize(string input) {
+            internal static List<string> RegexTokenize(string input) {
                 // Wide multi-character operators and atomic tokens
                 string[] atomicTokens = new[] {
                     "$\"", "<=>", "==", "!=", "<=", ">=", "&&", "||", "++", "--",
