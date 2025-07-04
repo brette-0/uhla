@@ -2,6 +2,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using Numinous.Langauges;
+using static Antlr4.Runtime.Atn.SemanticContext;
 
 namespace Numinous {
     namespace Engine {
@@ -198,103 +199,150 @@ namespace Numinous {
              *          
              */
 
-            internal static List<(List<(List<(int StringOffset, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> Tokens, int MaxHierachy, bool Success)> ContextFetcher(ref string[] SourceFileReference, ref int SourceLineReference) {
+            internal static (List<(List<(List<(int StringOffset, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> Tokens, int MaxHierachy)>, bool Success) ContextFetcher(ref string[] SourceFileReference, ref int SourceLineReference) {
                 List<string> RegexTokens = RegexTokenize(SourceFileReference[SourceLineReference]);
-                List<(List<(int StringOffset, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> Response = [];
-                
+
+                List<(List<(List<(int StringOffset, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> Tokens, int MaxHierachy)> Tokens = [];
+                List<(List<(int StringOffset, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> StepTokens = [];
                 List<(int StringOffset, object data, bool IsOperator)> DeltaTokens = [];
 
                 List<Operators> ContainerBuffer = [];
                 List<int>       nTermBuffer     = [0];
 
                 int MaxHierachy = 0;
+                int? LastNonWhiteSpaceIndex = null;
                 
                 string WHITESPACE_CONSTEXP = "";
-                
-                for (int i = 0, si = 0; i < RegexTokens.Count; i++, si += RegexTokens[i].Length) {
-                    switch (RegexTokens[i]) {
-                        case " ":   WHITESPACE_CONSTEXP += ' '; continue;
-                        case "\t": WHITESPACE_CONSTEXP += '\t'; continue;
 
-                        default:
-                            if (WHITESPACE_CONSTEXP.Length != 0) {
-                                DeltaTokens.Add((
-                                    si,
-                                    new Dictionary<string, object> {
+                do {
+                    for (int i = 0, si = 0; i < RegexTokens.Count; i++, si += RegexTokens[i].Length) {
+                        switch (RegexTokens[i]) {
+                            case " ": WHITESPACE_CONSTEXP += ' '; continue;
+                            case "\t": WHITESPACE_CONSTEXP += '\t'; continue;
+
+                            default:
+                                if (WHITESPACE_CONSTEXP.Length != 0) {
+                                    DeltaTokens.Add((
+                                        si,
+                                        new Dictionary<string, object> {
                                         {"self",    WHITESPACE_CONSTEXP },
                                         {"length",  WHITESPACE_CONSTEXP.Length },
                                         {"type",    AssembleTimeTypes.CEXP}
+                                        },
+                                        false
+                                    ));
+                                    WHITESPACE_CONSTEXP = "";
+                                }
+                                break;
+                        }
+                        switch (RegexTokens[i]) {
+                            case "+":   AddOperator(Operators.ADD,          si); break;
+                            case "-":   AddOperator(Operators.SUB,          si); break;
+                            case "*":   AddOperator(Operators.MULT,         si); break;
+                            case "/":   AddOperator(Operators.DIV,          si); break;
+                            case "%":   AddOperator(Operators.MOD,          si); break;
+                            case ">>":  AddOperator(Operators.RIGHT,        si); break;
+                            case "<<":  AddOperator(Operators.LEFT,         si); break;
+                            case "&":   AddOperator(Operators.BITMASK,      si); break;
+                            case "^":   AddOperator(Operators.BITFLIP,      si); break;
+                            case "|":   AddOperator(Operators.BITSET,       si); break;
+                            case "==":  AddOperator(Operators.EQUAL,        si); break;
+                            case "!=":  AddOperator(Operators.INEQUAL,      si); break;
+                            case ">=":  AddOperator(Operators.GOET,         si); break;
+                            case "<=":  AddOperator(Operators.LOET,         si); break;
+                            case ">":   AddOperator(Operators.GT,           si); break;
+                            case "<":   AddOperator(Operators.LT,           si); break;
+                            case "<=>": AddOperator(Operators.SERIAL,       si); break;
+                            case "=":   AddOperator(Operators.SET,          si); break;
+                            case "+=":  AddOperator(Operators.INCREASE,     si); break;
+                            case "-=":  AddOperator(Operators.DECREASE,     si); break;
+                            case "*=":  AddOperator(Operators.MULTIPLY,     si); break;
+                            case "/=":  AddOperator(Operators.DIVIDE,       si); break;
+                            case "%=":  AddOperator(Operators.MODULATE,     si); break;
+                            case ">>=": AddOperator(Operators.RIGHTSET,     si); break;
+                            case "<<=": AddOperator(Operators.LEFTSET,      si); break;
+                            case "&=":  AddOperator(Operators.ASSIGNMASK,   si); break;
+                            case "|=":  AddOperator(Operators.ASSIGNSET,    si); break;
+                            case "^=":  AddOperator(Operators.ASSIGNFLIP,   si); break;
+                            case "??=": AddOperator(Operators.NULLSET,      si); break;
+                            case "??":  AddOperator(Operators.NULL,         si); break;
+                            case ".":   AddOperator(Operators.PROPERTY,     si); break;
+                            case "?.":  AddOperator(Operators.NULLPROPERTY, si); break;
+                            case "?":   AddOperator(Operators.CHECK,        si); break;
+                            case ":":   AddOperator(Operators.ELSE,         si); break;
+
+                            // Container Code
+                            case "(": OpenContainer(ref si, Operators.OPAREN); break;
+                            case "[": OpenContainer(ref si, Operators.OBRACK); break;
+                            case "{": OpenContainer(ref si, Operators.OBRACE); break;
+
+                            case ")": if (CloseContainer(ref si, Operators.CPAREN)) return default; break;
+                            case "]": if (CloseContainer(ref si, Operators.CBRACK)) return default; break;
+                            case "}": if (CloseContainer(ref si, Operators.CBRACE)) return default; break;
+
+                            case ";":
+                                CopyDeltaTokens();
+                                var StepTokenShallowCopy = StepTokens
+                                    .Select(t => (
+                                        t.DeltaTokens,                  // reference to a clone, should be fine
+                                        t.Hierachy,
+                                        t.Terms
+                                    )).ToList();
+
+                                Tokens.Add((StepTokens, MaxHierachy));
+
+                                PrepareNextStep();
+
+                                // modify regex tokens to remove used and stored
+                                RegexTokens = [.. RegexTokens.TakeLast(RegexTokens.Count - i)]; // trim last step from pattern
+                                i = 0;                                                          // reset counter
+                                break;
+
+                            // Term Catching
+                            case ",":
+                                nTermBuffer[^1]++;
+                                AddOperator(Operators.TERM, si);
+                                break;
+
+                            default:
+                                if (RegexTokens[i] == " " || RegexTokens[i] == "\t") continue;
+                                DeltaTokens.Add((
+                                    si,
+                                    new Dictionary<string, (object data, AssembleTimeTypes type)> {
+                                    {"self", (RegexTokens[i], AssembleTimeTypes.CEXP) },
                                     },
                                     false
                                 ));
-                                WHITESPACE_CONSTEXP = "";
-                            }
-                            break;
+                                LastNonWhiteSpaceIndex = DeltaTokens.Count - 1;
+                                break;
+
+                        }
                     }
-                    switch (RegexTokens[i]) {
-                        case "+":   DeltaTokens.Add((si, Operators.ADD,             true)); break;
-                        case "-":   DeltaTokens.Add((si, Operators.SUB,             true)); break;
-                        case "*":   DeltaTokens.Add((si, Operators.MULT,            true)); break;
-                        case "/":   DeltaTokens.Add((si, Operators.DIV,             true)); break;
-                        case "%":   DeltaTokens.Add((si, Operators.MOD,             true)); break;
-                        case ">>":  DeltaTokens.Add((si, Operators.RIGHT,           true)); break;
-                        case "<<":  DeltaTokens.Add((si, Operators.LEFT,            true)); break;
-                        case "&":   DeltaTokens.Add((si, Operators.BITMASK,         true)); break;
-                        case "^":   DeltaTokens.Add((si, Operators.BITFLIP,         true)); break;
-                        case "|":   DeltaTokens.Add((si, Operators.BITSET,          true)); break;
-                        case "==":  DeltaTokens.Add((si, Operators.EQUAL,           true)); break;
-                        case "!=":  DeltaTokens.Add((si, Operators.INEQUAL,         true)); break;
-                        case ">=":  DeltaTokens.Add((si, Operators.GOET,            true)); break;
-                        case "<=":  DeltaTokens.Add((si, Operators.LOET,            true)); break;
-                        case ">":   DeltaTokens.Add((si, Operators.GT,              true)); break;
-                        case "<":   DeltaTokens.Add((si, Operators.LT,              true)); break;
-                        case "<=>": DeltaTokens.Add((si, Operators.SERIAL,          true)); break;
-                        case "=":   DeltaTokens.Add((si, Operators.SET,             true)); break;
-                        case "+=":  DeltaTokens.Add((si, Operators.INCREASE,        true)); break;
-                        case "-=":  DeltaTokens.Add((si, Operators.DECREASE,        true)); break;
-                        case "*=":  DeltaTokens.Add((si, Operators.MULTIPLY,        true)); break;
-                        case "/=":  DeltaTokens.Add((si, Operators.DIVIDE,          true)); break;
-                        case "%=":  DeltaTokens.Add((si, Operators.MODULATE,        true)); break;
-                        case ">>=": DeltaTokens.Add((si, Operators.RIGHTSET,        true)); break;
-                        case "<<=": DeltaTokens.Add((si, Operators.LEFTSET,         true)); break;
-                        case "&=":  DeltaTokens.Add((si, Operators.ASSIGNMASK,      true)); break;
-                        case "|=":  DeltaTokens.Add((si, Operators.ASSIGNSET,       true)); break;
-                        case "^=":  DeltaTokens.Add((si, Operators.ASSIGNFLIP,      true)); break;
-                        case "??=": DeltaTokens.Add((si, Operators.NULLSET,         true)); break;
-                        case "??":  DeltaTokens.Add((si, Operators.NULL,            true)); break;
-                        case ".":   DeltaTokens.Add((si, Operators.PROPERTY,        true)); break;
-                        case "?.":  DeltaTokens.Add((si, Operators.NULLPROPERTY,    true)); break;
-                        case "?":   DeltaTokens.Add((si, Operators.CHECK,           true)); break;
-                        case ":":   DeltaTokens.Add((si, Operators.ELSE,            true)); break;
 
-                        // Container Code
-                        case "(":   OpenContainer(ref si, Operators.OPAREN);                break;
-                        case "[":   OpenContainer(ref si, Operators.OBRACK);                break;
-                        case "{":   OpenContainer(ref si, Operators.OBRACE);                break;
+                    bool IsLastOperator = LastNonWhiteSpaceIndex == null ? false : Tokens[^1].Tokens[^1].DeltaTokens[(int)LastNonWhiteSpaceIndex].IsOperator;
 
-                        case ")":   if (CloseContainer(ref si, Operators.CPAREN)) return default; break;
-                        case "]":   if (CloseContainer(ref si, Operators.CBRACK)) return default; break;
-                        case "}":   if (CloseContainer(ref si, Operators.CBRACE)) return default; break;
+                    if (ContainerBuffer.Count > 0 && !IsLastOperator) break;
 
-
-                        // Term Catching
-                        case ",":
-                            nTermBuffer[^1]++;
-                            DeltaTokens.Add((si, Operators.TERM, true));
-                            break;
-
-                        default: 
-                            if (RegexTokens[i] == " " || RegexTokens[i] == "\t") continue;
-                            DeltaTokens.Add((
-                                si, 
-                                new Dictionary<string, (object data, AssembleTimeTypes type)> {
-                                    {"self", (RegexTokens[i], AssembleTimeTypes.CEXP) },
-                                }, 
-                                false
-                            ));
-                            break;
-
+                    if (SourceLineReference == SourceFileReference.Length) {
+                        // error, cant take more context
+                        return default;
                     }
+
+                    // fetch more context, restart last StepToken. 
+
+                    PrepareNextStep();
+                    RegexTokens = [.. RegexTokens, .. RegexTokenize(SourceFileReference[++SourceLineReference])];
+
+                } while (true);
+
+                void PrepareNextStep() {
+                    MaxHierachy = 0;
+                    StepTokens.Clear();
+                    nTermBuffer = [0];
+                }
+
+                void AddOperator(Operators Operator, int si) {
+                    DeltaTokens.Add((si, Operators.ADD, true)); LastNonWhiteSpaceIndex = DeltaTokens.Count - 1;
                 }
 
                 void OpenContainer(ref int si, Operators Operator) {
@@ -302,7 +350,7 @@ namespace Numinous {
                     ContainerBuffer.Add(Operator);                                  // register container type
                     nTermBuffer.Add(0);
 
-                    DeltaTokens.Add((si, Operator, true));
+                    AddOperator(Operator, si);
                     MaxHierachy = Math.Max(ContainerBuffer.Count, MaxHierachy);
                 }
 
@@ -312,11 +360,11 @@ namespace Numinous {
                         return true;
                     }
 
-                    DeltaTokens.Add((si, Operator, true));
+                    AddOperator(Operator, si);
                     CopyDeltaTokens();
                     ContainerBuffer.RemoveAt(ContainerBuffer.Count - 1);
                     nTermBuffer.RemoveAt(nTermBuffer.Count - 1);
-                    
+
                     return false;
                 }
 
@@ -330,11 +378,11 @@ namespace Numinous {
                         )).ToList();
 
                     DeltaTokens = [];                                                               // wipe delta tokens for next operation
-                    Response.Add((DeltaTokenShallowCopy, ContainerBuffer.Count, nTermBuffer[^1]));  // append copy to Response
+                    StepTokens.Add((DeltaTokenShallowCopy, ContainerBuffer.Count, nTermBuffer[^1]));  // append copy to StepTokens
                 }
 
 
-                return [];
+                return (Tokens, true);
             }
 
             internal static T Clone<T>(ref T ctx) => ctx switch {
