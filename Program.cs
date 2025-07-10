@@ -1,15 +1,17 @@
-﻿using Numinous.Engine;
-using static Numinous.Engine.Engine;
+﻿using System.Runtime.InteropServices;
 
+using Numinous.Engine;
 using Numinous.Langauges;
+
+using static Numinous.Engine.Engine;
 
 internal static class Program {
     internal static int Main(string[] args) {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-        (string? InputPath, string? OutputPath, Terminal.AssemblyFlags Flags) = Terminal.Parse(args);
-        if (Flags.HasFlag(Terminal.AssemblyFlags.Failed))   return (int)ErrorTypes.ParsingError;   // Exit if parsing returns error
-        if (Flags.HasFlag(Terminal.AssemblyFlags.Complete)) return 0;
+        (string? InputPath, string? OutputPath, Terminal.Responses Response) = Terminal.Parse(args);
+        if (Response == Terminal.Responses.Terminate_Error)   return (int)ErrorTypes.ParsingError;   // Exit if parsing returns error
+        if (Response == Terminal.Responses.Terminate_Success) return 0;
 
         if (ActiveLanguage == Languages.Null) ActiveLanguage = Language.CaptureSystemLanguage();
         if (ActiveLanguage == Languages.Null) {
@@ -38,6 +40,7 @@ internal static class Program {
         }
         SourceFileNameBuffer.Add(InputPath!);
         SourceFileContentBuffer.Add(InputFile);
+        SourceFileIndexBuffer.Add(0);           // begin from "main.s" (CONTENTS) : (0)
 
         // rs "Root Scope" has itself as key, value and parent - sitting in the root pointing to itself.
         LabelDataBase["rs"] = new Dictionary<string, (object data, AssembleTimeTypes type)>() {
@@ -52,14 +55,26 @@ internal static class Program {
 
         ActiveScope = LabelDataBase["rs"];
 
-        (var response, var Status) = FetchContext(SourceFileContentBuffer[^1], 0, SourceFileNameBuffer[^1]);
+        Span<int> SourceFileIndexBufferSpan = CollectionsMarshal.AsSpan(SourceFileIndexBuffer);
+
+        var Demo = ContextFetcher(SourceFileContentBuffer[^1], ref SourceFileIndexBufferSpan[^1]);
+
+        if (Demo.Success) {
+            Console.WriteLine("POSITIVE");
+        } else {
+            Console.WriteLine("NEGATIVE");
+        }
+
         return 0;
     }
 
-    internal static List<string[]> SourceFileContentBuffer = [];
-    internal static List<string>   SourceFileNameBuffer    = [];
-
+    internal static List<string[]>  SourceFileContentBuffer = [];
+    internal static List<int>       SourceFileIndexBuffer   = [];
+    internal static List<string>    SourceFileNameBuffer    = [];
+    
     internal static Dictionary<string, Dictionary<string, (object data, AssembleTimeTypes type)>> LabelDataBase = [];
     internal static Dictionary<string, (object data, AssembleTimeTypes type)> ActiveScope = [];
+    
     internal static Languages ActiveLanguage;
+    internal static WarningLevels WarningLevel;
 }

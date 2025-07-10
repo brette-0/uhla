@@ -1,11 +1,28 @@
 ﻿using System.Runtime.CompilerServices;
+using System.Runtime.Serialization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Numinous.Langauges;
-using static Antlr4.Runtime.Atn.SemanticContext;
 
 namespace Numinous {
     namespace Engine {
+        [Flags]
+        internal enum WarningLevels : byte {
+            IGNORE      = 0x00,
+            DEFAULT     = 0x01,
+            ERROR       = 0x02,
+            VERBOSE     = 0x04,
+
+            /* Internal     */
+            NONE        = 0xff,
+            NO_OVERRULE = 0x08,
+
+            /* Composite    */
+            STRICT      = VERBOSE | ERROR,
+            CONTROLLED  = VERBOSE | ERROR | NO_OVERRULE,
+
+        }
+
         internal enum Operators : byte {
             STRING,
             FSTRING,
@@ -71,7 +88,9 @@ namespace Numinous {
             ASSIGNSET,
             ASSIGNFLIP,
 
-            TERM
+            TERM,
+
+            NONE = 255
         }
 
         internal enum AssembleTimeTypes  : byte {
@@ -109,6 +128,11 @@ namespace Numinous {
             MINT,       // int macro
             MSTRING,    // string macro
             MEXP,       // expression macro
+        }
+
+        internal enum AccessLevels : byte {
+            PUBLIC = 0,
+            PRIVATE = 1
         }
 
         internal enum AssemleTimeValueStatus : byte {
@@ -193,137 +217,168 @@ namespace Numinous {
              *          
              *          
              *          TODO:
-             *              FETCH CONTEXT FROM NEXT LINE
-             *              ERROR REPORT
-             *              STEP SUPPORT
+             *              CODE:
+             *                  ERROR REPORT
+             *                  CLEANSE
+             *              
+             *              TEST:
+             *                  EXTREME CASE
+             *                  EMPTY CASE
+             *                      
+             *                  
              *          
              */
 
-            internal static (List<(List<(List<(int StringOffset, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> Tokens, int MaxHierachy)>, bool Success) ContextFetcher(ref string[] SourceFileReference, ref int SourceLineReference) {
+            internal static (List<(List<(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> Tokens, int MaxHierachy)>, bool Success) ContextFetcher(string[] SourceFileReference, ref int SourceLineReference) {
                 List<string> RegexTokens = RegexTokenize(SourceFileReference[SourceLineReference]);
 
-                List<(List<(List<(int StringOffset, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> Tokens, int MaxHierachy)> Tokens = [];
-                List<(List<(int StringOffset, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> StepTokens = [];
-                List<(int StringOffset, object data, bool IsOperator)> DeltaTokens = [];
+                List<(List<(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> Tokens, int MaxHierachy)> Tokens = [];
+                List<(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> StepTokens = [];
+                List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens = [];
 
                 List<Operators> ContainerBuffer = [];
                 List<int>       nTermBuffer     = [0];
 
                 int MaxHierachy = 0;
-                int? LastNonWhiteSpaceIndex = null;
-                
+                int LastNonWhiteSpaceIndex = -1;
+
                 string WHITESPACE_CONSTEXP = "";
+                string LITERAL_CSTRING =     "";
 
                 do {
-                    for (int i = 0, si = 0; i < RegexTokens.Count; i++, si += RegexTokens[i].Length) {
-                        switch (RegexTokens[i]) {
-                            case " ": WHITESPACE_CONSTEXP += ' '; continue;
-                            case "\t": WHITESPACE_CONSTEXP += '\t'; continue;
-
-                            default:
-                                if (WHITESPACE_CONSTEXP.Length != 0) {
-                                    DeltaTokens.Add((
-                                        si,
-                                        new Dictionary<string, object> {
-                                        {"self",    WHITESPACE_CONSTEXP },
-                                        {"length",  WHITESPACE_CONSTEXP.Length },
-                                        {"type",    AssembleTimeTypes.CEXP}
-                                        },
-                                        false
-                                    ));
-                                    WHITESPACE_CONSTEXP = "";
+                    for (int i = 0, StringIndex = 0; i < RegexTokens.Count; StringIndex += RegexTokens[i].Length, i++) {
+                        if (ContainerBuffer.Count != 0 && ContainerBuffer[^1] == Operators.FSTRING) {
+                            CaptureCSTRING(ref i, ref StringIndex, c => c == '"' || c == '{');
+                            if (RegexTokens[i][0] != '{') {
+                                if (RegexTokens[i][0] == '"') {
+                                    if (CloseContainer(StringIndex, Operators.STRING, Operators.FSTRING)) continue;
+                                    else return default;
                                 }
-                                break;
+                            }
                         }
+
+
+                        // capture whitespace
+                        int CapturedStringIndex = StringIndex;
+                        for (WHITESPACE_CONSTEXP = ""; RegexTokens[i][0] == ' ' || RegexTokens[i][0] == '\t'; i++, StringIndex++) WHITESPACE_CONSTEXP += RegexTokens[i];
+                        if (CapturedStringIndex != StringIndex) {
+                            DeltaTokens.Add((
+                                CapturedStringIndex,
+                                WHITESPACE_CONSTEXP.Length,
+                                // everything is private here because it should never exist
+                                new Dictionary<string, (object, AssembleTimeTypes, AccessLevels)> {
+                                    {"self",    (WHITESPACE_CONSTEXP,           AssembleTimeTypes.CEXP, AccessLevels.PRIVATE) },
+                                    {"length",  (WHITESPACE_CONSTEXP.Length,    AssembleTimeTypes.CINT, AccessLevels.PRIVATE) },
+                                    {"type",    (AssembleTimeTypes.CEXP,        AssembleTimeTypes.TYPE, AccessLevels.PRIVATE)}
+                                },
+                                false
+                            ));
+                        }
+
+                        // handle tokens
                         switch (RegexTokens[i]) {
-                            case "+":   AddOperator(Operators.ADD,          si); break;
-                            case "-":   AddOperator(Operators.SUB,          si); break;
-                            case "*":   AddOperator(Operators.MULT,         si); break;
-                            case "/":   AddOperator(Operators.DIV,          si); break;
-                            case "%":   AddOperator(Operators.MOD,          si); break;
-                            case ">>":  AddOperator(Operators.RIGHT,        si); break;
-                            case "<<":  AddOperator(Operators.LEFT,         si); break;
-                            case "&":   AddOperator(Operators.BITMASK,      si); break;
-                            case "^":   AddOperator(Operators.BITFLIP,      si); break;
-                            case "|":   AddOperator(Operators.BITSET,       si); break;
-                            case "==":  AddOperator(Operators.EQUAL,        si); break;
-                            case "!=":  AddOperator(Operators.INEQUAL,      si); break;
-                            case ">=":  AddOperator(Operators.GOET,         si); break;
-                            case "<=":  AddOperator(Operators.LOET,         si); break;
-                            case ">":   AddOperator(Operators.GT,           si); break;
-                            case "<":   AddOperator(Operators.LT,           si); break;
-                            case "<=>": AddOperator(Operators.SERIAL,       si); break;
-                            case "=":   AddOperator(Operators.SET,          si); break;
-                            case "+=":  AddOperator(Operators.INCREASE,     si); break;
-                            case "-=":  AddOperator(Operators.DECREASE,     si); break;
-                            case "*=":  AddOperator(Operators.MULTIPLY,     si); break;
-                            case "/=":  AddOperator(Operators.DIVIDE,       si); break;
-                            case "%=":  AddOperator(Operators.MODULATE,     si); break;
-                            case ">>=": AddOperator(Operators.RIGHTSET,     si); break;
-                            case "<<=": AddOperator(Operators.LEFTSET,      si); break;
-                            case "&=":  AddOperator(Operators.ASSIGNMASK,   si); break;
-                            case "|=":  AddOperator(Operators.ASSIGNSET,    si); break;
-                            case "^=":  AddOperator(Operators.ASSIGNFLIP,   si); break;
-                            case "??=": AddOperator(Operators.NULLSET,      si); break;
-                            case "??":  AddOperator(Operators.NULL,         si); break;
-                            case ".":   AddOperator(Operators.PROPERTY,     si); break;
-                            case "?.":  AddOperator(Operators.NULLPROPERTY, si); break;
-                            case "?":   AddOperator(Operators.CHECK,        si); break;
-                            case ":":   AddOperator(Operators.ELSE,         si); break;
+                            case "+":   SimpleAddOperator(Operators.ADD,          StringIndex); break;
+                            case "-":   SimpleAddOperator(Operators.SUB,          StringIndex); break;
+                            case "*":   SimpleAddOperator(Operators.MULT,         StringIndex); break;
+                            case "/":   SimpleAddOperator(Operators.DIV,          StringIndex); break;
+                            case "%":   SimpleAddOperator(Operators.MOD,          StringIndex); break;
+                            case ">>":  SimpleAddOperator(Operators.RIGHT,        StringIndex); break;
+                            case "<<":  SimpleAddOperator(Operators.LEFT,         StringIndex); break;
+                            case "&":   SimpleAddOperator(Operators.BITMASK,      StringIndex); break;
+                            case "^":   SimpleAddOperator(Operators.BITFLIP,      StringIndex); break;
+                            case "|":   SimpleAddOperator(Operators.BITSET,       StringIndex); break;
+                            case "==":  SimpleAddOperator(Operators.EQUAL,        StringIndex); break;
+                            case "!=":  SimpleAddOperator(Operators.INEQUAL,      StringIndex); break;
+                            case ">=":  SimpleAddOperator(Operators.GOET,         StringIndex); break;
+                            case "<=":  SimpleAddOperator(Operators.LOET,         StringIndex); break;
+                            case ">":   SimpleAddOperator(Operators.GT,           StringIndex); break;
+                            case "<":   SimpleAddOperator(Operators.LT,           StringIndex); break;
+                            case "<=>": SimpleAddOperator(Operators.SERIAL,       StringIndex); break;
+                            case "=":   SimpleAddOperator(Operators.SET,          StringIndex); break;
+                            case "+=":  SimpleAddOperator(Operators.INCREASE,     StringIndex); break;
+                            case "-=":  SimpleAddOperator(Operators.DECREASE,     StringIndex); break;
+                            case "*=":  SimpleAddOperator(Operators.MULTIPLY,     StringIndex); break;
+                            case "/=":  SimpleAddOperator(Operators.DIVIDE,       StringIndex); break;
+                            case "%=":  SimpleAddOperator(Operators.MODULATE,     StringIndex); break;
+                            case ">>=": SimpleAddOperator(Operators.RIGHTSET,     StringIndex); break;
+                            case "<<=": SimpleAddOperator(Operators.LEFTSET,      StringIndex); break;
+                            case "&=":  SimpleAddOperator(Operators.ASSIGNMASK,   StringIndex); break;
+                            case "|=":  SimpleAddOperator(Operators.ASSIGNSET,    StringIndex); break;
+                            case "^=":  SimpleAddOperator(Operators.ASSIGNFLIP,   StringIndex); break;
+                            case "??=": SimpleAddOperator(Operators.NULLSET,      StringIndex); break;
+                            case "??":  SimpleAddOperator(Operators.NULL,         StringIndex); break;
+                            case ".":   SimpleAddOperator(Operators.PROPERTY,     StringIndex); break;
+                            case "?.":  SimpleAddOperator(Operators.NULLPROPERTY, StringIndex); break;
+                            case "?":   SimpleAddOperator(Operators.CHECK,        StringIndex); break;
+                            case ":":   SimpleAddOperator(Operators.ELSE,         StringIndex); break;
+
+                            // special case
+                            case "\"":
+                                i++;
+                                if (CaptureCSTRING(ref i, ref StringIndex, c => c == '"')) break;
+                                return default;
 
                             // Container Code
-                            case "(": OpenContainer(ref si, Operators.OPAREN); break;
-                            case "[": OpenContainer(ref si, Operators.OBRACK); break;
-                            case "{": OpenContainer(ref si, Operators.OBRACE); break;
+                            case "(":   OpenContainer(StringIndex, Operators.OPAREN);   break;
+                            case "[":   OpenContainer(StringIndex, Operators.OBRACK);   break;
+                            case "{":   OpenContainer(StringIndex, Operators.OBRACE);   break;
+                            case "$\"": OpenContainer(StringIndex, Operators.FSTRING);  break;
 
-                            case ")": if (CloseContainer(ref si, Operators.CPAREN)) return default; break;
-                            case "]": if (CloseContainer(ref si, Operators.CBRACK)) return default; break;
-                            case "}": if (CloseContainer(ref si, Operators.CBRACE)) return default; break;
+                            case ")": if (SimpleCloseContainer(StringIndex, Operators.CPAREN)) break; else return default;
+                            case "]": if (SimpleCloseContainer(StringIndex, Operators.CBRACK)) break; else return default;
+                            case "}": if (SimpleCloseContainer(StringIndex, Operators.CBRACE)) break; else return default;
 
                             case ";":
+                                if (ContainerBuffer.Count > 0) {
+                                    // error : terminated mid-line
+                                    return default;
+                                }
+
+                                if (i == RegexTokens.Count) {
+                                    if (Program.WarningLevel.HasFlag(WarningLevels.VERBOSE)) {
+                                        // log/ error : do not end with a semicolon
+                                        if (Program.WarningLevel.HasFlag(WarningLevels.ERROR)) return default;
+                                    } else continue; // otherwise exit the loop entirely. We forgive our users for using semicolons despite having a great CF.
+                                }
+  
+
                                 CopyDeltaTokens();
-                                var StepTokenShallowCopy = StepTokens
-                                    .Select(t => (
-                                        t.DeltaTokens,                  // reference to a clone, should be fine
-                                        t.Hierachy,
-                                        t.Terms
-                                    )).ToList();
-
-                                Tokens.Add((StepTokens, MaxHierachy));
-
+                                CopyStepTokens();
                                 PrepareNextStep();
 
                                 // modify regex tokens to remove used and stored
-                                RegexTokens = [.. RegexTokens.TakeLast(RegexTokens.Count - i)]; // trim last step from pattern
-                                i = 0;                                                          // reset counter
+                                RegexTokens = [.. RegexTokens.TakeLast(RegexTokens.Count - i - 1)]; // trim last step from pattern
+                                i = 0;                                                              // reset counter
                                 break;
 
                             // Term Catching
                             case ",":
                                 nTermBuffer[^1]++;
-                                AddOperator(Operators.TERM, si);
+                                SimpleAddOperator(Operators.TERM, StringIndex);
                                 break;
 
                             default:
-                                if (RegexTokens[i] == " " || RegexTokens[i] == "\t") continue;
                                 DeltaTokens.Add((
-                                    si,
-                                    new Dictionary<string, (object data, AssembleTimeTypes type)> {
-                                    {"self", (RegexTokens[i], AssembleTimeTypes.CEXP) },
+                                    StringIndex,
+                                    RegexTokens[i].Length,
+                                    new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels)> {
+                                        // private for now, but once its determined to be something then it will change accordingly
+                                        // values also need a 'repr_length' to describe how long for errors in text the value is.
+                                        { "self", (RegexTokens[i], AssembleTimeTypes.CEXP, AccessLevels.PRIVATE) },
                                     },
                                     false
                                 ));
                                 LastNonWhiteSpaceIndex = DeltaTokens.Count - 1;
                                 break;
 
-                        }
+                            }
                     }
 
-                    bool IsLastOperator = LastNonWhiteSpaceIndex == null ? false : Tokens[^1].Tokens[^1].DeltaTokens[(int)LastNonWhiteSpaceIndex].IsOperator;
+                    bool IsLastOperator = LastNonWhiteSpaceIndex != -1 && DeltaTokens.Count != 0 && DeltaTokens[LastNonWhiteSpaceIndex].IsOperator;
 
-                    if (ContainerBuffer.Count > 0 && !IsLastOperator) break;
+                    if (ContainerBuffer.Count == 0 && !IsLastOperator) break;
 
-                    if (SourceLineReference == SourceFileReference.Length) {
+                    if (++SourceLineReference == SourceFileReference.Length) {
                         // error, cant take more context
                         return default;
                     }
@@ -331,61 +386,131 @@ namespace Numinous {
                     // fetch more context, restart last StepToken. 
 
                     PrepareNextStep();
-                    RegexTokens = [.. RegexTokens, .. RegexTokenize(SourceFileReference[++SourceLineReference])];
+                    RegexTokens = [.. RegexTokens, .. RegexTokenize(SourceFileReference[SourceLineReference])];
 
                 } while (true);
+
+                CopyDeltaTokens();                                                                  // process final DeltaTokens (valid) to StepTokens end
+                CopyStepTokens();                                                                   // add last captured StepToken to Tokens
+
+                return (Tokens, true);
 
                 void PrepareNextStep() {
                     MaxHierachy = 0;
                     StepTokens.Clear();
+                    DeltaTokens.Clear();
                     nTermBuffer = [0];
+                    ContainerBuffer = [];
                 }
 
-                void AddOperator(Operators Operator, int si) {
-                    DeltaTokens.Add((si, Operators.ADD, true)); LastNonWhiteSpaceIndex = DeltaTokens.Count - 1;
+                bool CaptureCSTRING(ref int i, ref int si, Func<char, bool> HaltCapturePredicate) {
+                    int csi = si;
+
+                    for (; i < RegexTokens.Count && !HaltCapturePredicate(RegexTokens[i][0]); i++) {
+                        LITERAL_CSTRING += RegexTokens[i];
+                        si++;
+                    }
+
+                    if (i == RegexTokens.Count) {
+                        // error unterminated string
+                        return false;
+                    }
+
+                    if (csi != si) {
+                        DeltaTokens.Add((
+                            csi,
+                            csi - si,
+                            new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
+                                {"self",    (LITERAL_CSTRING,           AssembleTimeTypes.CSTRING,  AccessLevels.PRIVATE) },
+                                {"length",  (LITERAL_CSTRING.Length,    AssembleTimeTypes.CINT,     AccessLevels.PUBLIC) },
+                            },
+                            false
+                        ));
+
+                        LITERAL_CSTRING = "";   // wipe string for next capture
+                    }
+
+
+                    return true;
                 }
 
-                void OpenContainer(ref int si, Operators Operator) {
+
+                #region Context Fetcher Functions
+                void AddOperator(Operators Operator, int si, int sl) {
+                    DeltaTokens.Add((si, sl, Operator, true)); LastNonWhiteSpaceIndex = DeltaTokens.Count - 1; ;
+                }
+
+                void SimpleAddOperator(Operators Operator, int si) => AddOperator(Operator, si, 1);
+
+                void ComplexOpenContainer(int si, int sl, Operators Operator) {
                     CopyDeltaTokens();
                     ContainerBuffer.Add(Operator);                                  // register container type
                     nTermBuffer.Add(0);
 
-                    AddOperator(Operator, si);
+                    AddOperator(Operator, si, sl);
                     MaxHierachy = Math.Max(ContainerBuffer.Count, MaxHierachy);
                 }
 
-                bool CloseContainer(ref int si, Operators Operator) {
-                    if (ContainerBuffer.Count == 0 || ContainerBuffer[^1] != Operator) {
+                void OpenContainer(int si, Operators Operator) => ComplexOpenContainer(si, 1, Operator);
+
+                bool CloseContainer(int si, Operators CloseOperator, Operators OpenOperator) {
+                    if (ContainerBuffer.Count == 0 || ContainerBuffer[^1] != OpenOperator) {
                         // error, bracket was not opened last before this
-                        return true;
+                        return false;
                     }
 
-                    AddOperator(Operator, si);
+                    SimpleAddOperator(CloseOperator, si);
                     CopyDeltaTokens();
                     ContainerBuffer.RemoveAt(ContainerBuffer.Count - 1);
                     nTermBuffer.RemoveAt(nTermBuffer.Count - 1);
 
-                    return false;
+                    return true;
+                }
+
+                bool SimpleCloseContainer(int si, Operators Operator) => CloseContainer(si, Operator, Operator - 1);
+
+                void CopyStepTokens() {
+                    var StepTokenShallowCopy = StepTokens
+                        .Select(t => (
+                            t.DeltaTokens,                  // reference to a clone, should be fine
+                            t.Hierachy,
+                            t.Terms
+                        )).ToList();
+
+                    Tokens.Add((StepTokenShallowCopy, MaxHierachy));
                 }
 
                 void CopyDeltaTokens() {
                     // Clone Delta Tokens thus far
                     var DeltaTokenShallowCopy = DeltaTokens
-                        .Select(t => (
-                            t.StringOffset,
-                            Clone(ref t.data),
-                            t.IsOperator
-                        )).ToList();
+                    .Select(t => (
+                        t.StringOffset,
+                        t.StringLength,
+                        t.IsOperator
+                            ? t.data
+                            : Clone((Dictionary<string, (object, AssembleTimeTypes, AccessLevels)>)t.data),
+                        t.IsOperator
+                    )).ToList();
 
                     DeltaTokens = [];                                                               // wipe delta tokens for next operation
-                    StepTokens.Add((DeltaTokenShallowCopy, ContainerBuffer.Count, nTermBuffer[^1]));  // append copy to StepTokens
+                    StepTokens.Add((DeltaTokenShallowCopy, ContainerBuffer.Count, nTermBuffer[^1]));// append copy to StepTokens
                 }
-
-
-                return (Tokens, true);
+                #endregion Context Fetcher Functions
             }
 
-            internal static T Clone<T>(ref T ctx) => ctx switch {
+
+            // Generated Function | However I do find that this function is how I would code and meets criteria
+            internal static Dictionary<TKey, TValue> Clone<TKey, TValue>(Dictionary<TKey, TValue> Source) where TKey : notnull {
+                var clone = new Dictionary<TKey, TValue>(Source.Count);
+                foreach (var kv in Source) {
+                    var keyClone = Clone(kv.Key);
+                    var valueClone = Clone(kv.Value);
+                    clone[keyClone] = valueClone;
+                }
+                return clone;
+            }
+
+            internal static T Clone<T>(T ctx) => ctx switch {
                 ICloneable c => (T)c.Clone(),
                 string or ValueType => ctx,
 #if DEBUG
@@ -1529,28 +1654,32 @@ namespace Numinous {
             }
 
             internal static class Terminal {
-                [Flags]
-                internal enum AssemblyFlags : byte {
-                    Complete = 0x80,              // indicates that no context is required, as a task was completed here
-                    Failed   = 0x40
+                internal enum Responses : byte {
+                    Terminate_Error,
+                    Terminate_Success,
+                    Proceed,
                 }
                 
-                internal static (string? InputPath, string? OutputPath, AssemblyFlags Flags) Parse(string[] args) {
-                    string? InputPath = null, OutPutPath = null;
+                internal static (string InputPath, string OutputPath, Responses Response) Parse(string[] args) {
+                    string InputPath = "", OutputPath = "";
                     int StringIndex = 0;
                     string Flattened = string.Join(" ", args);
-                    AssemblyFlags Flags = 0x00;
 
-                    for (int i = 0; i < args.Length; i++, StringIndex += i == args.Length ? 0 : args[i].Length) {
+                    Responses Response = Responses.Proceed;
+                    Program.WarningLevel = WarningLevels.NONE;
+
+                    for (int i = 0; i < args.Length; i++) {
+                        StringIndex += args[i].Length;
+
                         switch (args[i]) {
                             case "-i":
                             case "--input":
                                 if (i == args.Length - 1) {
                                     Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Input Path Provided")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
-                                    Flags |= AssemblyFlags.Failed;
-                                } else if (InputPath != null) {
+                                    return default;
+                                } else if (InputPath.Length > 0) {
                                     Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Input Source File Path has already been specified")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
-                                    Flags |= AssemblyFlags.Failed;
+                                    return default;
                                 } else {
                                     InputPath = args[++i];
                                 }
@@ -1560,36 +1689,150 @@ namespace Numinous {
                             case "--output":
                                 if (i == args.Length - 1) {
                                     Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Output Path Provided")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
-                                    Flags |= AssemblyFlags.Failed;
-                                } else if (OutPutPath != null) {
+                                    return default;
+                                } else if (OutputPath.Length > 0) {
                                     Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Output Binary File Path has already been specified")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
-                                    Flags |= AssemblyFlags.Failed;
+                                    return default;
                                 }
-                                OutPutPath = args[++i];
+                                OutputPath = args[++i];
+                                break;
+
+                            case "-w":
+                            case "--warning":
+                                if (i == args.Length - 1) {
+                                    // error, no warnign description detected
+                                    return default;
+                                } else if (Program.WarningLevel != WarningLevels.NONE) {
+                                    // error, already described warning level
+                                    return default;
+                                }
+                                
+                                Program.WarningLevel = args[++i] switch {
+                                    "i" or "ignore"     or "I" or "IGNORE"      => WarningLevels.IGNORE,
+                                    "d" or "default"    or "D" or "DEFAULT"     => WarningLevels.DEFAULT,
+                                    "e" or "error"      or "E" or "ERROR"       => WarningLevels.ERROR,
+                                    "v" or "verbose"    or "V" or "VERBOSE"     => WarningLevels.VERBOSE,
+                                    "s" or "strict"     or "S" or "STRICT"      => WarningLevels.STRICT,
+                                    "c" or "controlled" or "C" or "CONTROLLED"  => WarningLevels.CONTROLLED,
+
+                                    _ => WarningLevels.NONE
+                                };
+
+                                if (Program.WarningLevel == WarningLevels.NONE) {
+                                    // error : unrecognized warning level 
+                                    return default;
+                                }
                                 break;
 
                             case "-h":
                             case "--help":
-                                Flags |= AssemblyFlags.Complete;
-                                Log(ErrorTypes.None, DecodingPhase.TERMINAL,
+                                Response = Responses.Terminate_Success;
+
+                                if (i == args.Length) {
+                                    // generic help message
+                                    Log(ErrorTypes.None, DecodingPhase.TERMINAL,
 $"""
 Numinous 2a03 - GPL V2 Brette Allen 2026
 
 -i | --input        | [path]    | {Language.Connectives[(Program.ActiveLanguage, "Entrypoint Source Assembly File")]}
 -o | --output       | [path]    | {Language.Connectives[(Program.ActiveLanguage, "Output ROM/Disk Binary Output")]}
 -h | --help         |           | {Language.Connectives[(Program.ActiveLanguage, "Display the help string (you did that)")]}
+-h | --help         | [arg]     | TODO: WRITE "GET INFO ON SPECIFIC ARGUMENT FUNCTION" HERE
 -l | --language     | [lang]    | {Language.Connectives[(Program.ActiveLanguage, "Choose a language to use")]}
--L | --Languages    |           | {Language.Connectives[(Program.ActiveLanguage, "Display all Languages")]}
+-w | --warning      | [level]   | TODO: Write "SET WARNING LEVEL" HERE
        
 """, null, null, null);
+                                } else {
+                                    switch (args[++i]) {
+                                        default: --i; break;
+
+                                        case "l":
+                                        case "lang":
+                                        case "languages":
+                                            // language specific help message.
+                                            Log(ErrorTypes.None, DecodingPhase.TERMINAL, @"
+English (UK)      ""-l en_gb""
+English (US)      ""-l en_us""
+Español           ""-l es""
+Deutsch           ""-l de""
+日本語            ""-l ja""
+Français          ""-l fr""
+Português         ""-l pt""
+Русский           ""-l ru""
+Italiano          ""-l it""
+Nederlands        ""-l ne""
+Polski            ""-l pl""
+Türkçe            ""-l tr""
+Tiếng Việt        ""-l vt""
+Bahasa Indonesia  ""-l in""
+Čeština           ""-l cz""
+한국어            ""-l ko""
+Українська        ""-l uk""
+العربية           ""-l ar""
+Svenska           ""-l sw""
+فارسی             ""-l pe""
+中文              ""-l ch""
+", null, null, null);
+                                            break;
+
+                                        case "w":
+                                        case "warn":
+                                        case "warnings":
+                                            // warnings specific help message
+                                            Log(ErrorTypes.None, DecodingPhase.TERMINAL,
+                                            $"""
+Numinous Warning Types and how they work
+
+ignore      : Will not display any warnings, but track the quantity for after completion.
+default     : Will warn the user about potential issues with their code.
+error       : Will convert all errors into warnings, enforcing the user to fix all issues.
+verbose     : Will display much more warnings, reccomended and intended for those who wish to write perfect code.
+strict      : Acts as 'verbose' but warnings become errors, not reccomended.
+controlled  : Acts as 'strict' but prevents overruling.
+       
+""", null, null, null);
+                                            break;
+
+                                        case "i":
+                                        case "input":
+                                            Log(ErrorTypes.None, DecodingPhase.TERMINAL,
+$"""
+Numinous Input File
+
+The input file argument (-i or --input) should be followed by a valid file path to a source assembly file. 
+If the file is empty you will recieve an error, you may only pass one file here as the entry point file.
+This decides what the root of the "include path" is, includes from here must be relative to this path.
+       
+""", null, null, null);
+                                            break;
+
+                                        case "o":
+                                        case "output":
+                                            Log(ErrorTypes.None, DecodingPhase.TERMINAL,
+$"""
+Numinous Output File
+
+The output file argument (-o or --output) should be followed by a path pointing to a file to generate.
+The file name must comply with the limits of your Operating System.
+The directory the output file lives in must also already exist. 
+If you wish to create an FDS Disk image, you must use the FDS Header variant as using the *.fds file extentsion
+will not affect the kind of build produced. 
+
+Numinous WILL overwrite a file existing with the same name at the output path if found.
+       
+""", null, null, null);
+                                            break;
+                                    }
+                                }
+
+
                                 break;
 
                             case "-l":
                             case "--language":
                                 if (i == args.Length - 1) {
                                     Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Language Provided")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
-                                    Flags |= AssemblyFlags.Failed;
-                                    break;
+                                    return default;
                                 }
 
                                 Program.ActiveLanguage = args[++i] switch {
@@ -1620,46 +1863,19 @@ Numinous 2a03 - GPL V2 Brette Allen 2026
 
                                 if (Program.ActiveLanguage == Languages.Null) {
                                     Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Invalid Language Provided")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
-                                    Flags |= AssemblyFlags.Failed;
+                                    return default;
                                 }
-                                break;
-
-                            case "-L":
-                            case "--Languages":
-                                Log(ErrorTypes.None, DecodingPhase.TERMINAL,@"
-English (UK)      ""-l en_gb""
-English (US)      ""-l en_us""
-Español           ""-l es""
-Deutsch           ""-l de""
-日本語            ""-l ja""
-Français          ""-l fr""
-Português         ""-l pt""
-Русский           ""-l ru""
-Italiano          ""-l it""
-Nederlands        ""-l ne""
-Polski            ""-l pl""
-Türkçe            ""-l tr""
-Tiếng Việt        ""-l vt""
-Bahasa Indonesia  ""-l in""
-Čeština           ""-l cz""
-한국어            ""-l ko""
-Українська        ""-l uk""
-العربية           ""-l ar""
-Svenska           ""-l sw""
-فارسی             ""-l pe""
-中文              ""-l ch""
-", null, null, null);
-                                Flags |= AssemblyFlags.Complete;
                                 break;
 
                             default:
                                 Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Unrecognized Terminal Argument")]}.", null, null, ApplyWiggle(Flattened, 1 + StringIndex, args[i].Length));
-                                Flags |= AssemblyFlags.Failed;
-                                break;
+                                return default;
                         }
                     }
 
-                    return (InputPath, OutPutPath, Flags);
+                    if (Program.WarningLevel == WarningLevels.NONE) Program.WarningLevel = WarningLevels.DEFAULT;
+
+                    return (InputPath, OutputPath, Response);
                 }
 
 // in event of left in message, don't show on release
@@ -1727,7 +1943,7 @@ Svenska           ""-l sw""
                 internal static void  Warn(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context,
                     [CallerLineNumber] int lineNumber = 0,
                     [CallerFilePath] string filePath = "",
-                    [CallerMemberName] string memberName = "") => WriteInfo(ErrorLevels.WARN,  ErrorType, Phase, Message, LineNumber, StepNumber, Context, lineNumber, filePath, memberName);
+                    [CallerMemberName] string memberName = "") => WriteInfo(Program.WarningLevel.HasFlag(WarningLevels.ERROR) ? ErrorLevels.ERROR : ErrorLevels.WARN,  ErrorType, Phase, Message, LineNumber, StepNumber, Context, lineNumber, filePath, memberName);
 
 
                 internal static void Error(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context,
