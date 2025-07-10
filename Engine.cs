@@ -134,7 +134,7 @@ namespace Numinous {
             PRIVATE = 1
         }
 
-        internal enum AssemleTimeValueStatus : byte {
+        internal enum AssembleTimeValueStatus : byte {
             DECLARED,   // int foo;
             PARTIAL,    // int foo = defined_later;
             OK          // int foo = 2;
@@ -169,11 +169,28 @@ namespace Numinous {
             OPERATOR
         }
 
+
         internal static class Engine {
+            
+            /*
+             * Some notes:
+             *      This function needs to be able to resolve the information between the changes in hierarchy. The context of the capture is decided by the brackets not
+             *      containing the delta, but the ones receiving the result of the delta.
+             *      
+             *      The responsibilities of LinearEvaluate is:
+             *          Perform operations in the correct order
+             *          propagate object references as much as possible
+             *          generate constant static object literals
+             */
+            internal static (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)> Result, bool Success) LInearEvaluate(List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> DeltaTokens) {
+                return default;
+            }
+
+
             /*
              * Some notes:
              *      Tabs aren't equal width in each IDE, so we can't 'check' how many and generate the difference with spaces.
-             *      Because of this we are going to have to store this infomration also.
+             *      Because of this we are going to have to store this information also.
              *      
              *      The goal of this method will be to convert the regex tokenized string responses and convert them into a system of tokens.
              *      the tokens are in object obfuscated form, but naturally should look something like Value Operator Value
@@ -186,8 +203,8 @@ namespace Numinous {
              *              )
              *      )
              *      
-             *      we can easily resolve the highest hierachies and inject the result in between the two outside it.
-             *      by repeating this process until we have resolved the lowest hierachy we should be able to resolve any expression.
+             *      we can easily resolve the highest hierarchies and inject the result in between the two outside it.
+             *      by repeating this process until we have resolved the lowest hierarchy we should be able to resolve any expression.
              *      
              *      Resolving isn't what the CF does, but orders it so it can be done.
              *      
@@ -215,15 +232,13 @@ namespace Numinous {
              *          
              *          TODO:
              *              CODE:
-             *                  ERROR REPORT
+             *                  MULTI_LANG FOR ERRORS
              *                  CLEANSE
-             *              
-             *              TEST:
-             *                  EXTREME CASE
-             *                  EMPTY CASE
+             *                  TEST ALL ERRORS/WARNINGS
              */
 
             internal static (List<(List<(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> Tokens, int MaxHierachy)>, bool Success) ContextFetcher(string[] SourceFileReference, ref int SourceLineReference) {
+                string CollectiveContext = SourceFileReference[SourceLineReference];
                 List<string> RegexTokens = RegexTokenize(SourceFileReference[SourceLineReference]);
 
                 List<(List<(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> Tokens, int MaxHierachy)> Tokens = [];
@@ -233,19 +248,22 @@ namespace Numinous {
                 List<Operators> ContainerBuffer = [];
                 List<int>       nTermBuffer     = [0];
 
-                int MaxHierachy = 0;
+                int MaxHierarchy = 0;
                 int LastNonWhiteSpaceIndex = -1;
+                int LastOpenContainerOperatorStringIndex = -1;
 
                 string WHITESPACE_CONSTEXP = "";
                 string LITERAL_CSTRING =     "";
 
+                bool IsLastOperator = false;
+
                 do {
                     for (int i = 0, StringIndex = 0; i < RegexTokens.Count; StringIndex += RegexTokens[i].Length, i++) {
                         if (ContainerBuffer.Count != 0 && ContainerBuffer[^1] == Operators.FSTRING) {
-                            CaptureCSTRING(ref i, ref StringIndex, c => c == '"' || c == '{');
+                            CaptureCSTRING(ref i, ref StringIndex, SourceLineReference, c => c == '"' || c == '{');
                             if (RegexTokens[i][0] != '{') {
                                 if (RegexTokens[i][0] == '"') {
-                                    if (CloseContainer(StringIndex, Operators.STRING, Operators.FSTRING)) continue;
+                                    if (CloseContainer(StringIndex, SourceLineReference, Operators.STRING, Operators.FSTRING)) continue;
                                     else return default;
                                 }
                             }
@@ -309,7 +327,7 @@ namespace Numinous {
                             // special case
                             case "\"":
                                 i++;
-                                if (CaptureCSTRING(ref i, ref StringIndex, c => c == '"')) break;
+                                if (CaptureCSTRING(ref i, ref StringIndex, SourceLineReference, c => c == '"')) break;
                                 return default;
 
                             // Container Code
@@ -318,13 +336,13 @@ namespace Numinous {
                             case "{":   OpenContainer(StringIndex, Operators.OBRACE);   break;
                             case "$\"": OpenContainer(StringIndex, Operators.FSTRING);  break;
 
-                            case ")": if (SimpleCloseContainer(StringIndex, Operators.CPAREN)) break; else return default;
-                            case "]": if (SimpleCloseContainer(StringIndex, Operators.CBRACK)) break; else return default;
-                            case "}": if (SimpleCloseContainer(StringIndex, Operators.CBRACE)) break; else return default;
+                            case ")": if (SimpleCloseContainer(StringIndex, SourceLineReference, Operators.CPAREN)) break; else return default;
+                            case "]": if (SimpleCloseContainer(StringIndex, SourceLineReference, Operators.CBRACK)) break; else return default;
+                            case "}": if (SimpleCloseContainer(StringIndex, SourceLineReference, Operators.CBRACE)) break; else return default;
 
                             case ";":
                                 if (ContainerBuffer.Count > 0) {
-                                    // error : terminated mid-line
+                                    Terminal.Warn(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Unexpected end of command.", SourceLineReference, Tokens.Count, ApplyWiggle(CollectiveContext, StringIndex + 1, 1));
                                     return default;
                                 }
 
@@ -333,7 +351,7 @@ namespace Numinous {
                                 if (i == RegexTokens.Count - 1) {
                                     if (Program.WarningLevel.HasFlag(WarningLevels.VERBOSE))
                                         Terminal.Warn(ErrorTypes.SyntaxError, DecodingPhase.TOKEN,
-                                            "Lines should not end with a semi-colon", SourceLineReference, Tokens.Count, ""
+                                            "Lines should not end with a semi-colon", SourceLineReference, Tokens.Count, ApplyWiggle(CollectiveContext, StringIndex + 1, 1)
                                         );
                                     return Program.WarningLevel.HasFlag(WarningLevels.ERROR) ? default : (Tokens, true);
                                 }
@@ -345,7 +363,9 @@ namespace Numinous {
 
                                 // modify regex tokens to remove used and stored
                                 RegexTokens = [.. RegexTokens.TakeLast(RegexTokens.Count - i - 1)]; // trim last step from pattern
-                                i = 0;                                                              // reset counter
+                                i = 0;
+                                CollectiveContext = CollectiveContext[(StringIndex + RegexTokens[i].Length)..];
+                                StringIndex = 0;
                                 break;
 
                             // Term Catching
@@ -360,7 +380,6 @@ namespace Numinous {
                                     RegexTokens[i].Length,
                                     new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels)> {
                                         // private for now, but once its determined to be something then it will change accordingly
-                                        // values also need a 'repr_length' to describe how long for errors in text the value is.
                                         { "self", (RegexTokens[i], AssembleTimeTypes.CEXP, AccessLevels.PRIVATE) },
                                     },
                                     false
@@ -371,12 +390,13 @@ namespace Numinous {
                             }
                     }
 
-                    bool IsLastOperator = LastNonWhiteSpaceIndex != -1 && DeltaTokens.Count != 0 && DeltaTokens[LastNonWhiteSpaceIndex].IsOperator;
+                    // If IsLastOperator is enabled, we should only disable it until we have a non-whitespace line. 
+                    IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : DeltaTokens.Count != 0 && DeltaTokens[LastNonWhiteSpaceIndex].IsOperator;
 
                     if (ContainerBuffer.Count == 0 && !IsLastOperator) break;
 
                     if (++SourceLineReference == SourceFileReference.Length) {
-                        // error, cant take more context
+                        Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Not enough context to satisfy request", SourceLineReference - 1, Tokens.Count, ApplyWiggle(CollectiveContext, CollectiveContext.Length - 1, 1));
                         return default;
                     }
 
@@ -384,7 +404,7 @@ namespace Numinous {
 
                     PrepareNextStep();
                     RegexTokens = [.. RegexTokens, .. RegexTokenize(SourceFileReference[SourceLineReference])];
-
+                    CollectiveContext += SourceFileReference[SourceLineReference];
                 } while (true);
 
                 CopyDeltaTokens();                                                                  // process final DeltaTokens (valid) to StepTokens end
@@ -394,23 +414,24 @@ namespace Numinous {
 
                 #region Context Fetcher Functions
                 void PrepareNextStep() {
-                    MaxHierachy = 0;
+                    MaxHierarchy = 0;
                     StepTokens.Clear();
                     DeltaTokens.Clear();
                     nTermBuffer = [0];
                     ContainerBuffer = [];
+                    LastNonWhiteSpaceIndex = -1;
                 }
 
-                bool CaptureCSTRING(ref int i, ref int si, Func<char, bool> HaltCapturePredicate) {
+                bool CaptureCSTRING(ref int i, ref int si, int LineNumber, Func<char, bool> HaltCapturePredicate) {
                     int csi = si;
 
                     for (; i < RegexTokens.Count && !HaltCapturePredicate(RegexTokens[i][0]); i++) {
                         LITERAL_CSTRING += RegexTokens[i];
-                        si++;
+                        si += RegexTokens[i].Length;
                     }
 
                     if (i == RegexTokens.Count) {
-                        // error unterminated string
+                        Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Unterminated String", LineNumber, Tokens.Count, ApplyWiggle(CollectiveContext, csi + 1, si - csi));
                         return false;
                     }
 
@@ -444,18 +465,29 @@ namespace Numinous {
                     nTermBuffer.Add(0);
 
                     AddOperator(Operator, si, sl);
-                    MaxHierachy = Math.Max(ContainerBuffer.Count, MaxHierachy);
+                    LastOpenContainerOperatorStringIndex = si;
+                    MaxHierarchy = Math.Max(ContainerBuffer.Count, MaxHierarchy);
                 }
 
                 void OpenContainer(int si, Operators Operator) => ComplexOpenContainer(si, 1, Operator);
 
-                bool CloseContainer(int si, Operators CloseOperator, Operators OpenOperator) {
-                    if (ContainerBuffer.Count == 0 || ContainerBuffer[^1] != OpenOperator) {
-                        // error, bracket was not opened last before this
+                bool CloseContainer(int si, int SourceLineReference, Operators CloseOperator, Operators OpenOperator) {
+                    SimpleAddOperator(CloseOperator, si);
+
+                    if (ContainerBuffer.Count == 0) {
+                        Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"No Open Container before Close Container.",
+  SourceLineReference, StepTokens.Count, ApplyWiggle(CollectiveContext, 0, LastNonWhiteSpaceIndex + 1));
+
                         return false;
                     }
 
-                    SimpleAddOperator(CloseOperator, si);
+                    if (ContainerBuffer[^1] != OpenOperator) {
+                        Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"Invalid Container Closer '{CollectiveContext[si]}' for Opening container '{CollectiveContext[LastOpenContainerOperatorStringIndex]}'.",
+                          SourceLineReference, StepTokens.Count, ApplyWiggle(CollectiveContext, LastOpenContainerOperatorStringIndex + 1, si - LastOpenContainerOperatorStringIndex + 1));
+
+                        return false;
+                    }
+
                     CopyDeltaTokens();
                     ContainerBuffer.RemoveAt(ContainerBuffer.Count - 1);
                     nTermBuffer.RemoveAt(nTermBuffer.Count - 1);
@@ -463,7 +495,7 @@ namespace Numinous {
                     return true;
                 }
 
-                bool SimpleCloseContainer(int si, Operators Operator) => CloseContainer(si, Operator, Operator - 1);
+                bool SimpleCloseContainer(int si, int SourceLineReference, Operators Operator) => CloseContainer(si, SourceLineReference, Operator, Operator - 1);
 
                 void CopyStepTokens() {
                     var StepTokenShallowCopy = StepTokens
@@ -473,10 +505,12 @@ namespace Numinous {
                             t.Terms
                         )).ToList();
 
-                    Tokens.Add((StepTokenShallowCopy, MaxHierachy));
+                    Tokens.Add((StepTokenShallowCopy, MaxHierarchy));
                 }
 
                 void CopyDeltaTokens() {
+                    if (LastNonWhiteSpaceIndex == -1) return;                                       // Do not copy whitespace
+
                     // Clone Delta Tokens thus far
                     var DeltaTokenShallowCopy = DeltaTokens
                     .Select(t => (
@@ -515,15 +549,6 @@ namespace Numinous {
                 _ => throw new NotSupportedException($"FATAL ERROR :: (REPORT THIS ON THE GITHUB) CANNOT CLONE TYPE {ctx?.GetType()}")
 #endif
             };
-
-
-
-            internal struct DeltaTokens_t {
-                internal string[] DeltaTokens;
-                internal int Hierarchy;
-                internal int Terms;
-            }
-
             internal enum Unary : byte {
                 INC,
                 DEC,
@@ -532,40 +557,6 @@ namespace Numinous {
                 BIT,
                 NOT
             };
-
-            static internal (bool, object) DeltaEvaluate(AssembleTimeTypes Type, List<DeltaTokens_t> Tokens, int MaxHierachy) {
-                (bool, object) Response = default;
-
-                while (MaxHierachy >= -1) {
-                    int i; for (i = 0; i < Tokens.Count; i++) {
-                        if (Tokens[i].Hierarchy == MaxHierachy) break;
-                    }
-
-                    if (i == Tokens.Count) {
-                        MaxHierachy--;
-                        continue;
-                    }
-                    // resolve what is inside : capture object, type and object_reference
-
-                    if (MaxHierachy == -1) break;  // resolve, don't merge (you can't merge this with anything)
-
-
-                    // to merge, append two to one
-                    // return multiple terms as array of (type, value)
-                    DeltaTokens_t MutToks = new() {
-                        DeltaTokens = [.. Tokens[i - 1].DeltaTokens, .. Tokens[i].DeltaTokens, .. Tokens[i + 1].DeltaTokens],
-                        Hierarchy = Tokens[i - 1].Hierarchy,
-                        Terms = Tokens[i - 1].Terms,
-                    };
-
-                    // merge 3 tokens into 1
-                    Tokens[i - 1] = MutToks;
-                    Tokens.RemoveAt(i);
-                    Tokens.RemoveAt(i);
-                }
-
-                return Response;
-            }
 
             internal static bool IsNonLiteral(char First) =>
                     First switch {
@@ -738,10 +729,10 @@ namespace Numinous {
                             case "-i":
                             case "--input":
                                 if (i == args.Length - 1) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Input Path Provided")]}.", null, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Input Path Provided")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 } else if (InputPath.Length > 0) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Input Source File Path has already been specified")]}.", null, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Input Source File Path has already been specified")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 } else {
                                     InputPath = args[++i];
@@ -751,10 +742,10 @@ namespace Numinous {
                             case "-o":
                             case "--output":
                                 if (i == args.Length - 1) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Output Path Provided")]}.", null, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Output Path Provided")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 } else if (OutputPath.Length > 0) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Output Binary File Path has already been specified")]}.", null, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Output Binary File Path has already been specified")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 }
                                 OutputPath = args[++i];
@@ -763,7 +754,7 @@ namespace Numinous {
                             case "-w":
                             case "--warning":
                                 if (i == args.Length - 1) {
-                                    // error, no warnign description detected
+                                    // error, no warning description detected
                                     return default;
                                 } else if (Program.WarningLevel != WarningLevels.NONE) {
                                     // error, already described warning level
@@ -804,7 +795,7 @@ Numinous 2a03 - GPL V2 Brette Allen 2026
 -l | --language     | [lang]    | {Language.Connectives[(Program.ActiveLanguage, "Choose a language to use")]}
 -w | --warning      | [level]   | TODO: Write "SET WARNING LEVEL" HERE
        
-""", null, default, null);
+""", -1, default, null);
                                 } else {
                                     switch (args[++i]) {
                                         default: --i; break;
@@ -835,7 +826,7 @@ Bahasa Indonesia  ""-l in""
 Svenska           ""-l sw""
 فارسی             ""-l pe""
 中文              ""-l ch""
-", null, default, null);
+", -1, default, null);
                                             break;
 
                                         case "w":
@@ -849,11 +840,11 @@ Numinous Warning Types and how they work
 ignore      : Will not display any warnings, but track the quantity for after completion.
 default     : Will warn the user about potential issues with their code.
 error       : Will convert all errors into warnings, enforcing the user to fix all issues.
-verbose     : Will display much more warnings, reccomended and intended for those who wish to write perfect code.
-strict      : Acts as 'verbose' but warnings become errors, not reccomended.
+verbose     : Will display much more warnings, recommended and intended for those who wish to write perfect code.
+strict      : Acts as 'verbose' but warnings become errors, not recommended.
 controlled  : Acts as 'strict' but prevents overruling.
        
-""", null, default, null);
+""", -1, default, null);
                                             break;
 
                                         case "i":
@@ -863,10 +854,10 @@ $"""
 Numinous Input File
 
 The input file argument (-i or --input) should be followed by a valid file path to a source assembly file. 
-If the file is empty you will recieve an error, you may only pass one file here as the entry point file.
+If the file is empty you will receive an error, you may only pass one file here as the entry point file.
 This decides what the root of the "include path" is, includes from here must be relative to this path.
        
-""", null, default, null);
+""", -1, default, null);
                                             break;
 
                                         case "o":
@@ -878,12 +869,12 @@ Numinous Output File
 The output file argument (-o or --output) should be followed by a path pointing to a file to generate.
 The file name must comply with the limits of your Operating System.
 The directory the output file lives in must also already exist. 
-If you wish to create an FDS Disk image, you must use the FDS Header variant as using the *.fds file extentsion
+If you wish to create an FDS Disk image, you must use the FDS Header variant as using the *.fds file extension
 will not affect the kind of build produced. 
 
 Numinous WILL overwrite a file existing with the same name at the output path if found.
        
-""", null, default, null);
+""", -1, default, null);
                                             break;
                                     }
                                 }
@@ -894,7 +885,7 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                             case "-l":
                             case "--language":
                                 if (i == args.Length - 1) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Language Provided")]}.", null, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Language Provided")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 }
 
@@ -925,13 +916,13 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                                 };
 
                                 if (Program.ActiveLanguage == Languages.Null) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Invalid Language Provided")]}.", null, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Invalid Language Provided")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 }
                                 break;
 
                             default:
-                                Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Unrecognized Terminal Argument")]}.", null, default, ApplyWiggle(Flattened, 1 + StringIndex, args[i].Length));
+                                Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Unrecognized Terminal Argument")]}.", -1, default, ApplyWiggle(Flattened, 1 + StringIndex, args[i].Length));
                                 return default;
                         }
                     }
@@ -949,7 +940,7 @@ Numinous WILL overwrite a file existing with the same name at the output path if
 #endif
 
 #if DEBUG
-                internal static void WriteInfo(ErrorLevels ErrorLevel, ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int StepNumber, string? Context,
+                internal static void WriteInfo(ErrorLevels ErrorLevel, ErrorTypes ErrorType, DecodingPhase Phase, string Message, int LineNumber, int StepNumber, string? Context,
                     int     lineNumber = 0, 
                     string  filePath = "", 
                     string  memberName = "")
@@ -980,12 +971,12 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                     ErrorTypeString     = Language.ErrorTypeMessages[(UseLanguage, ErrorType)];
                     ErrorTypeConnective = Language.Connectives[(UseLanguage, "During")];
                     DecodePhaseString   = Language.DecodePhaseMessages[(UseLanguage, Phase)];
-                    LocationString      = LineNumber == null ? "" : (StepNumber == 0 ? $"({LineNumber})" : $"({LineNumber}, {StepNumber})");
+                    LocationString      = LineNumber == -1 ? "" : (StepNumber == 0 ? $"({LineNumber})" : $"({LineNumber}, {StepNumber})");
                     Context = Context == null ? "" : $": {Context}";
 
                     // Something Error During Something Phase :: Could not do a thing (1, 2) : ah, the issue is here.
 #if DEBUG
-                    Console.WriteLine($"{ErrorTypeString} {ErrorTypeConnective} {DecodePhaseString} :: {Message} {LocationString}{Context}");
+                    Console.WriteLine($"{ErrorTypeString} {ErrorTypeConnective} {DecodePhaseString} :: {Message} {Program.SourceFileNameBuffer[^1]} {LocationString}{Context}");
                     Console.WriteLine($"[{filePath}:{lineNumber}] {memberName}");
 #else
                     Console.WriteLine($"{ErrorTypeString} {ErrorTypeConnective} {DecodePhaseString} :: {Message} {LocationString}{Context}");
@@ -997,19 +988,19 @@ Numinous WILL overwrite a file existing with the same name at the output path if
 
 #if DEBUG
                     
-                internal static void   Log(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int StepNumber, string? Context,
+                internal static void   Log(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int LineNumber, int StepNumber, string? Context,
                     [CallerLineNumber] int lineNumber = 0,
                     [CallerFilePath] string filePath = "",
                     [CallerMemberName] string memberName = "") => WriteInfo(ErrorLevels.LOG,   ErrorType, Phase, Message, LineNumber, StepNumber, Context, lineNumber, filePath, memberName);
                 
 
-                internal static void  Warn(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int StepNumber, string? Context,
+                internal static void  Warn(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int LineNumber, int StepNumber, string? Context,
                     [CallerLineNumber] int lineNumber = 0,
                     [CallerFilePath] string filePath = "",
                     [CallerMemberName] string memberName = "") => WriteInfo(Program.WarningLevel.HasFlag(WarningLevels.ERROR) ? ErrorLevels.ERROR : ErrorLevels.WARN,  ErrorType, Phase, Message, LineNumber, StepNumber, Context, lineNumber, filePath, memberName);
 
 
-                internal static void Error(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int StepNumber, string? Context,
+                internal static void Error(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int LineNumber, int StepNumber, string? Context,
                     [CallerLineNumber] int lineNumber = 0,
                     [CallerFilePath] string filePath = "",
                     [CallerMemberName] string memberName = "") => WriteInfo(ErrorLevels.ERROR, ErrorType, Phase, Message, LineNumber, StepNumber, Context, lineNumber, filePath, memberName);

@@ -18,24 +18,24 @@ internal static class Program {
             ActiveLanguage =  Languages.English_UK;
             // TODO: Consider SystemError as more suitable?
             Terminal.Log(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, "Could not detect language, choosing English (UK).",
-                    null, default, null);
+                    -1, default, null);
         }
 
         if (InputPath == null) {
             Terminal.Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL,  $"{Language.Connectives[(ActiveLanguage, "Input path must be provided")]}.",
-                null, default, null);
+                -1, default, null);
             return (int)ErrorTypes.ParsingError;
         }
 
         if (OutputPath == null) {
             Terminal.Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL,  $"{Language.Connectives[(ActiveLanguage, "Output path must be provided")]}.",
-                    null, default, null);
+                    -1, default, null);
             return (int)ErrorTypes.ParsingError;
         }
 
         string[] InputFile = File.ReadAllLines(InputPath!);
         if (InputFile.Length == 0) {
-            Terminal.Error(ErrorTypes.NothingToDo,  DecodingPhase.TOKEN,     $"{Language.Connectives[(ActiveLanguage, "Source file")]} {InputPath} {Language.Connectives[(ActiveLanguage, "has no contents")]}", null, 0, null);
+            Terminal.Error(ErrorTypes.NothingToDo,  DecodingPhase.TOKEN,     $"{Language.Connectives[(ActiveLanguage, "Source file")]} {InputPath} {Language.Connectives[(ActiveLanguage, "has no contents")]}", -1, 0, null);
             return (int)ErrorTypes.NothingToDo;
         }
         SourceFileNameBuffer.Add(InputPath!);
@@ -58,12 +58,6 @@ internal static class Program {
         Span<int> SourceFileIndexBufferSpan = CollectionsMarshal.AsSpan(SourceFileIndexBuffer);
 
         var Demo = ContextFetcher(SourceFileContentBuffer[^1], ref SourceFileIndexBufferSpan[^1]);
-
-        if (Demo.Success) {
-            Console.WriteLine("POSITIVE");
-        } else {
-            Console.WriteLine("NEGATIVE");
-        }
 
         return 0;
     }
