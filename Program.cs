@@ -18,24 +18,24 @@ internal static class Program {
             ActiveLanguage =  Languages.English_UK;
             // TODO: Consider SystemError as more suitable?
             Terminal.Log(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, "Could not detect language, choosing English (UK).",
-                    null, null, null);
+                    null, default, null);
         }
 
         if (InputPath == null) {
             Terminal.Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL,  $"{Language.Connectives[(ActiveLanguage, "Input path must be provided")]}.",
-                null, null, null);
+                null, default, null);
             return (int)ErrorTypes.ParsingError;
         }
 
         if (OutputPath == null) {
             Terminal.Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL,  $"{Language.Connectives[(ActiveLanguage, "Output path must be provided")]}.",
-                    null, null, null);
+                    null, default, null);
             return (int)ErrorTypes.ParsingError;
         }
 
         string[] InputFile = File.ReadAllLines(InputPath!);
         if (InputFile.Length == 0) {
-            Terminal.Error(ErrorTypes.NothingToDo,  DecodingPhase.TOKEN,     $"{Language.Connectives[(ActiveLanguage, "Source file")]} {InputPath} {Language.Connectives[(ActiveLanguage, "has no contents")]}", null, null, null);
+            Terminal.Error(ErrorTypes.NothingToDo,  DecodingPhase.TOKEN,     $"{Language.Connectives[(ActiveLanguage, "Source file")]} {InputPath} {Language.Connectives[(ActiveLanguage, "has no contents")]}", null, 0, null);
             return (int)ErrorTypes.NothingToDo;
         }
         SourceFileNameBuffer.Add(InputPath!);

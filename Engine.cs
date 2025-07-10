@@ -1,5 +1,4 @@
 ﻿using System.Runtime.CompilerServices;
-using System.Runtime.Serialization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Numinous.Langauges;
@@ -329,11 +328,14 @@ namespace Numinous {
                                     return default;
                                 }
 
-                                if (i == RegexTokens.Count) {
-                                    if (Program.WarningLevel.HasFlag(WarningLevels.VERBOSE)) {
-                                        // log/ error : do not end with a semicolon
-                                        if (Program.WarningLevel.HasFlag(WarningLevels.ERROR)) return default;
-                                    } else continue; // otherwise exit the loop entirely. We forgive our users for using semicolons despite having a great CF.
+                                
+
+                                if (i == RegexTokens.Count - 1) {
+                                    if (Program.WarningLevel.HasFlag(WarningLevels.VERBOSE))
+                                        Terminal.Warn(ErrorTypes.SyntaxError, DecodingPhase.TOKEN,
+                                            "Lines should not end with a semi-colon", SourceLineReference, Tokens.Count, ""
+                                        );
+                                    return Program.WarningLevel.HasFlag(WarningLevels.ERROR) ? default : (Tokens, true);
                                 }
   
 
@@ -390,6 +392,7 @@ namespace Numinous {
 
                 return (Tokens, true);
 
+                #region Context Fetcher Functions
                 void PrepareNextStep() {
                     MaxHierachy = 0;
                     StepTokens.Clear();
@@ -429,8 +432,6 @@ namespace Numinous {
                     return true;
                 }
 
-
-                #region Context Fetcher Functions
                 void AddOperator(Operators Operator, int si, int sl) {
                     DeltaTokens.Add((si, sl, Operator, true)); LastNonWhiteSpaceIndex = DeltaTokens.Count - 1; ;
                 }
@@ -737,10 +738,10 @@ namespace Numinous {
                             case "-i":
                             case "--input":
                                 if (i == args.Length - 1) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Input Path Provided")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Input Path Provided")]}.", null, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 } else if (InputPath.Length > 0) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Input Source File Path has already been specified")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Input Source File Path has already been specified")]}.", null, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 } else {
                                     InputPath = args[++i];
@@ -750,10 +751,10 @@ namespace Numinous {
                             case "-o":
                             case "--output":
                                 if (i == args.Length - 1) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Output Path Provided")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Output Path Provided")]}.", null, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 } else if (OutputPath.Length > 0) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Output Binary File Path has already been specified")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Output Binary File Path has already been specified")]}.", null, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 }
                                 OutputPath = args[++i];
@@ -803,7 +804,7 @@ Numinous 2a03 - GPL V2 Brette Allen 2026
 -l | --language     | [lang]    | {Language.Connectives[(Program.ActiveLanguage, "Choose a language to use")]}
 -w | --warning      | [level]   | TODO: Write "SET WARNING LEVEL" HERE
        
-""", null, null, null);
+""", null, default, null);
                                 } else {
                                     switch (args[++i]) {
                                         default: --i; break;
@@ -834,7 +835,7 @@ Bahasa Indonesia  ""-l in""
 Svenska           ""-l sw""
 فارسی             ""-l pe""
 中文              ""-l ch""
-", null, null, null);
+", null, default, null);
                                             break;
 
                                         case "w":
@@ -852,7 +853,7 @@ verbose     : Will display much more warnings, reccomended and intended for thos
 strict      : Acts as 'verbose' but warnings become errors, not reccomended.
 controlled  : Acts as 'strict' but prevents overruling.
        
-""", null, null, null);
+""", null, default, null);
                                             break;
 
                                         case "i":
@@ -865,7 +866,7 @@ The input file argument (-i or --input) should be followed by a valid file path 
 If the file is empty you will recieve an error, you may only pass one file here as the entry point file.
 This decides what the root of the "include path" is, includes from here must be relative to this path.
        
-""", null, null, null);
+""", null, default, null);
                                             break;
 
                                         case "o":
@@ -882,7 +883,7 @@ will not affect the kind of build produced.
 
 Numinous WILL overwrite a file existing with the same name at the output path if found.
        
-""", null, null, null);
+""", null, default, null);
                                             break;
                                     }
                                 }
@@ -893,7 +894,7 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                             case "-l":
                             case "--language":
                                 if (i == args.Length - 1) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Language Provided")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Language Provided")]}.", null, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 }
 
@@ -924,13 +925,13 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                                 };
 
                                 if (Program.ActiveLanguage == Languages.Null) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Invalid Language Provided")]}.", null, null, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Invalid Language Provided")]}.", null, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 }
                                 break;
 
                             default:
-                                Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Unrecognized Terminal Argument")]}.", null, null, ApplyWiggle(Flattened, 1 + StringIndex, args[i].Length));
+                                Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Unrecognized Terminal Argument")]}.", null, default, ApplyWiggle(Flattened, 1 + StringIndex, args[i].Length));
                                 return default;
                         }
                     }
@@ -948,7 +949,7 @@ Numinous WILL overwrite a file existing with the same name at the output path if
 #endif
 
 #if DEBUG
-                internal static void WriteInfo(ErrorLevels ErrorLevel, ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context,
+                internal static void WriteInfo(ErrorLevels ErrorLevel, ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int StepNumber, string? Context,
                     int     lineNumber = 0, 
                     string  filePath = "", 
                     string  memberName = "")
@@ -979,7 +980,7 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                     ErrorTypeString     = Language.ErrorTypeMessages[(UseLanguage, ErrorType)];
                     ErrorTypeConnective = Language.Connectives[(UseLanguage, "During")];
                     DecodePhaseString   = Language.DecodePhaseMessages[(UseLanguage, Phase)];
-                    LocationString      = LineNumber == null ? "" : (StepNumber == null ? $"({LineNumber})" : $"({LineNumber}, {StepNumber})");
+                    LocationString      = LineNumber == null ? "" : (StepNumber == 0 ? $"({LineNumber})" : $"({LineNumber}, {StepNumber})");
                     Context = Context == null ? "" : $": {Context}";
 
                     // Something Error During Something Phase :: Could not do a thing (1, 2) : ah, the issue is here.
@@ -996,19 +997,19 @@ Numinous WILL overwrite a file existing with the same name at the output path if
 
 #if DEBUG
                     
-                internal static void   Log(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context,
+                internal static void   Log(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int StepNumber, string? Context,
                     [CallerLineNumber] int lineNumber = 0,
                     [CallerFilePath] string filePath = "",
                     [CallerMemberName] string memberName = "") => WriteInfo(ErrorLevels.LOG,   ErrorType, Phase, Message, LineNumber, StepNumber, Context, lineNumber, filePath, memberName);
                 
 
-                internal static void  Warn(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context,
+                internal static void  Warn(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int StepNumber, string? Context,
                     [CallerLineNumber] int lineNumber = 0,
                     [CallerFilePath] string filePath = "",
                     [CallerMemberName] string memberName = "") => WriteInfo(Program.WarningLevel.HasFlag(WarningLevels.ERROR) ? ErrorLevels.ERROR : ErrorLevels.WARN,  ErrorType, Phase, Message, LineNumber, StepNumber, Context, lineNumber, filePath, memberName);
 
 
-                internal static void Error(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context,
+                internal static void Error(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int StepNumber, string? Context,
                     [CallerLineNumber] int lineNumber = 0,
                     [CallerFilePath] string filePath = "",
                     [CallerMemberName] string memberName = "") => WriteInfo(ErrorLevels.ERROR, ErrorType, Phase, Message, LineNumber, StepNumber, Context, lineNumber, filePath, memberName);

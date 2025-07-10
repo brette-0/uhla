@@ -2,7 +2,7 @@
   "profiles": {
     "Tataru": {
       "commandName": "Project",
-      "commandLineArgs": "-i \"Main.s\" -o \"Main.NES\"",
+      "commandLineArgs": "-i \"Main.s\" -o \"Main.NES\" -w strict",
       "workingDirectory": "C:\\Users\\Administrator\\Documents\\GitHub\\Tataru\\Tataru\\Test"
     }
   }
