@@ -697,7 +697,7 @@ namespace Numinous {
                     )).ToList();
 
                     DeltaTokens = [];                                                                                                                           // wipe delta tokens for next operation
-                    StepTokens.Add((DeltaTokenShallowCopy, ContainerBuffer.Count, nTermBuffer[^1], CollectiveContext[(StringIndex + RegexTokens[i].Length)..]));// append copy to StepTokens
+                    StepTokens.Add((DeltaTokenShallowCopy, ContainerBuffer.Count, nTermBuffer[^1], i == RegexTokens.Count ? CollectiveContext : CollectiveContext[..(StringIndex + RegexTokens[i].Length)]));// append copy to StepTokens
                 }
                 #endregion Context Fetcher Functions
             }
