@@ -1,7 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 
 using Numinous.Engine;
-using Numinous.Langauges;
+using Numinous.Language;
 
 using static Numinous.Engine.Engine;
 

@@ -1,24 +1,28 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Diagnostics;
+using System.Globalization;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices.Swift;
 using System.Text;
 using System.Text.RegularExpressions;
-using Numinous.Langauges;
+using Antlr4.Runtime;
+using Numinous.Language;
 
 namespace Numinous {
     namespace Engine {
         [Flags]
         internal enum WarningLevels : byte {
-            IGNORE      = 0x00,
-            DEFAULT     = 0x01,
-            ERROR       = 0x02,
-            VERBOSE     = 0x04,
+            IGNORE = 0x00,
+            DEFAULT = 0x01,
+            ERROR = 0x02,
+            VERBOSE = 0x04,
 
             /* Internal     */
-            NONE        = 0xff,
+            NONE = 0xff,
             NO_OVERRULE = 0x08,
 
             /* Composite    */
-            STRICT      = VERBOSE | ERROR,
-            CONTROLLED  = VERBOSE | ERROR | NO_OVERRULE,
+            STRICT = VERBOSE | ERROR,
+            CONTROLLED = VERBOSE | ERROR | NO_OVERRULE,
 
         }
 
@@ -66,9 +70,9 @@ namespace Numinous {
             INEQUAL,
 
             AND,
-            
+
             OR,
-            
+
             NULL,
             CHECK,
             ELSE,
@@ -82,17 +86,18 @@ namespace Numinous {
             NULLSET,
             RIGHTSET,
             LEFTSET,
-            
+
             ASSIGNMASK,
             ASSIGNSET,
             ASSIGNFLIP,
 
             TERM,
+            NOT,
 
             NONE = 255
         }
 
-        internal enum AssembleTimeTypes  : byte {
+        internal enum AssembleTimeTypes : byte {
             PROPERTY,   // Property (Evaluator Solving)
             TYPE,       // typeof result
             INT,        // assemble time integer
@@ -123,7 +128,7 @@ namespace Numinous {
             CEXP,       // Constant Expression
 
             MACRO = 0x80,
-                        // void macro
+            // void macro
             MINT,       // int macro
             MSTRING,    // string macro
             MEXP,       // expression macro
@@ -171,20 +176,189 @@ namespace Numinous {
 
 
         internal static class Engine {
-            
-            /*
-             * Some notes:
-             *      This function needs to be able to resolve the information between the changes in hierarchy. The context of the capture is decided by the brackets not
-             *      containing the delta, but the ones receiving the result of the delta.
-             *      
-             *      The responsibilities of LinearEvaluate is:
-             *          Perform operations in the correct order
-             *          propagate object references as much as possible
-             *          generate constant static object literals
-             */
-            internal static (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)> Result, bool Success) LInearEvaluate(List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> DeltaTokens) {
-                return default;
+
+
+            internal static class Evaluate {
+
+                /*
+                 * Some notes:
+                 *      This function needs to be able to resolve the information between the changes in hierarchy. The context of the capture is decided by the brackets not
+                 *      containing the delta, but the ones receiving the result of the delta.
+                 *      
+                 *      The responsibilities of LinearEvaluate is:
+                 *          Perform operations in the correct order
+                 *          propagate object references as much as possible
+                 *          generate constant static object literals
+                 */
+
+                internal static (List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> Result, bool Success) LinearEvaluate(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens) {
+                    List<Operators> ValueMutators = [];
+                    List<Operators> OperatorBuffer = [];
+                    List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> ValueTokenBuffer = [];
+
+                    List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> ResultTermTokens = [];
+
+                    bool ExpectOperator = false;
+
+                    for (int i = 0; i < DeltaTokens.Count; i++) {
+                        if (DeltaTokens[i].IsOperator) {
+                            if (!ExpectOperator) {
+                                // error, wanted operator
+                                return default;
+                            }
+
+                            OperatorBuffer.Add((Operators)DeltaTokens[i].data);
+                            ExpectOperator = false;
+                        } else {
+                            var Token = GetData(DeltaTokens[i]);
+
+                            switch ((AssembleTimeTypes)Token["type"].data) {
+                                case AssembleTimeTypes.CSTRING:
+                                    (object data, bool isString) = MutateCString((string)Token["self"].data);
+
+                                    ValueTokenBuffer.Add(new Dictionary<string, (object, AssembleTimeTypes, AccessLevels)> {
+                                        { "self", (data, isString ? AssembleTimeTypes.CSTRING : AssembleTimeTypes.CINT, AccessLevels.PRIVATE) }
+                                    });
+                                    break;
+
+                                case AssembleTimeTypes.CEXP:
+                                    string ctx = (string)Token["self"].data;
+                                    if (ctx[0] == ' ' || ctx[1] == '\t') continue;    // do not compute whitespace
+                                    else if (ExpectOperator) {
+                                        // error, needed operator
+                                        return default;
+                                    } else {
+                                        // attempt to evaluate, CEXP has to mean unresolved here.
+                                        int parse;
+
+                                        switch (ctx[0]) {
+                                            case '0':
+                                                switch (ctx[1]) {
+                                                    case 'x':
+                                                        if (int.TryParse(ctx, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out parse)) goto parse_exit;
+                                                        // illegal number style
+                                                        return default;
+                                                    case 'b':
+                                                        if (int.TryParse(ctx, NumberStyles.BinaryNumber, CultureInfo.InvariantCulture, out parse)) goto parse_exit;
+                                                        // illegal number style
+                                                        return default;
+
+                                                    default:
+                                                        if (int.TryParse(ctx, NumberStyles.Number, CultureInfo.InvariantCulture, out parse)) goto parse_exit;
+                                                        // illegal number style
+                                                        return default;
+                                                }
+
+                                            case '1':
+                                            case '2':
+                                            case '3':
+                                            case '4':
+                                            case '5':
+                                            case '6':
+                                            case '7':
+                                            case '8':
+                                            case '9':
+                                                if (!int.TryParse(ctx, NumberStyles.Number, CultureInfo.InvariantCulture, out parse)) {
+                                                    // illegal number style
+                                                    return default;
+                                                }
+
+                                                ValueTokenBuffer.Add(new Dictionary<string, (object, AssembleTimeTypes, AccessLevels)> {
+                                                            { "self", (parse, AssembleTimeTypes.CINT, AccessLevels.PRIVATE) }
+                                                        });
+                                                ExpectOperator = true;
+                                                break;
+
+                                            case '$':
+                                                if (int.TryParse(ctx, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out parse)) goto parse_exit;
+                                                // illegal number style
+                                                return default;
+
+                                            case '%':
+                                                if (int.TryParse(ctx, NumberStyles.BinaryNumber, CultureInfo.InvariantCulture, out parse)) goto parse_exit;
+                                                // illegal number style
+                                                return default;
+
+
+                                            parse_exit:
+                                                MutateCInt(parse);  // process all unary values
+                                                ValueTokenBuffer.Add(new Dictionary<string, (object, AssembleTimeTypes, AccessLevels)> {
+                                                    { "self", (parse, AssembleTimeTypes.CINT, AccessLevels.PRIVATE) }
+                                                });
+                                                ExpectOperator = true;
+                                                break;
+
+                                            default:
+                                                // variable TODO: IMPLEMENT
+                                                break;
+                                        }
+
+                                        break;
+                                    }
+                            }
+                        }
+                    }
+
+
+                    return default;
+
+                    (object Data, bool isString) MutateCString(string ctx) {
+                        object Data = ctx;
+                        bool isString = true;
+
+                        ValueMutators.Reverse();
+
+                        foreach (Operators Operator in ValueMutators) {
+                            switch (Operator) {
+                                case Operators.ADD:
+                                    if (isString) Data = ((string)Data).ToUpper(); 
+                                    else Data = Math.Abs((int)Data);
+                                    continue;
+
+
+                                case Operators.SUB:
+                                    if (isString) ((string)Data).ToLower();
+                                    else Data = Data = -(int)Data;
+                                    continue;
+
+                                case Operators.NOT:
+                                    if (isString) new string(' ', ((string)Data).Length); 
+                                    else Data = Data = 0 == (int)Data ? 0 : 1;
+                                    continue;
+
+                                case Operators.BITFLIP:
+                                    if (isString) Data = ((string)Data).Length;
+                                    else Data = ^(int)Data;
+
+                                    isString = false;
+                                    continue;
+                            }
+                        }
+                        ValueMutators.Clear();
+                        return (Data, isString);
+                    }
+
+                    int MutateCInt(int ctx) {
+                        int Data = ctx;
+
+                        ValueMutators.Reverse();
+
+                        foreach (Operators Operator in ValueMutators) {
+                            switch (Operator) {
+                                case Operators.ADD: Math.Abs(Data);                         continue;
+                                case Operators.SUB: Data = -Data;                           continue;
+                                case Operators.NOT: Data = 0 == Data ? 0 : 1;               continue;
+                                case Operators.BITFLIP: Data = (int)(Data ^ uint.MaxValue); continue;
+                            }
+                        }
+
+                        ValueMutators.Clear();
+                        return Data;
+                    }
+                }
+                internal static Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> GetData(object data) => (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)data;
             }
+
 
 
             /*
@@ -231,18 +405,15 @@ namespace Numinous {
              *          
              *          
              *          TODO:
-             *              CODE:
-             *                  MULTI_LANG FOR ERRORS
-             *                  CLEANSE
-             *                  TEST ALL ERRORS/WARNINGS
+             *              MULTI_LANG FOR ERRORS
              */
 
-            internal static (List<(List<(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> Tokens, int MaxHierachy)>, bool Success) ContextFetcher(string[] SourceFileReference, ref int SourceLineReference) {
+            internal static (List<(List<(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms, string Representation)> Tokens, int MaxHierachy)>, bool Success) ContextFetcher(string[] SourceFileReference, ref int SourceLineReference) {
                 string CollectiveContext = SourceFileReference[SourceLineReference];
                 List<string> RegexTokens = RegexTokenize(SourceFileReference[SourceLineReference]);
 
-                List<(List<(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> Tokens, int MaxHierachy)> Tokens = [];
-                List<(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms)> StepTokens = [];
+                List<(List<(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms, string Representation)> Tokens, int MaxHierachy)> Tokens = [];
+                List<(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms, string Representation)> StepTokens = [];
                 List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens = [];
 
                 List<Operators> ContainerBuffer = [];
@@ -257,88 +428,90 @@ namespace Numinous {
 
                 bool IsLastOperator = false;
 
+                int i = 0, StringIndex = 0;
                 do {
-                    for (int i = 0, StringIndex = 0; i < RegexTokens.Count; StringIndex += RegexTokens[i].Length, i++) {
+                    for (i = 0, StringIndex = 0; i < RegexTokens.Count; StringIndex += RegexTokens[i].Length, i++) {
                         if (ContainerBuffer.Count != 0 && ContainerBuffer[^1] == Operators.FSTRING) {
-                            CaptureCSTRING(ref i, ref StringIndex, SourceLineReference, c => c == '"' || c == '{');
+                            CaptureCSTRING(SourceLineReference, c => c == '"' || c == '{');
                             if (RegexTokens[i][0] != '{') {
                                 if (RegexTokens[i][0] == '"') {
-                                    if (CloseContainer(StringIndex, SourceLineReference, Operators.STRING, Operators.FSTRING)) continue;
+                                    if (CloseContainer(SourceLineReference, Operators.STRING, Operators.FSTRING)) continue;
                                     else return default;
                                 }
                             }
                         }
 
 
-                        // capture whitespace
-                        int CapturedStringIndex = StringIndex;
-                        for (WHITESPACE_CONSTEXP = ""; RegexTokens[i][0] == ' ' || RegexTokens[i][0] == '\t'; i++, StringIndex++) WHITESPACE_CONSTEXP += RegexTokens[i];
-                        if (CapturedStringIndex != StringIndex) {
-                            DeltaTokens.Add((
-                                CapturedStringIndex,
-                                WHITESPACE_CONSTEXP.Length,
-                                // everything is private here because it should never exist
-                                new Dictionary<string, (object, AssembleTimeTypes, AccessLevels)> {
-                                    {"self",    (WHITESPACE_CONSTEXP,           AssembleTimeTypes.CEXP, AccessLevels.PRIVATE) },
-                                    {"length",  (WHITESPACE_CONSTEXP.Length,    AssembleTimeTypes.CINT, AccessLevels.PRIVATE) },
-                                    {"type",    (AssembleTimeTypes.CEXP,        AssembleTimeTypes.TYPE, AccessLevels.PRIVATE)}
-                                },
-                                false
-                            ));
-                        }
+                        //// capture whitespace
+                        //int CapturedStringIndex = StringIndex;
+                        //for (WHITESPACE_CONSTEXP = ""; RegexTokens[i][0] == ' ' || RegexTokens[i][0] == '\t'; i++, StringIndex++) WHITESPACE_CONSTEXP += RegexTokens[i];
+                        //if (CapturedStringIndex != StringIndex) {
+                        //    DeltaTokens.Add((
+                        //        CapturedStringIndex,
+                        //        WHITESPACE_CONSTEXP.Length,
+                        //        // everything is private here because it should never exist
+                        //        new Dictionary<string, (object, AssembleTimeTypes, AccessLevels)> {
+                        //            {"self",    (WHITESPACE_CONSTEXP,           AssembleTimeTypes.CEXP, AccessLevels.PRIVATE) },
+                        //            {"length",  (WHITESPACE_CONSTEXP.Length,    AssembleTimeTypes.CINT, AccessLevels.PRIVATE) },
+                        //            {"type",    (AssembleTimeTypes.CEXP,        AssembleTimeTypes.TYPE, AccessLevels.PRIVATE)}
+                        //        },
+                        //        false
+                        //    ));
+                        //}
 
                         // handle tokens
                         switch (RegexTokens[i]) {
-                            case "+":   SimpleAddOperator(Operators.ADD,          StringIndex); break;
-                            case "-":   SimpleAddOperator(Operators.SUB,          StringIndex); break;
-                            case "*":   SimpleAddOperator(Operators.MULT,         StringIndex); break;
-                            case "/":   SimpleAddOperator(Operators.DIV,          StringIndex); break;
-                            case "%":   SimpleAddOperator(Operators.MOD,          StringIndex); break;
-                            case ">>":  SimpleAddOperator(Operators.RIGHT,        StringIndex); break;
-                            case "<<":  SimpleAddOperator(Operators.LEFT,         StringIndex); break;
-                            case "&":   SimpleAddOperator(Operators.BITMASK,      StringIndex); break;
-                            case "^":   SimpleAddOperator(Operators.BITFLIP,      StringIndex); break;
-                            case "|":   SimpleAddOperator(Operators.BITSET,       StringIndex); break;
-                            case "==":  SimpleAddOperator(Operators.EQUAL,        StringIndex); break;
-                            case "!=":  SimpleAddOperator(Operators.INEQUAL,      StringIndex); break;
-                            case ">=":  SimpleAddOperator(Operators.GOET,         StringIndex); break;
-                            case "<=":  SimpleAddOperator(Operators.LOET,         StringIndex); break;
-                            case ">":   SimpleAddOperator(Operators.GT,           StringIndex); break;
-                            case "<":   SimpleAddOperator(Operators.LT,           StringIndex); break;
-                            case "<=>": SimpleAddOperator(Operators.SERIAL,       StringIndex); break;
-                            case "=":   SimpleAddOperator(Operators.SET,          StringIndex); break;
-                            case "+=":  SimpleAddOperator(Operators.INCREASE,     StringIndex); break;
-                            case "-=":  SimpleAddOperator(Operators.DECREASE,     StringIndex); break;
-                            case "*=":  SimpleAddOperator(Operators.MULTIPLY,     StringIndex); break;
-                            case "/=":  SimpleAddOperator(Operators.DIVIDE,       StringIndex); break;
-                            case "%=":  SimpleAddOperator(Operators.MODULATE,     StringIndex); break;
-                            case ">>=": SimpleAddOperator(Operators.RIGHTSET,     StringIndex); break;
-                            case "<<=": SimpleAddOperator(Operators.LEFTSET,      StringIndex); break;
-                            case "&=":  SimpleAddOperator(Operators.ASSIGNMASK,   StringIndex); break;
-                            case "|=":  SimpleAddOperator(Operators.ASSIGNSET,    StringIndex); break;
-                            case "^=":  SimpleAddOperator(Operators.ASSIGNFLIP,   StringIndex); break;
-                            case "??=": SimpleAddOperator(Operators.NULLSET,      StringIndex); break;
-                            case "??":  SimpleAddOperator(Operators.NULL,         StringIndex); break;
-                            case ".":   SimpleAddOperator(Operators.PROPERTY,     StringIndex); break;
-                            case "?.":  SimpleAddOperator(Operators.NULLPROPERTY, StringIndex); break;
-                            case "?":   SimpleAddOperator(Operators.CHECK,        StringIndex); break;
-                            case ":":   SimpleAddOperator(Operators.ELSE,         StringIndex); break;
+                            case "+":   SimpleAddOperator(Operators.ADD         ); break;
+                            case "-":   SimpleAddOperator(Operators.SUB         ); break;
+                            case "*":   SimpleAddOperator(Operators.MULT        ); break;
+                            case "/":   SimpleAddOperator(Operators.DIV         ); break;
+                            case "%":   SimpleAddOperator(Operators.MOD         ); break;
+                            case ">>":  SimpleAddOperator(Operators.RIGHT       ); break;
+                            case "<<":  SimpleAddOperator(Operators.LEFT        ); break;
+                            case "&":   SimpleAddOperator(Operators.BITMASK     ); break;
+                            case "^":   SimpleAddOperator(Operators.BITFLIP     ); break;
+                            case "|":   SimpleAddOperator(Operators.BITSET      ); break;
+                            case "==":  SimpleAddOperator(Operators.EQUAL       ); break;
+                            case "!=":  SimpleAddOperator(Operators.INEQUAL     ); break;
+                            case ">=":  SimpleAddOperator(Operators.GOET        ); break;
+                            case "<=":  SimpleAddOperator(Operators.LOET        ); break;
+                            case ">":   SimpleAddOperator(Operators.GT          ); break;
+                            case "<":   SimpleAddOperator(Operators.LT          ); break;
+                            case "<=>": SimpleAddOperator(Operators.SERIAL      ); break;
+                            case "=":   SimpleAddOperator(Operators.SET         ); break;
+                            case "+=":  SimpleAddOperator(Operators.INCREASE    ); break;
+                            case "-=":  SimpleAddOperator(Operators.DECREASE    ); break;
+                            case "*=":  SimpleAddOperator(Operators.MULTIPLY    ); break;
+                            case "/=":  SimpleAddOperator(Operators.DIVIDE      ); break;
+                            case "%=":  SimpleAddOperator(Operators.MODULATE    ); break;
+                            case ">>=": SimpleAddOperator(Operators.RIGHTSET    ); break;
+                            case "<<=": SimpleAddOperator(Operators.LEFTSET     ); break;
+                            case "&=":  SimpleAddOperator(Operators.ASSIGNMASK  ); break;
+                            case "|=":  SimpleAddOperator(Operators.ASSIGNSET   ); break;
+                            case "^=":  SimpleAddOperator(Operators.ASSIGNFLIP  ); break;
+                            case "??=": SimpleAddOperator(Operators.NULLSET     ); break;
+                            case "??":  SimpleAddOperator(Operators.NULL        ); break;
+                            case ".":   SimpleAddOperator(Operators.PROPERTY    ); break;
+                            case "?.":  SimpleAddOperator(Operators.NULLPROPERTY); break;
+                            case "?":   SimpleAddOperator(Operators.CHECK       ); break;
+                            case ":":   SimpleAddOperator(Operators.ELSE        ); break;
+                            case "!":   SimpleAddOperator(Operators.NOT         ); break;
 
                             // special case
                             case "\"":
                                 i++;
-                                if (CaptureCSTRING(ref i, ref StringIndex, SourceLineReference, c => c == '"')) break;
+                                if (CaptureCSTRING(SourceLineReference, c => c == '"')) break;
                                 return default;
 
                             // Container Code
-                            case "(":   OpenContainer(StringIndex, Operators.OPAREN);   break;
-                            case "[":   OpenContainer(StringIndex, Operators.OBRACK);   break;
-                            case "{":   OpenContainer(StringIndex, Operators.OBRACE);   break;
-                            case "$\"": OpenContainer(StringIndex, Operators.FSTRING);  break;
+                            case "(":   OpenContainer(Operators.OPAREN);   break;
+                            case "[":   OpenContainer(Operators.OBRACK);   break;
+                            case "{":   OpenContainer(Operators.OBRACE);   break;
+                            case "$\"": OpenContainer(Operators.FSTRING);  break;
 
-                            case ")": if (SimpleCloseContainer(StringIndex, SourceLineReference, Operators.CPAREN)) break; else return default;
-                            case "]": if (SimpleCloseContainer(StringIndex, SourceLineReference, Operators.CBRACK)) break; else return default;
-                            case "}": if (SimpleCloseContainer(StringIndex, SourceLineReference, Operators.CBRACE)) break; else return default;
+                            case ")": if (SimpleCloseContainer(SourceLineReference, Operators.CPAREN)) break; else return default;
+                            case "]": if (SimpleCloseContainer(SourceLineReference, Operators.CBRACK)) break; else return default;
+                            case "}": if (SimpleCloseContainer(SourceLineReference, Operators.CBRACE)) break; else return default;
 
                             case ";":
                                 if (ContainerBuffer.Count > 0) {
@@ -371,7 +544,7 @@ namespace Numinous {
                             // Term Catching
                             case ",":
                                 nTermBuffer[^1]++;
-                                SimpleAddOperator(Operators.TERM, StringIndex);
+                                SimpleAddOperator(Operators.TERM);
                                 break;
 
                             default:
@@ -422,23 +595,23 @@ namespace Numinous {
                     LastNonWhiteSpaceIndex = -1;
                 }
 
-                bool CaptureCSTRING(ref int i, ref int si, int LineNumber, Func<char, bool> HaltCapturePredicate) {
-                    int csi = si;
+                bool CaptureCSTRING(int LineNumber, Func<char, bool> HaltCapturePredicate) {
+                    int csi = StringIndex;
 
                     for (; i < RegexTokens.Count && !HaltCapturePredicate(RegexTokens[i][0]); i++) {
                         LITERAL_CSTRING += RegexTokens[i];
-                        si += RegexTokens[i].Length;
+                        StringIndex += RegexTokens[i].Length;
                     }
 
                     if (i == RegexTokens.Count) {
-                        Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Unterminated String", LineNumber, Tokens.Count, ApplyWiggle(CollectiveContext, csi + 1, si - csi));
+                        Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Unterminated String", LineNumber, Tokens.Count, ApplyWiggle(CollectiveContext, csi + 1, StringIndex - csi));
                         return false;
                     }
 
-                    if (csi != si) {
+                    if (csi != StringIndex) {
                         DeltaTokens.Add((
                             csi,
-                            csi - si,
+                            csi - StringIndex,
                             new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
                                 {"self",    (LITERAL_CSTRING,           AssembleTimeTypes.CSTRING,  AccessLevels.PRIVATE) },
                                 {"length",  (LITERAL_CSTRING.Length,    AssembleTimeTypes.CINT,     AccessLevels.PUBLIC) },
@@ -453,26 +626,26 @@ namespace Numinous {
                     return true;
                 }
 
-                void AddOperator(Operators Operator, int si, int sl) {
-                    DeltaTokens.Add((si, sl, Operator, true)); LastNonWhiteSpaceIndex = DeltaTokens.Count - 1; ;
+                void AddOperator(Operators Operator, int sl) {
+                    DeltaTokens.Add((StringIndex, sl, Operator, true)); LastNonWhiteSpaceIndex = DeltaTokens.Count - 1; ;
                 }
 
-                void SimpleAddOperator(Operators Operator, int si) => AddOperator(Operator, si, 1);
+                void SimpleAddOperator(Operators Operator) => AddOperator(Operator, 1);
 
-                void ComplexOpenContainer(int si, int sl, Operators Operator) {
+                void ComplexOpenContainer(int sl, Operators Operator) {
                     CopyDeltaTokens();
                     ContainerBuffer.Add(Operator);                                  // register container type
                     nTermBuffer.Add(0);
 
-                    AddOperator(Operator, si, sl);
-                    LastOpenContainerOperatorStringIndex = si;
+                    AddOperator(Operator, sl);
+                    LastOpenContainerOperatorStringIndex = StringIndex;
                     MaxHierarchy = Math.Max(ContainerBuffer.Count, MaxHierarchy);
                 }
 
-                void OpenContainer(int si, Operators Operator) => ComplexOpenContainer(si, 1, Operator);
+                void OpenContainer(Operators Operator) => ComplexOpenContainer(1, Operator);
 
-                bool CloseContainer(int si, int SourceLineReference, Operators CloseOperator, Operators OpenOperator) {
-                    SimpleAddOperator(CloseOperator, si);
+                bool CloseContainer(int SourceLineReference, Operators CloseOperator, Operators OpenOperator) {
+                    SimpleAddOperator(CloseOperator);
 
                     if (ContainerBuffer.Count == 0) {
                         Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"No Open Container before Close Container.",
@@ -482,8 +655,8 @@ namespace Numinous {
                     }
 
                     if (ContainerBuffer[^1] != OpenOperator) {
-                        Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"Invalid Container Closer '{CollectiveContext[si]}' for Opening container '{CollectiveContext[LastOpenContainerOperatorStringIndex]}'.",
-                          SourceLineReference, StepTokens.Count, ApplyWiggle(CollectiveContext, LastOpenContainerOperatorStringIndex + 1, si - LastOpenContainerOperatorStringIndex + 1));
+                        Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"Invalid Container Closer '{CollectiveContext[StringIndex]}' for Opening container '{CollectiveContext[LastOpenContainerOperatorStringIndex]}'.",
+                          SourceLineReference, StepTokens.Count, ApplyWiggle(CollectiveContext, LastOpenContainerOperatorStringIndex + 1, StringIndex - LastOpenContainerOperatorStringIndex + 1));
 
                         return false;
                     }
@@ -495,14 +668,15 @@ namespace Numinous {
                     return true;
                 }
 
-                bool SimpleCloseContainer(int si, int SourceLineReference, Operators Operator) => CloseContainer(si, SourceLineReference, Operator, Operator - 1);
+                bool SimpleCloseContainer(int SourceLineReference, Operators Operator) => CloseContainer(SourceLineReference, Operator, Operator - 1);
 
                 void CopyStepTokens() {
                     var StepTokenShallowCopy = StepTokens
                         .Select(t => (
                             t.DeltaTokens,                  // reference to a clone, should be fine
                             t.Hierachy,
-                            t.Terms
+                            t.Terms,
+                            t.Representation
                         )).ToList();
 
                     Tokens.Add((StepTokenShallowCopy, MaxHierarchy));
@@ -522,8 +696,8 @@ namespace Numinous {
                         t.IsOperator
                     )).ToList();
 
-                    DeltaTokens = [];                                                               // wipe delta tokens for next operation
-                    StepTokens.Add((DeltaTokenShallowCopy, ContainerBuffer.Count, nTermBuffer[^1]));// append copy to StepTokens
+                    DeltaTokens = [];                                                                                                                           // wipe delta tokens for next operation
+                    StepTokens.Add((DeltaTokenShallowCopy, ContainerBuffer.Count, nTermBuffer[^1], CollectiveContext[(StringIndex + RegexTokens[i].Length)..]));// append copy to StepTokens
                 }
                 #endregion Context Fetcher Functions
             }
@@ -564,7 +738,7 @@ namespace Numinous {
                         _ => true,
                     };
 
-            internal static int GetHierachy(string op) => op switch {
+            internal static int GetHierarchy(string op) => op switch {
                 /* Property*/
                 "." or "?."
                 => 1,
@@ -729,10 +903,10 @@ namespace Numinous {
                             case "-i":
                             case "--input":
                                 if (i == args.Length - 1) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Input Path Provided")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Input Path Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 } else if (InputPath.Length > 0) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Input Source File Path has already been specified")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Input Source File Path has already been specified")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 } else {
                                     InputPath = args[++i];
@@ -742,10 +916,10 @@ namespace Numinous {
                             case "-o":
                             case "--output":
                                 if (i == args.Length - 1) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Output Path Provided")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Output Path Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 } else if (OutputPath.Length > 0) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Output Binary File Path has already been specified")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Output Binary File Path has already been specified")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 }
                                 OutputPath = args[++i];
@@ -788,11 +962,11 @@ namespace Numinous {
 $"""
 Numinous 2a03 - GPL V2 Brette Allen 2026
 
--i | --input        | [path]    | {Language.Connectives[(Program.ActiveLanguage, "Entrypoint Source Assembly File")]}
--o | --output       | [path]    | {Language.Connectives[(Program.ActiveLanguage, "Output ROM/Disk Binary Output")]}
--h | --help         |           | {Language.Connectives[(Program.ActiveLanguage, "Display the help string (you did that)")]}
+-i | --input        | [path]    | {(Language.Language.Connectives[(Program.ActiveLanguage, "Entrypoint Source Assembly File")])}
+-o | --output       | [path]    | {(Language.Language.Connectives[(Program.ActiveLanguage, "Output ROM/Disk Binary Output")])}
+-h | --help         |           | {(Language.Language.Connectives[(Program.ActiveLanguage, "Display the help string (you did that)")])}
 -h | --help         | [arg]     | TODO: WRITE "GET INFO ON SPECIFIC ARGUMENT FUNCTION" HERE
--l | --language     | [lang]    | {Language.Connectives[(Program.ActiveLanguage, "Choose a language to use")]}
+-l | --language     | [lang]    | {(Language.Language.Connectives[(Program.ActiveLanguage, "Choose a language to use")])}
 -w | --warning      | [level]   | TODO: Write "SET WARNING LEVEL" HERE
        
 """, -1, default, null);
@@ -885,44 +1059,44 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                             case "-l":
                             case "--language":
                                 if (i == args.Length - 1) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "No Language Provided")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Language Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 }
 
                                 Program.ActiveLanguage = args[++i] switch {
-                                    "en_gb" => Languages.English_UK,
-                                    "en_us" => Languages.English_US,
-                                    "es"    => Languages.Spanish,
-                                    "de"    => Languages.German,
-                                    "ja"    => Languages.Japanese,
-                                    "fr"    => Languages.French,
-                                    "pt"    => Languages.Portuguese,
-                                    "ru"    => Languages.Russian,
-                                    "it"    => Languages.Italian,
-                                    "ne"    => Languages.Dutch,
-                                    "pl"    => Languages.Polish,
-                                    "tr"    => Languages.Turkish,
-                                    "vt"    => Languages.Vietnamese,
-                                    "in"    => Languages.Indonesian,
-                                    "cz"    => Languages.Czech,
-                                    "ko"    => Languages.Korean,
-                                    "uk"    => Languages.Ukrainian,
-                                    "ar"    => Languages.Arabic,
-                                    "sw"    => Languages.Swedish,
-                                    "pe"    => Languages.Persian,
-                                    "ch"    => Languages.Chinese,
+                                    "en_gb" => Language.Languages.English_UK,
+                                    "en_us" => Language.Languages.English_US,
+                                    "es"    => Language.Languages.Spanish,
+                                    "de"    => Language.Languages.German,
+                                    "ja"    => Language.Languages.Japanese,
+                                    "fr"    => Language.Languages.French,
+                                    "pt"    => Language.Languages.Portuguese,
+                                    "ru"    => Language.Languages.Russian,
+                                    "it"    => Language.Languages.Italian,
+                                    "ne"    => Language.Languages.Dutch,
+                                    "pl"    => Language.Languages.Polish,
+                                    "tr"    => Language.Languages.Turkish,
+                                    "vt"    => Language.Languages.Vietnamese,
+                                    "in"    => Language.Languages.Indonesian,
+                                    "cz"    => Language.Languages.Czech,
+                                    "ko"    => Language.Languages.Korean,
+                                    "uk"    => Language.Languages.Ukrainian,
+                                    "ar"    => Language.Languages.Arabic,
+                                    "sw"    => Language.Languages.Swedish,
+                                    "pe"    => Language.Languages.Persian,
+                                    "ch"    => Language.Languages.Chinese,
 
-                                    _       => Languages.Null
+                                    _       => Language.Languages.Null
                                 };
 
-                                if (Program.ActiveLanguage == Languages.Null) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Invalid Language Provided")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                if (Program.ActiveLanguage == Language.Languages.Null) {
+                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Invalid Language Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 }
                                 break;
 
                             default:
-                                Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(Program.ActiveLanguage, "Unrecognized Terminal Argument")]}.", -1, default, ApplyWiggle(Flattened, 1 + StringIndex, args[i].Length));
+                                Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Unrecognized Terminal Argument")])}.", -1, default, ApplyWiggle(Flattened, 1 + StringIndex, args[i].Length));
                                 return default;
                         }
                     }
@@ -948,9 +1122,9 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                 internal static void WriteInfo(ErrorLevels ErrorLevel, ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context) 
 #endif
                 {
-                    Languages UseLanguage = Program.ActiveLanguage;
-                    if (Program.ActiveLanguage == Languages.Null) UseLanguage = Program.ActiveLanguage = Language.CaptureSystemLanguage();
-                    if (Program.ActiveLanguage == Languages.Null) UseLanguage = Program.ActiveLanguage = Program.ActiveLanguage = Languages.English_UK;
+                    Language.Languages UseLanguage = Program.ActiveLanguage;
+                    if (Program.ActiveLanguage == Language.Languages.Null) UseLanguage = Program.ActiveLanguage = Language.Language.CaptureSystemLanguage();
+                    if (Program.ActiveLanguage == Language.Languages.Null) UseLanguage = Program.ActiveLanguage = Program.ActiveLanguage = Language.Languages.English_UK;
 
 
                     Console.ForegroundColor = ErrorLevel switch {
@@ -968,9 +1142,9 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                         goto Exit;
                     }
 
-                    ErrorTypeString     = Language.ErrorTypeMessages[(UseLanguage, ErrorType)];
-                    ErrorTypeConnective = Language.Connectives[(UseLanguage, "During")];
-                    DecodePhaseString   = Language.DecodePhaseMessages[(UseLanguage, Phase)];
+                    ErrorTypeString     = Language.Language.ErrorTypeMessages[(UseLanguage, ErrorType)];
+                    ErrorTypeConnective = Language.Language.Connectives[(UseLanguage, "During")];
+                    DecodePhaseString   = Language.Language.DecodePhaseMessages[(UseLanguage, Phase)];
                     LocationString      = LineNumber == -1 ? "" : (StepNumber == 0 ? $"({LineNumber})" : $"({LineNumber}, {StepNumber})");
                     Context = Context == null ? "" : $": {Context}";
 

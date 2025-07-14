@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using Numinous.Engine;
 
 namespace Numinous {
-    namespace Langauges {
+    namespace Language {
         internal enum Languages {
             English_UK,
             English_US,
@@ -29,11 +29,11 @@ namespace Numinous {
             Persian,
             Chinese,
 
-            Null                // Used for unrecognized langauge specify from terminal
+            Null                // Used for unrecognized language specify from terminal
         }
 
         internal class Language {
-            // Note : Operating Systems that wont return en_us/en_gb will be forced to use UK english.
+            // Note : Operating Systems that wont return en_us/en_gb will be forced to use UK English.
             //        The way I see it, its either enforce UK or enforce US. This way people might be inclined to ask about the projects origins.
             // Generated Method:
             internal static Languages CaptureSystemLanguage() {
@@ -150,72 +150,6 @@ namespace Numinous {
                 {(Languages.Swedish,    "Unexpected Line Termination in"), "Oväntat radslut i"},
                 {(Languages.Persian,    "Unexpected Line Termination in"), "پایان خط غیرمنتظره در"},
                 {(Languages.Chinese,    "Unexpected Line Termination in"), "在…中意外的行终止"},
-
-                // Unexpected Brace in
-                {(Languages.English_UK, "Unexpected Brace in"), "Unexpected Brace in"},
-                {(Languages.English_US, "Unexpected Brace in"), "Unexpected Brace in"},
-                {(Languages.Spanish,    "Unexpected Brace in"), "Llave inesperada en"},
-                {(Languages.German,     "Unexpected Brace in"), "Unerwartete geschweifte Klammer in"},
-                {(Languages.French,     "Unexpected Brace in"), "Acolade inattendue dans"},
-                {(Languages.Portuguese, "Unexpected Brace in"), "Chave inesperada em"},
-                {(Languages.Russian,    "Unexpected Brace in"), "Неожиданная фигурная скобка в"},
-                {(Languages.Italian,    "Unexpected Brace in"), "Graffa inaspettata in"},
-                {(Languages.Dutch,      "Unexpected Brace in"), "Onverwachte accolade in"},
-                {(Languages.Polish,     "Unexpected Brace in"), "Nieoczekiwany nawias klamrowy w"},
-                {(Languages.Turkish,    "Unexpected Brace in"), "Beklenmeyen süslü parantez içinde"},
-                {(Languages.Vietnamese, "Unexpected Brace in"), "Dấu ngoặc nhọn không mong muốn trong"},
-                {(Languages.Indonesian, "Unexpected Brace in"), "Kurung kurawal tak terduga di"},
-                {(Languages.Czech,      "Unexpected Brace in"), "Neočekávaná složená závorka v"},
-                {(Languages.Korean,     "Unexpected Brace in"), "예기치 않은 중괄호 발생 위치:"},
-                {(Languages.Ukrainian,  "Unexpected Brace in"), "Несподівана фігурна дужка в"},
-                {(Languages.Arabic,     "Unexpected Brace in"), "قوس معقوف غير متوقع في"},
-                {(Languages.Swedish,    "Unexpected Brace in"), "Oväntad måsvinge i"},
-                {(Languages.Persian,    "Unexpected Brace in"), "آکولاد غیرمنتظره در"},
-                {(Languages.Chinese,    "Unexpected Brace in"), "在…中意外的大括号"},
-
-                // Unexpected Bracket in
-                {(Languages.English_UK, "Unexpected Bracket in"), "Unexpected Bracket in"},
-                {(Languages.English_US, "Unexpected Bracket in"), "Unexpected Bracket in"},
-                {(Languages.Spanish,    "Unexpected Bracket in"), "Corchete inesperado en"},
-                {(Languages.German,     "Unexpected Bracket in"), "Unerwartete eckige Klammer in"},
-                {(Languages.French,     "Unexpected Bracket in"), "Crochet inattendu dans"},
-                {(Languages.Portuguese, "Unexpected Bracket in"), "Colchete inesperado em"},
-                {(Languages.Russian,    "Unexpected Bracket in"), "Неожиданный квадратный скобка в"},
-                {(Languages.Italian,    "Unexpected Bracket in"), "Parentesi quadra inaspettata in"},
-                {(Languages.Dutch,      "Unexpected Bracket in"), "Onverwachte vierkante haak in"},
-                {(Languages.Polish,     "Unexpected Bracket in"), "Nieoczekiwany nawias kwadratowy w"},
-                {(Languages.Turkish,    "Unexpected Bracket in"), "Beklenmeyen köşeli parantez içinde"},
-                {(Languages.Vietnamese, "Unexpected Bracket in"), "Dấu ngoặc vuông không mong muốn trong"},
-                {(Languages.Indonesian, "Unexpected Bracket in"), "Bracket tak terduga di"},
-                {(Languages.Czech,      "Unexpected Bracket in"), "Neočekávaná hranatá závorka v"},
-                {(Languages.Korean,     "Unexpected Bracket in"), "예기치 않은 대괄호 발생 위치:"},
-                {(Languages.Ukrainian,  "Unexpected Bracket in"), "Несподівана квадратна дужка в"},
-                {(Languages.Arabic,     "Unexpected Bracket in"), "قوس غير متوقع في"},
-                {(Languages.Swedish,    "Unexpected Bracket in"), "Oväntad hakparentes i"},
-                {(Languages.Persian,    "Unexpected Bracket in"), "براکت غیرمنتظره در"},
-                {(Languages.Chinese,    "Unexpected Bracket in"), "在…中意外的方括号"},
-
-                // Unexpected Parenthesis in
-                {(Languages.English_UK, "Unexpected Parenthesis in"), "Unexpected Parenthesis in"},
-                {(Languages.English_US, "Unexpected Parenthesis in"), "Unexpected Parenthesis in"},
-                {(Languages.Spanish,    "Unexpected Parenthesis in"), "Paréntesis inesperado en"},
-                {(Languages.German,     "Unexpected Parenthesis in"), "Unerwartete runde Klammer in"},
-                {(Languages.French,     "Unexpected Parenthesis in"), "Parenthèse inattendue dans"},
-                {(Languages.Portuguese, "Unexpected Parenthesis in"), "Parêntese inesperado em"},
-                {(Languages.Russian,    "Unexpected Parenthesis in"), "Неожиданная круглая скобка в"},
-                {(Languages.Italian,    "Unexpected Parenthesis in"), "Parentesi inaspettata in"},
-                {(Languages.Dutch,      "Unexpected Parenthesis in"), "Onverwachte ronde haak in"},
-                {(Languages.Polish,     "Unexpected Parenthesis in"), "Nieoczekiwany nawias okrągły w"},
-                {(Languages.Turkish,    "Unexpected Parenthesis in"), "Beklenmeyen parantez içinde"},
-                {(Languages.Vietnamese, "Unexpected Parenthesis in"), "Dấu ngoặc tròn không mong muốn trong"},
-                {(Languages.Indonesian, "Unexpected Parenthesis in"), "Kurung tak terduga di"},
-                {(Languages.Czech,      "Unexpected Parenthesis in"), "Neočekávaná kulatá závorka v"},
-                {(Languages.Korean,     "Unexpected Parenthesis in"), "예기치 않은 소괄호 발생 위치:"},
-                {(Languages.Ukrainian,  "Unexpected Parenthesis in"), "Несподівана кругла дужка в"},
-                {(Languages.Arabic,     "Unexpected Parenthesis in"), "قوس غير متوقع في"},
-                {(Languages.Swedish,    "Unexpected Parenthesis in"), "Oväntad parentes i"},
-                {(Languages.Persian,    "Unexpected Parenthesis in"), "پرانتز غیرمنتظره در"},
-                {(Languages.Chinese,    "Unexpected Parenthesis in"), "在…中意外的圆括号"},
 
                 // Source file
                 {(Languages.English_UK, "Source file"), "Source file"},
