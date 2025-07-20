@@ -1,1 +1,1 @@
-(a, b)
+(lang, lang)

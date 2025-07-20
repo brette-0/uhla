@@ -344,13 +344,13 @@ namespace Numinous {
              */
 
             internal static (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)>, bool Success) ContextFetcher(string[] SourceFileReference, ref int SourceLineReference) {
-                string CollectiveContext = SourceFileReference[SourceLineReference];
                 List<string> RegexTokens = ResolveDefines(RegexTokenize(SourceFileReference[SourceLineReference]));
+                string CollectiveContext = string.Concat(RegexTokens);
 
-                List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)> Tokens = [];
+                List <(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)> Tokens = [];
                 List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> StepTokens = [];
-                List<(int StringOffset, int StringLength, object data, bool IsOperator)> StepDeltaTokens = [];
-                List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens = [];
+                List<(int StringOffset, int StringLength, object data, bool IsOperator)> StepDeltaTokens    = [];
+                List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens  = [];
 
                 List<Operators> ContainerBuffer = [];
 
@@ -715,8 +715,10 @@ namespace Numinous {
                     for (int i = 0; i < tokens.Count; i++) {
                         string token = tokens[i];
                         ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) = Database.GetObjectFromAlias(token, AccessLevels.PUBLIC);
-                        if (success) {
-                            string Capture = (string)ctx.data;
+                        if (success && ctx.type == AssembleTimeTypes.CSTRING) {
+                            var foo = (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)ctx.data;
+                            var bar = foo[""].data;
+                            string Capture = (string)bar;
                             UpdatedTokens.AddRange(RegexTokenize(Capture));
                             DidReplace = true;
                         } else UpdatedTokens.Add(token);
