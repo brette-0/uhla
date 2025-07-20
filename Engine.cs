@@ -345,7 +345,7 @@ namespace Numinous {
 
             internal static (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)>, bool Success) ContextFetcher(string[] SourceFileReference, ref int SourceLineReference) {
                 string CollectiveContext = SourceFileReference[SourceLineReference];
-                List<string> RegexTokens = RegexTokenize(SourceFileReference[SourceLineReference]);
+                List<string> RegexTokens = ResolveDefines(RegexTokenize(SourceFileReference[SourceLineReference]));
 
                 List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)> Tokens = [];
                 List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> StepTokens = [];
@@ -705,9 +705,7 @@ namespace Numinous {
                 ";", ":", "#", "\\", "\"", "{", "}", "?", ">", "<", "!", ".", ","
             ];
 
-            // Best if inline, we want it to just use the result of tokenizing immediately.
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            internal static List<string> ResolveDefines(List<string> tokens, Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> ActiveScope) {
+            internal static List<string> ResolveDefines(List<string> tokens) {
                 bool DidReplace;
 
                 do {
