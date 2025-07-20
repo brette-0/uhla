@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Globalization;
+using System.Reflection.Metadata.Ecma335;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices.Swift;
 using System.Text;
@@ -9,6 +10,23 @@ using Numinous.Language;
 
 namespace Numinous {
     namespace Engine {
+        namespace System {
+            internal enum Registers { A, X, Y }
+            
+            [Flags]
+            internal enum Flags {
+                Carry       = 0x01,
+                Zero        = 0x02,
+            //  Interrupt   = 0x04,
+            //  Decimal     = 0x08,
+            //  Break       = 0x10,
+            //  None (1)    = 0x20,
+                Overflow    = 0x40,
+                Negative    = 0x80
+            }
+        }
+
+
         [Flags]
         internal enum WarningLevels : byte {
             IGNORE = 0x00,
@@ -200,162 +218,74 @@ namespace Numinous {
 
                     bool ExpectOperator = false;
 
-                    for (int i = 0; i < DeltaTokens.Count; i++) {
-                        if (DeltaTokens[i].IsOperator) {
-                            if (!ExpectOperator) {
-                                // error, wanted operator
-                                return default;
-                            }
-
-                            OperatorBuffer.Add((Operators)DeltaTokens[i].data);
-                            ExpectOperator = false;
-                        } else {
-                            var Token = GetData(DeltaTokens[i]);
-
-                            switch ((AssembleTimeTypes)Token["type"].data) {
-                                case AssembleTimeTypes.CSTRING:
-                                    (object data, bool isString) = MutateCString((string)Token["self"].data);
-
-                                    ValueTokenBuffer.Add(new Dictionary<string, (object, AssembleTimeTypes, AccessLevels)> {
-                                        { "self", (data, isString ? AssembleTimeTypes.CSTRING : AssembleTimeTypes.CINT, AccessLevels.PRIVATE) }
-                                    });
-                                    break;
-
-                                case AssembleTimeTypes.CEXP:
-                                    string ctx = (string)Token["self"].data;
-                                    if (ctx[0] == ' ' || ctx[1] == '\t') continue;    // do not compute whitespace
-                                    else if (ExpectOperator) {
-                                        // error, needed operator
-                                        return default;
-                                    } else {
-                                        // attempt to evaluate, CEXP has to mean unresolved here.
-                                        int parse;
-
-                                        switch (ctx[0]) {
-                                            case '0':
-                                                switch (ctx[1]) {
-                                                    case 'x':
-                                                        if (int.TryParse(ctx, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out parse)) goto parse_exit;
-                                                        // illegal number style
-                                                        return default;
-                                                    case 'b':
-                                                        if (int.TryParse(ctx, NumberStyles.BinaryNumber, CultureInfo.InvariantCulture, out parse)) goto parse_exit;
-                                                        // illegal number style
-                                                        return default;
-
-                                                    default:
-                                                        if (int.TryParse(ctx, NumberStyles.Number, CultureInfo.InvariantCulture, out parse)) goto parse_exit;
-                                                        // illegal number style
-                                                        return default;
-                                                }
-
-                                            case '1':
-                                            case '2':
-                                            case '3':
-                                            case '4':
-                                            case '5':
-                                            case '6':
-                                            case '7':
-                                            case '8':
-                                            case '9':
-                                                if (!int.TryParse(ctx, NumberStyles.Number, CultureInfo.InvariantCulture, out parse)) {
-                                                    // illegal number style
-                                                    return default;
-                                                }
-
-                                                ValueTokenBuffer.Add(new Dictionary<string, (object, AssembleTimeTypes, AccessLevels)> {
-                                                            { "self", (parse, AssembleTimeTypes.CINT, AccessLevels.PRIVATE) }
-                                                        });
-                                                ExpectOperator = true;
-                                                break;
-
-                                            case '$':
-                                                if (int.TryParse(ctx, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out parse)) goto parse_exit;
-                                                // illegal number style
-                                                return default;
-
-                                            case '%':
-                                                if (int.TryParse(ctx, NumberStyles.BinaryNumber, CultureInfo.InvariantCulture, out parse)) goto parse_exit;
-                                                // illegal number style
-                                                return default;
-
-
-                                            parse_exit:
-                                                MutateCInt(parse);  // process all unary values
-                                                ValueTokenBuffer.Add(new Dictionary<string, (object, AssembleTimeTypes, AccessLevels)> {
-                                                    { "self", (parse, AssembleTimeTypes.CINT, AccessLevels.PRIVATE) }
-                                                });
-                                                ExpectOperator = true;
-                                                break;
-
-                                            default:
-                                                // variable TODO: IMPLEMENT
-                                                break;
-                                        }
-
-                                        break;
-                                    }
-                            }
-                        }
-                    }
-
-
                     return default;
-
-                    (object Data, bool isString) MutateCString(string ctx) {
-                        object Data = ctx;
-                        bool isString = true;
-
-                        ValueMutators.Reverse();
-
-                        foreach (Operators Operator in ValueMutators) {
-                            switch (Operator) {
-                                case Operators.ADD:
-                                    if (isString) Data = ((string)Data).ToUpper(); 
-                                    else Data = Math.Abs((int)Data);
-                                    continue;
-
-
-                                case Operators.SUB:
-                                    if (isString) ((string)Data).ToLower();
-                                    else Data = Data = -(int)Data;
-                                    continue;
-
-                                case Operators.NOT:
-                                    if (isString) new string(' ', ((string)Data).Length); 
-                                    else Data = Data = 0 == (int)Data ? 0 : 1;
-                                    continue;
-
-                                case Operators.BITFLIP:
-                                    if (isString) Data = ((string)Data).Length;
-                                    else Data = ^(int)Data;
-
-                                    isString = false;
-                                    continue;
-                            }
-                        }
-                        ValueMutators.Clear();
-                        return (Data, isString);
-                    }
-
-                    int MutateCInt(int ctx) {
-                        int Data = ctx;
-
-                        ValueMutators.Reverse();
-
-                        foreach (Operators Operator in ValueMutators) {
-                            switch (Operator) {
-                                case Operators.ADD: Math.Abs(Data);                         continue;
-                                case Operators.SUB: Data = -Data;                           continue;
-                                case Operators.NOT: Data = 0 == Data ? 0 : 1;               continue;
-                                case Operators.BITFLIP: Data = (int)(Data ^ uint.MaxValue); continue;
-                            }
-                        }
-
-                        ValueMutators.Clear();
-                        return Data;
-                    }
                 }
+
+                /// <summary>
+                /// Ensures the left side operator has precedence over the right side operator.
+                /// </summary>
+                /// <param name="Left"></param>
+                /// <param name="Right"></param>
+                /// <returns></returns>
+                internal static bool HasPrecedence(Operators Left, Operators Right) => GetHierarchy(Left) < GetHierarchy(Right);
+
+                /// <summary>
+                /// Returns the ordinance of the operator, lowest means highest hierarchy.
+                /// </summary>
+                /// <param name="Operator"></param>
+                /// <returns></returns>
+                /// <exception cref="NotSupportedException"></exception>
+                internal static int GetHierarchy(Operators Operator) => Operator switch {
+                    Operators.MULT => 0,
+                    Operators.DIV => 0,
+                    Operators.MOD => 0,
+
+                    Operators.ADD => 1,
+                    Operators.SUB => 1,
+
+                    Operators.LEFT => 2,
+                    Operators.RIGHT => 2,
+
+                    Operators.LT => 3,
+                    Operators.GT => 3,
+                    Operators.GOET => 3,
+                    Operators.LOET => 3,
+                    Operators.SERIAL => 3,
+
+                    Operators.EQUAL => 4,
+                    Operators.INEQUAL => 4,
+
+                    Operators.BITMASK => 5,
+                    Operators.BITFLIP => 5,
+                    Operators.BITSET => 5,
+
+                    Operators.AND => 6,
+                    Operators.OR => 6,
+
+                    Operators.NULL => 7,
+
+                    Operators.CHECK => 8,
+                    Operators.ELSE => 8,
+
+                    Operators.SET => 9,
+                    Operators.INCREASE => 9,
+                    Operators.DECREASE => 9,
+                    Operators.MULTIPLY => 9,
+                    Operators.DIVIDE => 9,
+                    Operators.MODULATE => 9,
+                    Operators.ASSIGNMASK => 9,
+                    Operators.ASSIGNSET => 9,
+                    Operators.ASSIGNFLIP => 9,
+                    Operators.LEFTSET => 9,
+                    Operators.RIGHTSET => 9,
+                    Operators.NULLSET => 9,
+#if DEBUG
+                    _ => throw new NotSupportedException($"Unusable Operator Type {Operator}")
+#else
+                    _ => throw new NotSupportedException($"FATAL ERROR :: (REPORT THIS ON THE GITHUB) INVALID OPERATOR TYPE {Operator}")
+#endif
+                };
+
                 internal static Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> GetData(object data) => (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)data;
             }
 
@@ -391,39 +321,43 @@ namespace Numinous {
              *      
              *      PER STEP
              *          TOKENS
-             *              DELTA_TOKENS
-             *                  STRING_OFFSET
-             *                  DATA
-             *                      ?: OPERTOR
-             *                      ?: (ITEM, CEXP,    PRIVATE)
-             *                      ?: (ITEM, CSTRING, PUBLIC)
-             *                  IS_OPERATOR
+             *              DELTA_TOKENS [TERMS]
+             *                  STEP_DELTA_TOKENS
+             *                      STRING_OFFSET
+             *                      DATA
+             *                          ?: OPERTOR
+             *                          ?: (ITEM, CEXP,    PRIVATE)
+             *                          ?: (ITEM, CSTRING, PUBLIC)
+             *                      IS_OPERATOR
              *              HIERACHY
-             *              TERMS
              *          MAX_HIERACHY
              *          SUCCESS
              *          
              *          
              *          TODO:
+             *              SOLVE DEFINES
+             *              TEST MULTI TERM
+             *              ADD ERROR REPORTS
              *              MULTI_LANG FOR ERRORS
+             *              
+             *              
              */
 
-            internal static (List<(List<(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms, string Representation)> Tokens, int MaxHierachy)>, bool Success) ContextFetcher(string[] SourceFileReference, ref int SourceLineReference) {
+            internal static (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)>, bool Success) ContextFetcher(string[] SourceFileReference, ref int SourceLineReference) {
                 string CollectiveContext = SourceFileReference[SourceLineReference];
                 List<string> RegexTokens = RegexTokenize(SourceFileReference[SourceLineReference]);
 
-                List<(List<(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms, string Representation)> Tokens, int MaxHierachy)> Tokens = [];
-                List<(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens, int Hierachy, int Terms, string Representation)> StepTokens = [];
-                List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens = [];
+                List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)> Tokens = [];
+                List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> StepTokens = [];
+                List<(int StringOffset, int StringLength, object data, bool IsOperator)> StepDeltaTokens = [];
+                List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens = [];
 
                 List<Operators> ContainerBuffer = [];
-                List<int>       nTermBuffer     = [0];
 
                 int MaxHierarchy = 0;
                 int LastNonWhiteSpaceIndex = -1;
                 int LastOpenContainerOperatorStringIndex = -1;
-
-                string WHITESPACE_CONSTEXP = "";
+                
                 string LITERAL_CSTRING =     "";
 
                 bool IsLastOperator = false;
@@ -431,6 +365,8 @@ namespace Numinous {
                 int i = 0, StringIndex = 0;
                 do {
                     for (i = 0, StringIndex = 0; i < RegexTokens.Count; StringIndex += RegexTokens[i].Length, i++) {
+                        if (RegexTokens[i][0] == ' ' || RegexTokens[i][0] == '\t') continue;                            // do not tokenize whitespace
+
                         if (ContainerBuffer.Count != 0 && ContainerBuffer[^1] == Operators.FSTRING) {
                             CaptureCSTRING(SourceLineReference, c => c == '"' || c == '{');
                             if (RegexTokens[i][0] != '{') {
@@ -440,24 +376,6 @@ namespace Numinous {
                                 }
                             }
                         }
-
-
-                        //// capture whitespace
-                        //int CapturedStringIndex = StringIndex;
-                        //for (WHITESPACE_CONSTEXP = ""; RegexTokens[i][0] == ' ' || RegexTokens[i][0] == '\t'; i++, StringIndex++) WHITESPACE_CONSTEXP += RegexTokens[i];
-                        //if (CapturedStringIndex != StringIndex) {
-                        //    DeltaTokens.Add((
-                        //        CapturedStringIndex,
-                        //        WHITESPACE_CONSTEXP.Length,
-                        //        // everything is private here because it should never exist
-                        //        new Dictionary<string, (object, AssembleTimeTypes, AccessLevels)> {
-                        //            {"self",    (WHITESPACE_CONSTEXP,           AssembleTimeTypes.CEXP, AccessLevels.PRIVATE) },
-                        //            {"length",  (WHITESPACE_CONSTEXP.Length,    AssembleTimeTypes.CINT, AccessLevels.PRIVATE) },
-                        //            {"type",    (AssembleTimeTypes.CEXP,        AssembleTimeTypes.TYPE, AccessLevels.PRIVATE)}
-                        //        },
-                        //        false
-                        //    ));
-                        //}
 
                         // handle tokens
                         switch (RegexTokens[i]) {
@@ -543,12 +461,11 @@ namespace Numinous {
 
                             // Term Catching
                             case ",":
-                                nTermBuffer[^1]++;
-                                SimpleAddOperator(Operators.TERM);
+                                CopyStepDeltaTokens();
                                 break;
 
                             default:
-                                DeltaTokens.Add((
+                                StepDeltaTokens.Add((
                                     StringIndex,
                                     RegexTokens[i].Length,
                                     new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels)> {
@@ -557,14 +474,14 @@ namespace Numinous {
                                     },
                                     false
                                 ));
-                                LastNonWhiteSpaceIndex = DeltaTokens.Count - 1;
+                                LastNonWhiteSpaceIndex = StepDeltaTokens.Count - 1;
                                 break;
 
                             }
                     }
 
                     // If IsLastOperator is enabled, we should only disable it until we have a non-whitespace line. 
-                    IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : DeltaTokens.Count != 0 && DeltaTokens[LastNonWhiteSpaceIndex].IsOperator;
+                    IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : StepDeltaTokens.Count != 0 && StepDeltaTokens[LastNonWhiteSpaceIndex].IsOperator;
 
                     if (ContainerBuffer.Count == 0 && !IsLastOperator) break;
 
@@ -580,7 +497,7 @@ namespace Numinous {
                     CollectiveContext += SourceFileReference[SourceLineReference];
                 } while (true);
 
-                CopyDeltaTokens();                                                                  // process final DeltaTokens (valid) to StepTokens end
+                CopyDeltaTokens();                                                                  // process final StepDeltaTokens (valid) to StepTokens end
                 CopyStepTokens();                                                                   // add last captured StepToken to Tokens
 
                 return (Tokens, true);
@@ -589,8 +506,7 @@ namespace Numinous {
                 void PrepareNextStep() {
                     MaxHierarchy = 0;
                     StepTokens.Clear();
-                    DeltaTokens.Clear();
-                    nTermBuffer = [0];
+                    StepDeltaTokens.Clear();
                     ContainerBuffer = [];
                     LastNonWhiteSpaceIndex = -1;
                 }
@@ -609,7 +525,7 @@ namespace Numinous {
                     }
 
                     if (csi != StringIndex) {
-                        DeltaTokens.Add((
+                        StepDeltaTokens.Add((
                             csi,
                             csi - StringIndex,
                             new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
@@ -627,7 +543,7 @@ namespace Numinous {
                 }
 
                 void AddOperator(Operators Operator, int sl) {
-                    DeltaTokens.Add((StringIndex, sl, Operator, true)); LastNonWhiteSpaceIndex = DeltaTokens.Count - 1; ;
+                    StepDeltaTokens.Add((StringIndex, sl, Operator, true)); LastNonWhiteSpaceIndex = StepDeltaTokens.Count - 1; ;
                 }
 
                 void SimpleAddOperator(Operators Operator) => AddOperator(Operator, 1);
@@ -635,7 +551,6 @@ namespace Numinous {
                 void ComplexOpenContainer(int sl, Operators Operator) {
                     CopyDeltaTokens();
                     ContainerBuffer.Add(Operator);                                  // register container type
-                    nTermBuffer.Add(0);
 
                     AddOperator(Operator, sl);
                     LastOpenContainerOperatorStringIndex = StringIndex;
@@ -663,7 +578,6 @@ namespace Numinous {
 
                     CopyDeltaTokens();
                     ContainerBuffer.RemoveAt(ContainerBuffer.Count - 1);
-                    nTermBuffer.RemoveAt(nTermBuffer.Count - 1);
 
                     return true;
                 }
@@ -675,7 +589,6 @@ namespace Numinous {
                         .Select(t => (
                             t.DeltaTokens,                  // reference to a clone, should be fine
                             t.Hierachy,
-                            t.Terms,
                             t.Representation
                         )).ToList();
 
@@ -683,10 +596,16 @@ namespace Numinous {
                 }
 
                 void CopyDeltaTokens() {
-                    if (LastNonWhiteSpaceIndex == -1) return;                                       // Do not copy whitespace
+                    CopyStepDeltaTokens();
+                    var DeltaTokensShallowCopy = DeltaTokens.Select(t => t).ToList();
+                    StepTokens.Add((DeltaTokensShallowCopy, ContainerBuffer.Count, i == RegexTokens.Count ? CollectiveContext : CollectiveContext[..(StringIndex + RegexTokens[i].Length)]));
+                }
+
+                void CopyStepDeltaTokens() {
+                    if (LastNonWhiteSpaceIndex == -1) return;   // Do not copy whitespace
 
                     // Clone Delta Tokens thus far
-                    var DeltaTokenShallowCopy = DeltaTokens
+                    var StepDeltaTokenShallowCopy = StepDeltaTokens
                     .Select(t => (
                         t.StringOffset,
                         t.StringLength,
@@ -696,8 +615,8 @@ namespace Numinous {
                         t.IsOperator
                     )).ToList();
 
-                    DeltaTokens = [];                                                                                                                           // wipe delta tokens for next operation
-                    StepTokens.Add((DeltaTokenShallowCopy, ContainerBuffer.Count, nTermBuffer[^1], i == RegexTokens.Count ? CollectiveContext : CollectiveContext[..(StringIndex + RegexTokens[i].Length)]));// append copy to StepTokens
+                    StepDeltaTokens = [];                       // wipe delta tokens for next operation
+                    DeltaTokens.Add(StepDeltaTokenShallowCopy);
                 }
                 #endregion Context Fetcher Functions
             }
@@ -737,76 +656,6 @@ namespace Numinous {
                         '0' or '1' or '2' or '3' or '4' or '5' or '6' or '7' or '8' or '9' or '$' or '%' or '&' or '+' or '-' or '!' or '^' or '*' or '[' or ']' or '{' or '}' or '\'' or '#' or '~' or ':' or ',' or '<' or '.' or '>' or '/' or '?' => false,
                         _ => true,
                     };
-
-            internal static int GetHierarchy(string op) => op switch {
-                /* Property*/
-                "." or "?."
-                => 1,
-
-                /* Multiplicative*/
-                "*" or "/" or "%"
-                => 2,
-
-                /* Additive*/
-                "+" or "-"
-                => 3,
-
-                /* Shift*/
-                ">>" or "<<"
-                => 4,
-
-                /* Boolean And*/
-                "&"
-                => 5,
-
-                /* Boolean Xor*/
-                "^"
-                => 6,
-
-                /* Boolean Or*/
-                "|"
-                => 7,
-
-                /* Relational*/
-                ">" or "<" or ">=" or "<=" or "<=>"
-                => 8,
-
-                /* Equality*/
-                "==" or "!="
-                => 9,
-
-                /* Conditional And*/
-                "&&"
-                => 10,
-
-                /* Conditional Or*/
-                "||"
-                => 11,
-
-                /* Null coalesce*/
-                "??"
-                => 12,
-
-                /* Ternary*/
-                "?" or ":"
-                => 13,
-
-                /* Assignment*/
-                "=" or "+=" or "-=" or "*=" or "/=" or "%=" or "|=" or "&=" or "^=" or "??=" or ">>=" or "<<="
-                => 14,
-
-                /* Term*/
-                ","
-                => 15,
-
-                /* Reserved*/
-                "#" or "'"
-                => 16,
-
-                /* Not found*/
-                _
-                => -1
-            };
 
 
             internal static readonly string[] Reserved = [
@@ -858,7 +707,7 @@ namespace Numinous {
 
             // Best if inline, we want it to just use the result of tokenizing immediately.
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            internal static List<string> SolveDefines(List<string> tokens) {
+            internal static List<string> SolveDefines(List<string> tokens, Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> ActiveScope) {
                 bool DidReplace;
 
                 do {
@@ -867,7 +716,7 @@ namespace Numinous {
 
                     for (int i = 0; i < tokens.Count; i++) {
                         string token = tokens[i];
-                        if (Program.ActiveScope.TryGetValue(token, out (object data, AssembleTimeTypes type) CapturedValue) && CapturedValue.type == AssembleTimeTypes.DEFINE) {
+                        if (ActiveScope.TryGetValue(token, out (object data, AssembleTimeTypes type, AccessLevels access) CapturedValue) && CapturedValue.type == AssembleTimeTypes.DEFINE) {
                             string Capture = (string)CapturedValue.data;
                             UpdatedTokens.AddRange(RegexTokenize(Capture));
                             DidReplace = true;
@@ -1192,6 +1041,86 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                     WriteInfo(ErrorLevels.ERROR, ErrorType, Phase, Message, LineNumber, StepNumber, Context);
                 }
 #endif
+            }
+
+            /// <summary>
+            /// Searches for 'Alias' in TargetScope (Either ActiveScope or specified scope)
+            /// </summary>
+            /// <param name="Alias"></param>
+            /// <param name="TargetScope"></param>
+            /// <param name="UsedAccessLevel"></param>
+            /// <returns></returns>
+            internal static ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) GetObjectFromAlias(string Alias, Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> TargetScope, AccessLevels UsedAccessLevel) {
+                ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool found, bool error) = (default, default, default);
+                List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>> LocalObjectSearchBuffer;
+
+                if (TargetScope == Program.ActiveScopeBuffer[^1]) {
+                        LocalObjectSearchBuffer = [.. Program.ObjectSearchBuffer, Program.ActiveScopeBuffer[^1]];
+                } else  LocalObjectSearchBuffer = [TargetScope]; 
+
+
+                if (!LocalObjectSearchBuffer.Contains(TargetScope)) LocalObjectSearchBuffer.Add(TargetScope);
+
+                foreach (var LocalObjectSearchContainer in LocalObjectSearchBuffer) {
+                    if (LocalObjectSearchContainer.TryGetValue(Alias, out ctx)) {
+                        if (UsedAccessLevel < ctx.access) {
+                            // error, invalid permissions to access item
+                            return default;
+                        } else return (ctx, true);
+                    }
+                }
+
+                return default;
+            }
+
+            /// <summary>
+            /// Database methods
+            /// </summary>
+            internal static class Database {
+                /// <summary>
+                /// Get without specifying target scope.
+                /// 
+                /// Order may be changed depending on Program.ObjectSearchBuffer. The ActiveScope is ALWAYS searched first, afterwards its down to this.
+                /// By default the ObjectSearchBuffer only includes the root scope.
+                /// </summary>
+                /// <param name="Alias"></param>
+                /// <param name="UsedAccessLevel"></param>
+                /// <returns></returns>
+                internal static ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) GetObjectFromAlias(string Alias, AccessLevels UsedAccessLevel) {
+                    List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>> LocalObjectSearchBuffer = [Program.ActiveScopeBuffer[^1], .. Program.ObjectSearchBuffer];
+                    return __GetObjectFromAlias(Alias, LocalObjectSearchBuffer, UsedAccessLevel);
+                }
+                /// <summary>
+                /// Only check the specified scope, may be used like rs\foo. Note that the scope used to specify will be the result of the other method being used first.
+                /// After this its hierarchy based and therefore rs\foo\foo may not always work.
+                /// </summary>
+                /// <param name="Alias"></param>
+                /// <param name="TargetScope"></param>
+                /// <param name="UsedAccessLevel"></param>
+                /// <returns></returns>
+                /// 
+                internal static ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) GetObjectFromAlias(string Alias, Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> TargetScope, AccessLevels UsedAccessLevel) => __GetObjectFromAlias(Alias, [TargetScope], UsedAccessLevel);
+                
+                /// <summary>
+                /// Internal function iterating over the LocalObjectSearchPath to find the required context if possible.
+                /// </summary>
+                /// <param name="Alias"></param>
+                /// <param name="LocalObjectSearchBuffer"></param>
+                /// <param name="UsedAccessLevel"></param>
+                /// <returns></returns>
+                private  static ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) __GetObjectFromAlias(string Alias, List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>> LocalObjectSearchBuffer, AccessLevels UsedAccessLevel) {
+                    ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool found, bool error) = (default, default, default);
+                    foreach (var LocalObjectSearchContainer in LocalObjectSearchBuffer) {
+                        if (LocalObjectSearchContainer.TryGetValue(Alias, out ctx)) {
+                            if (UsedAccessLevel < ctx.access) {
+                                // error, invalid permissions to access item
+                                return default;
+                            } else return (ctx, true);
+                        }
+                    }
+
+                    return default;
+                }
             }
 
             internal static string ApplyWiggle(string input, int start, int length) {
