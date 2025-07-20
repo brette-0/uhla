@@ -707,7 +707,7 @@ namespace Numinous {
 
             // Best if inline, we want it to just use the result of tokenizing immediately.
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            internal static List<string> SolveDefines(List<string> tokens, Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> ActiveScope) {
+            internal static List<string> ResolveDefines(List<string> tokens, Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> ActiveScope) {
                 bool DidReplace;
 
                 do {
@@ -716,13 +716,12 @@ namespace Numinous {
 
                     for (int i = 0; i < tokens.Count; i++) {
                         string token = tokens[i];
-                        if (ActiveScope.TryGetValue(token, out (object data, AssembleTimeTypes type, AccessLevels access) CapturedValue) && CapturedValue.type == AssembleTimeTypes.DEFINE) {
-                            string Capture = (string)CapturedValue.data;
+                        ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) = Database.GetObjectFromAlias(token, AccessLevels.PUBLIC);
+                        if (success) {
+                            string Capture = (string)ctx.data;
                             UpdatedTokens.AddRange(RegexTokenize(Capture));
                             DidReplace = true;
-                        } else {
-                            UpdatedTokens.Add(token);
-                        }
+                        } else UpdatedTokens.Add(token);
                     }
                     
                     tokens = UpdatedTokens;
