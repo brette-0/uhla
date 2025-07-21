@@ -149,6 +149,8 @@ namespace Numinous {
             IRWN,       // Indexing Register with N             foo[i + 2] situations
             ICRWN,      // Indexing Constant Register with N    foo[x + 2] situations
 
+            TOKENS,     // Should never be available to the user, this is for code inside codeblocks
+
             MACRO = 0x80,
             // void macro
             MINT,       // int macro
@@ -199,6 +201,17 @@ namespace Numinous {
 
         internal static class Engine {
 
+            /// <summary>
+            /// Remove the Function from the values, ensuring functions are not evaluated.
+            /// By functions we refer to directives such as #include
+            /// or assembler level functions such as typeof()
+            /// Here we also attempt to identify if, loop or things of that nature
+            /// </summary>
+            /// <param name="Tokens"></param>
+            /// <param name="MaxHierarchy"></param>
+            internal static void ExtractTask(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierarchy) { 
+            
+            }
 
             internal static class Evaluate {
 
@@ -375,67 +388,78 @@ namespace Numinous {
                 };
 
                 /*
-                 * Some notes:
-                 *      Tabs aren't equal width in each IDE, so we can't 'check' how many and generate the difference with spaces.
-                 *      Because of this we are going to have to store this information also.
-                 *      
-                 *      The goal of this method will be to convert the regex tokenized string responses and convert them into a system of tokens.
-                 *      the tokens are in object obfuscated form, but naturally should look something like Value Operator Value
-                 *      
-                 *      By storing information like
-                 *      (
-                 *          this + 
-                 *              (
-                 *                  that
-                 *              )
-                 *      )
-                 *      
-                 *      we can easily resolve the highest hierarchies and inject the result in between the two outside it.
-                 *      by repeating this process until we have resolved the lowest hierarchy we should be able to resolve any expression.
-                 *      
-                 *      Resolving isn't what the CF does, but orders it so it can be done.
-                 *      
-                 *      The CF will also need to encode whitespace in, which will seriously violate VOV.
-                 *      The Evaluator will need to check to exempt VOV from evaluation logic, but will need to be used in error report code.
-                 *      
-                 *      The rule has to be WVWO (repeating) where W is whitespace.
-                 *      
-                 *      Whitespace will have to be an CEXP that begins with a whitespace token.
-                 *      
-                 *      PER STEP
-                 *          TOKENS
-                 *              DELTA_TOKENS [TERMS]
-                 *                  STEP_DELTA_TOKENS
-                 *                      STRING_OFFSET
-                 *                      DATA
-                 *                          ?: OPERTOR
-                 *                          ?: (ITEM, CEXP,    PRIVATE)
-                 *                          ?: (ITEM, CSTRING, PUBLIC)
-                 *                      IS_OPERATOR
-                 *              HIERACHY
-                 *          MAX_HIERACHY
-                 *          SUCCESS
-                 *          
-                 *          
-                 *          TODO:
-                 *              SOLVE DEFINES
-                 *              TEST MULTI TERM
-                 *              ADD ERROR REPORTS
-                 *              MULTI_LANG FOR ERRORS
-                 *              
-                 *              
-                 */
-                internal static (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)>, bool Success) ContextFetcher(string[] SourceFileReference, ref int SourceLineReference) {
-                    List<string> RegexTokens = ResolveDefines(RegexTokenize(SourceFileReference[SourceLineReference]));
+                * Some notes:
+                *      Tabs aren't equal width in each IDE, so we can't 'check' how many and generate the difference with spaces.
+                *      Because of this we are going to have to store this information also.
+                *      
+                *      The goal of this method will be to convert the regex tokenized string responses and convert them into a system of tokens.
+                *      the tokens are in object obfuscated form, but naturally should look something like Value Operator Value
+                *      
+                *      By storing information like
+                *      (
+                *          this + 
+                *              (
+                *                  that
+                *              )
+                *      )
+                *      
+                *      we can easily resolve the highest hierarchies and inject the result in between the two outside it.
+                *      by repeating this process until we have resolved the lowest hierarchy we should be able to resolve any expression.
+                *      
+                *      Resolving isn't what the CF does, but orders it so it can be done.
+                *      
+                *      The CF will also need to encode whitespace in, which will seriously violate VOV.
+                *      The Evaluator will need to check to exempt VOV from evaluation logic, but will need to be used in error report code.
+                *      
+                *      The rule has to be WVWO (repeating) where W is whitespace.
+                *      
+                *      Whitespace will have to be an CEXP that begins with a whitespace token.
+                *      
+                *      PER STEP
+                *          TOKENS
+                *              DELTA_TOKENS [TERMS]
+                *                  STEP_DELTA_TOKENS
+                *                      STRING_OFFSET
+                *                      DATA
+                *                          ?: OPERTOR
+                *                          ?: (ITEM, CEXP,    PRIVATE)
+                *                          ?: (ITEM, CSTRING, PUBLIC)
+                *                      IS_OPERATOR
+                *              HIERACHY
+                *          MAX_HIERACHY
+                *          SUCCESS
+                *          
+                *          
+                *          TODO:
+                *              SOLVE DEFINES
+                *              TEST MULTI TERM
+                *              ADD ERROR REPORTS
+                *              MULTI_LANG FOR ERRORS
+                *              
+                *              
+                */
+
+                /// <summary>
+                /// Tokenizes referred source code at referred line from referred substring index into tokens split by step, then by delta in hierarchy, then by term.
+                /// </summary>
+                /// <param name="SourceFileReference"></param>
+                /// <param name="SourceLineReference"></param>
+                /// <param name="SourceLineSubStringIndex"></param>
+                /// <returns></returns>
+                internal static (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)>, int Finish, bool Success) ContextFetcher(string[] SourceFileReference, ref int SourceLineReference, int SourceLineSubStringIndex) {
+                    List<string> RegexTokens = ResolveDefines(RegexTokenize(SourceFileReference[SourceLineReference][SourceLineSubStringIndex ..]));
                     string CollectiveContext = string.Concat(RegexTokens);
 
                     List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)> Tokens = [];
                     List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> StepTokens = [];
-                    List<(int StringOffset, int StringLength, object data, bool IsOperator)> StepDeltaTokens = [];
+                    List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTermTokens = [];
                     List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens = [];
 
                     List<Operators> ContainerBuffer = [];
 
+                    
+
+                    int Finish = -1;
                     int MaxHierarchy = 0;
                     int LastNonWhiteSpaceIndex = -1;
                     int LastOpenContainerOperatorStringIndex = -1;
@@ -443,7 +467,7 @@ namespace Numinous {
                     string LITERAL_CSTRING = "";
 
                     bool IsLastOperator = false;
-
+                    
                     int i = 0, StringIndex = 0;
                     do {
                         for (i = 0, StringIndex = 0; i < RegexTokens.Count; StringIndex += RegexTokens[i].Length, i++) {
@@ -506,8 +530,31 @@ namespace Numinous {
                                 // Container Code
                                 case "(": OpenContainer(Operators.OPAREN); break;
                                 case "[": OpenContainer(Operators.OBRACK); break;
-                                case "{": OpenContainer(Operators.OBRACE); break;
-                                case "$\"": OpenContainer(Operators.FSTRING); break;
+                                case "{": 
+                                    if (ContainerBuffer.Count > 0 && ContainerBuffer[0] == Operators.FSTRING) {
+                                        // Format String
+                                        OpenContainer(Operators.OBRACE);
+                                    } else if (ContainerBuffer.Count > 0) {
+                                        // error, codeblock in erroneous location
+                                        return default;
+                                    } else {
+                                        // Early return, this is a code block. Do not context fetch this
+                                        Finish = StringIndex;
+                                        CopyDeltaTermTokens();
+                                        CopyDeltaTokens();
+                                        CopyStepTokens();
+                                        return Success();
+                                    }
+                                    break;
+
+                                case "$\"": 
+                                    if (ContainerBuffer[^1] == Operators.FSTRING) {
+                                        // error layered fstring
+                                        return default;
+                                    }
+
+                                    OpenContainer(Operators.FSTRING); 
+                                    break;
 
                                 case ")": if (SimpleCloseContainer(SourceLineReference, Operators.CPAREN)) break; else return default;
                                 case "]": if (SimpleCloseContainer(SourceLineReference, Operators.CBRACK)) break; else return default;
@@ -519,19 +566,17 @@ namespace Numinous {
                                         return default;
                                     }
 
-
+                                    CopyDeltaTokens();
+                                    CopyStepTokens();
 
                                     if (i == RegexTokens.Count - 1) {
                                         if (Program.WarningLevel.HasFlag(WarningLevels.VERBOSE))
                                             Terminal.Warn(ErrorTypes.SyntaxError, DecodingPhase.TOKEN,
                                                 "Lines should not end with a semi-colon", SourceLineReference, Tokens.Count, ApplyWiggle(CollectiveContext, StringIndex + 1, 1)
                                             );
-                                        return Program.WarningLevel.HasFlag(WarningLevels.ERROR) ? default : (Tokens, true);
+                                        return Program.WarningLevel.HasFlag(WarningLevels.ERROR) ? default : Success();
                                     }
 
-
-                                    CopyDeltaTokens();
-                                    CopyStepTokens();
                                     PrepareNextStep();
 
                                     // modify regex tokens to remove used and stored
@@ -543,11 +588,11 @@ namespace Numinous {
 
                                 // Term Catching
                                 case ",":
-                                    CopyStepDeltaTokens();
+                                    CopyDeltaTermTokens();
                                     break;
 
                                 default:
-                                    StepDeltaTokens.Add((
+                                    DeltaTermTokens.Add((
                                         StringIndex,
                                         RegexTokens[i].Length,
                                         new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels)> {
@@ -556,14 +601,14 @@ namespace Numinous {
                                         },
                                         false
                                     ));
-                                    LastNonWhiteSpaceIndex = StepDeltaTokens.Count - 1;
+                                    LastNonWhiteSpaceIndex = DeltaTermTokens.Count - 1;
                                     break;
 
                             }
                         }
 
                         // If IsLastOperator is enabled, we should only disable it until we have a non-whitespace line. 
-                        IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : StepDeltaTokens.Count != 0 && StepDeltaTokens[LastNonWhiteSpaceIndex].IsOperator;
+                        IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : DeltaTermTokens.Count != 0 && DeltaTermTokens[LastNonWhiteSpaceIndex].IsOperator;
 
                         if (ContainerBuffer.Count == 0 && !IsLastOperator) break;
 
@@ -579,16 +624,19 @@ namespace Numinous {
                         CollectiveContext += SourceFileReference[SourceLineReference];
                     } while (true);
 
-                    CopyDeltaTokens();                                                                  // process final StepDeltaTokens (valid) to StepTokens end
+                    CopyDeltaTermTokens();
+                    CopyDeltaTokens();                                                                  // process final DeltaTermTokens (valid) to StepTokens end
                     CopyStepTokens();                                                                   // add last captured StepToken to Tokens
 
-                    return (Tokens, true);
+                    return Success();
 
                     #region Context Fetcher Functions
+                    (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)>, int finish, bool Success) Success() => (Tokens, Finish, true);
+
                     void PrepareNextStep() {
                         MaxHierarchy = 0;
                         StepTokens.Clear();
-                        StepDeltaTokens.Clear();
+                        DeltaTermTokens.Clear();
                         ContainerBuffer = [];
                         LastNonWhiteSpaceIndex = -1;
                     }
@@ -607,7 +655,7 @@ namespace Numinous {
                         }
 
                         if (csi != StringIndex) {
-                            StepDeltaTokens.Add((
+                            DeltaTermTokens.Add((
                                 csi,
                                 csi - StringIndex,
                                 new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
@@ -625,7 +673,7 @@ namespace Numinous {
                     }
 
                     void AddOperator(Operators Operator, int sl) {
-                        StepDeltaTokens.Add((StringIndex, sl, Operator, true)); LastNonWhiteSpaceIndex = StepDeltaTokens.Count - 1; ;
+                        DeltaTermTokens.Add((StringIndex, sl, Operator, true)); LastNonWhiteSpaceIndex = DeltaTermTokens.Count - 1; ;
                     }
 
                     void SimpleAddOperator(Operators Operator) => AddOperator(Operator, 1);
@@ -678,16 +726,16 @@ namespace Numinous {
                     }
 
                     void CopyDeltaTokens() {
-                        CopyStepDeltaTokens();
+                        CopyDeltaTermTokens();
                         var DeltaTokensShallowCopy = DeltaTokens.Select(t => t).ToList();
                         StepTokens.Add((DeltaTokensShallowCopy, ContainerBuffer.Count, i == RegexTokens.Count ? CollectiveContext : CollectiveContext[..(StringIndex + RegexTokens[i].Length)]));
                     }
 
-                    void CopyStepDeltaTokens() {
+                    void CopyDeltaTermTokens() {
                         if (LastNonWhiteSpaceIndex == -1) return;   // Do not copy whitespace
 
                         // Clone Delta Tokens thus far
-                        var StepDeltaTokenShallowCopy = StepDeltaTokens
+                        var StepDeltaTokenShallowCopy = DeltaTermTokens
                         .Select(t => (
                             t.StringOffset,
                             t.StringLength,
@@ -697,7 +745,7 @@ namespace Numinous {
                             t.IsOperator
                         )).ToList();
 
-                        StepDeltaTokens = [];                       // wipe delta tokens for next operation
+                        DeltaTermTokens = [];                       // wipe delta tokens for next operation
                         DeltaTokens.Add(StepDeltaTokenShallowCopy);
                     }
                     #endregion Context Fetcher Functions
