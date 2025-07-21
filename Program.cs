@@ -74,7 +74,7 @@ internal static class Program {
 
         ActiveScopeBuffer.Add(LabelDataBase);   // add rs to as, default rs
         ObjectSearchBuffer = [LabelDataBase];   // by default, contains nothing more than this. For each search AS[^1] is added
-        var Demo = ContextFetcher(SourceFileContentBuffer[^1], ref SourceFileIndexBufferSpan[^1]);
+        var Demo = Evaluate.ContextFetcher(SourceFileContentBuffer[^1], ref SourceFileIndexBufferSpan[^1]);
 
         return 0;
     }

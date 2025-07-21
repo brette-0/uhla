@@ -222,7 +222,7 @@ namespace Numinous {
 
                     Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>? TargetScope = Program.ActiveScopeBuffer[^1];
 
-                    bool ExpectOperator = false;
+                    bool ExpectOperator;
 
                     int i = 0; for (; i < StepDeltaTokens.Count; i++) {
 
@@ -232,48 +232,26 @@ namespace Numinous {
 
                     ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool succses) ResolveCEXP() {
                         var LocalTargetScope = TargetScope;
-                       for (; i < StepDeltaTokens.Count; i++, ExpectOperator ^= true) {
-                            ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) = GetObjectFromAlias((string)StepDeltaTokens[i].data, LocalTargetScope, AccessLevels.PUBLIC);
+                        ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) = (default, default);
+                        for (; i < StepDeltaTokens.Count; i++) {
                             if (ExpectOperator != StepDeltaTokens[i].IsOperator) {
                                 // error, violated VOV
                                 return default;
                             }
 
+                            (ctx, success) = GetObjectFromAlias((string)StepDeltaTokens[i].data, LocalTargetScope, AccessLevels.PUBLIC);
                             if (ExpectOperator) {
                                 if ((Operators)(StepDeltaTokens[i].data) != Operators.PROPERTY) {
-                                    ++i; // fetch member name
                                     if (ctx.data == null) {
                                         // error, null reference exception
                                         return default;
-                                    }
-
-                                    // else search object for member of alias
-
-                                    // if const primitive, generate members
-                                    switch (ctx.type) {
-                                        case AssembleTimeTypes.CINT:
-                                            // invoke GenerateCINT(ctx.data)
-                                            break;
-
-                                        case AssembleTimeTypes.CSTRING:
-                                            // invoke GenerateCSTRING(ctx.data)
-                                            break;
-
-                                        default:    // other types
-                                            break;
-                                    }
-
-
-
-                                    TargetScope = (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>)ctx.data;
+                                    } ReTargetWithMember();     // else search object for member of alias
 
                                 } else if ((Operators)StepDeltaTokens[i].data != Operators.NULLPROPERTY) {
-                                    ++i; // fetch member name
                                     if (ctx.data == null) {
+                                        i++;                    // Skip next Operator, do not clear expect operator
                                         continue;               // pass down ctx as null
-                                    }
-
-                                    // else search object for member of alias
+                                    } ReTargetWithMember();     // else search object for member of alias
                                 } else {
                                     // end of value resolve, return value
                                     return (ctx, true);
@@ -282,6 +260,23 @@ namespace Numinous {
                         }
 
                         return default;
+
+                        void ReTargetWithMember() {
+                            ExpectOperator = false;                     // mark from here not to expect an operator
+                            switch (ctx.type) {
+                                case AssembleTimeTypes.CINT:
+                                    TargetScope = (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)GenerateCINT((int)ctx.data).data;
+                                    return;
+
+                                case AssembleTimeTypes.CSTRING:
+                                    TargetScope = (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)GenerateCSTRING((string)ctx.data).data;
+                                    return;
+
+                                default:                                // other types
+                                    TargetScope = (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)ctx.data;
+                                    return;
+                            }
+                        }
                     }
                 }
 
@@ -379,340 +374,336 @@ namespace Numinous {
 #endif
                 };
 
-                internal static Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> GetData(object data) => (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)data;
-            }
+                /*
+                 * Some notes:
+                 *      Tabs aren't equal width in each IDE, so we can't 'check' how many and generate the difference with spaces.
+                 *      Because of this we are going to have to store this information also.
+                 *      
+                 *      The goal of this method will be to convert the regex tokenized string responses and convert them into a system of tokens.
+                 *      the tokens are in object obfuscated form, but naturally should look something like Value Operator Value
+                 *      
+                 *      By storing information like
+                 *      (
+                 *          this + 
+                 *              (
+                 *                  that
+                 *              )
+                 *      )
+                 *      
+                 *      we can easily resolve the highest hierarchies and inject the result in between the two outside it.
+                 *      by repeating this process until we have resolved the lowest hierarchy we should be able to resolve any expression.
+                 *      
+                 *      Resolving isn't what the CF does, but orders it so it can be done.
+                 *      
+                 *      The CF will also need to encode whitespace in, which will seriously violate VOV.
+                 *      The Evaluator will need to check to exempt VOV from evaluation logic, but will need to be used in error report code.
+                 *      
+                 *      The rule has to be WVWO (repeating) where W is whitespace.
+                 *      
+                 *      Whitespace will have to be an CEXP that begins with a whitespace token.
+                 *      
+                 *      PER STEP
+                 *          TOKENS
+                 *              DELTA_TOKENS [TERMS]
+                 *                  STEP_DELTA_TOKENS
+                 *                      STRING_OFFSET
+                 *                      DATA
+                 *                          ?: OPERTOR
+                 *                          ?: (ITEM, CEXP,    PRIVATE)
+                 *                          ?: (ITEM, CSTRING, PUBLIC)
+                 *                      IS_OPERATOR
+                 *              HIERACHY
+                 *          MAX_HIERACHY
+                 *          SUCCESS
+                 *          
+                 *          
+                 *          TODO:
+                 *              SOLVE DEFINES
+                 *              TEST MULTI TERM
+                 *              ADD ERROR REPORTS
+                 *              MULTI_LANG FOR ERRORS
+                 *              
+                 *              
+                 */
+                internal static (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)>, bool Success) ContextFetcher(string[] SourceFileReference, ref int SourceLineReference) {
+                    List<string> RegexTokens = ResolveDefines(RegexTokenize(SourceFileReference[SourceLineReference]));
+                    string CollectiveContext = string.Concat(RegexTokens);
 
+                    List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)> Tokens = [];
+                    List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> StepTokens = [];
+                    List<(int StringOffset, int StringLength, object data, bool IsOperator)> StepDeltaTokens = [];
+                    List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens = [];
 
+                    List<Operators> ContainerBuffer = [];
 
-            /*
-             * Some notes:
-             *      Tabs aren't equal width in each IDE, so we can't 'check' how many and generate the difference with spaces.
-             *      Because of this we are going to have to store this information also.
-             *      
-             *      The goal of this method will be to convert the regex tokenized string responses and convert them into a system of tokens.
-             *      the tokens are in object obfuscated form, but naturally should look something like Value Operator Value
-             *      
-             *      By storing information like
-             *      (
-             *          this + 
-             *              (
-             *                  that
-             *              )
-             *      )
-             *      
-             *      we can easily resolve the highest hierarchies and inject the result in between the two outside it.
-             *      by repeating this process until we have resolved the lowest hierarchy we should be able to resolve any expression.
-             *      
-             *      Resolving isn't what the CF does, but orders it so it can be done.
-             *      
-             *      The CF will also need to encode whitespace in, which will seriously violate VOV.
-             *      The Evaluator will need to check to exempt VOV from evaluation logic, but will need to be used in error report code.
-             *      
-             *      The rule has to be WVWO (repeating) where W is whitespace.
-             *      
-             *      Whitespace will have to be an CEXP that begins with a whitespace token.
-             *      
-             *      PER STEP
-             *          TOKENS
-             *              DELTA_TOKENS [TERMS]
-             *                  STEP_DELTA_TOKENS
-             *                      STRING_OFFSET
-             *                      DATA
-             *                          ?: OPERTOR
-             *                          ?: (ITEM, CEXP,    PRIVATE)
-             *                          ?: (ITEM, CSTRING, PUBLIC)
-             *                      IS_OPERATOR
-             *              HIERACHY
-             *          MAX_HIERACHY
-             *          SUCCESS
-             *          
-             *          
-             *          TODO:
-             *              SOLVE DEFINES
-             *              TEST MULTI TERM
-             *              ADD ERROR REPORTS
-             *              MULTI_LANG FOR ERRORS
-             *              
-             *              
-             */
+                    int MaxHierarchy = 0;
+                    int LastNonWhiteSpaceIndex = -1;
+                    int LastOpenContainerOperatorStringIndex = -1;
 
-            internal static (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)>, bool Success) ContextFetcher(string[] SourceFileReference, ref int SourceLineReference) {
-                List<string> RegexTokens = ResolveDefines(RegexTokenize(SourceFileReference[SourceLineReference]));
-                string CollectiveContext = string.Concat(RegexTokens);
+                    string LITERAL_CSTRING = "";
 
-                List <(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)> Tokens = [];
-                List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> StepTokens = [];
-                List<(int StringOffset, int StringLength, object data, bool IsOperator)> StepDeltaTokens    = [];
-                List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens  = [];
+                    bool IsLastOperator = false;
 
-                List<Operators> ContainerBuffer = [];
+                    int i = 0, StringIndex = 0;
+                    do {
+                        for (i = 0, StringIndex = 0; i < RegexTokens.Count; StringIndex += RegexTokens[i].Length, i++) {
+                            if (RegexTokens[i][0] == ' ' || RegexTokens[i][0] == '\t') continue;                            // do not tokenize whitespace
 
-                int MaxHierarchy = 0;
-                int LastNonWhiteSpaceIndex = -1;
-                int LastOpenContainerOperatorStringIndex = -1;
-                
-                string LITERAL_CSTRING =     "";
-
-                bool IsLastOperator = false;
-
-                int i = 0, StringIndex = 0;
-                do {
-                    for (i = 0, StringIndex = 0; i < RegexTokens.Count; StringIndex += RegexTokens[i].Length, i++) {
-                        if (RegexTokens[i][0] == ' ' || RegexTokens[i][0] == '\t') continue;                            // do not tokenize whitespace
-
-                        if (ContainerBuffer.Count != 0 && ContainerBuffer[^1] == Operators.FSTRING) {
-                            CaptureCSTRING(SourceLineReference, c => c == '"' || c == '{');
-                            if (RegexTokens[i][0] != '{') {
-                                if (RegexTokens[i][0] == '"') {
-                                    if (CloseContainer(SourceLineReference, Operators.STRING, Operators.FSTRING)) continue;
-                                    else return default;
+                            if (ContainerBuffer.Count != 0 && ContainerBuffer[^1] == Operators.FSTRING) {
+                                CaptureCSTRING(SourceLineReference, c => c == '"' || c == '{');
+                                if (RegexTokens[i][0] != '{') {
+                                    if (RegexTokens[i][0] == '"') {
+                                        if (CloseContainer(SourceLineReference, Operators.STRING, Operators.FSTRING)) continue;
+                                        else return default;
+                                    }
                                 }
+                            }
+
+                            // handle tokens
+                            switch (RegexTokens[i]) {
+                                case "+": SimpleAddOperator(Operators.ADD); break;
+                                case "-": SimpleAddOperator(Operators.SUB); break;
+                                case "*": SimpleAddOperator(Operators.MULT); break;
+                                case "/": SimpleAddOperator(Operators.DIV); break;
+                                case "%": SimpleAddOperator(Operators.MOD); break;
+                                case ">>": SimpleAddOperator(Operators.RIGHT); break;
+                                case "<<": SimpleAddOperator(Operators.LEFT); break;
+                                case "&": SimpleAddOperator(Operators.BITMASK); break;
+                                case "^": SimpleAddOperator(Operators.BITFLIP); break;
+                                case "|": SimpleAddOperator(Operators.BITSET); break;
+                                case "==": SimpleAddOperator(Operators.EQUAL); break;
+                                case "!=": SimpleAddOperator(Operators.INEQUAL); break;
+                                case ">=": SimpleAddOperator(Operators.GOET); break;
+                                case "<=": SimpleAddOperator(Operators.LOET); break;
+                                case ">": SimpleAddOperator(Operators.GT); break;
+                                case "<": SimpleAddOperator(Operators.LT); break;
+                                case "<=>": SimpleAddOperator(Operators.SERIAL); break;
+                                case "=": SimpleAddOperator(Operators.SET); break;
+                                case "+=": SimpleAddOperator(Operators.INCREASE); break;
+                                case "-=": SimpleAddOperator(Operators.DECREASE); break;
+                                case "*=": SimpleAddOperator(Operators.MULTIPLY); break;
+                                case "/=": SimpleAddOperator(Operators.DIVIDE); break;
+                                case "%=": SimpleAddOperator(Operators.MODULATE); break;
+                                case ">>=": SimpleAddOperator(Operators.RIGHTSET); break;
+                                case "<<=": SimpleAddOperator(Operators.LEFTSET); break;
+                                case "&=": SimpleAddOperator(Operators.ASSIGNMASK); break;
+                                case "|=": SimpleAddOperator(Operators.ASSIGNSET); break;
+                                case "^=": SimpleAddOperator(Operators.ASSIGNFLIP); break;
+                                case "??=": SimpleAddOperator(Operators.NULLSET); break;
+                                case "??": SimpleAddOperator(Operators.NULL); break;
+                                case ".": SimpleAddOperator(Operators.PROPERTY); break;
+                                case "?.": SimpleAddOperator(Operators.NULLPROPERTY); break;
+                                case "?": SimpleAddOperator(Operators.CHECK); break;
+                                case ":": SimpleAddOperator(Operators.ELSE); break;
+                                case "!": SimpleAddOperator(Operators.NOT); break;
+
+                                // special case
+                                case "\"":
+                                    i++;
+                                    if (CaptureCSTRING(SourceLineReference, c => c == '"')) break;
+                                    return default;
+
+                                // Container Code
+                                case "(": OpenContainer(Operators.OPAREN); break;
+                                case "[": OpenContainer(Operators.OBRACK); break;
+                                case "{": OpenContainer(Operators.OBRACE); break;
+                                case "$\"": OpenContainer(Operators.FSTRING); break;
+
+                                case ")": if (SimpleCloseContainer(SourceLineReference, Operators.CPAREN)) break; else return default;
+                                case "]": if (SimpleCloseContainer(SourceLineReference, Operators.CBRACK)) break; else return default;
+                                case "}": if (SimpleCloseContainer(SourceLineReference, Operators.CBRACE)) break; else return default;
+
+                                case ";":
+                                    if (ContainerBuffer.Count > 0) {
+                                        Terminal.Warn(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Unexpected end of command.", SourceLineReference, Tokens.Count, ApplyWiggle(CollectiveContext, StringIndex + 1, 1));
+                                        return default;
+                                    }
+
+
+
+                                    if (i == RegexTokens.Count - 1) {
+                                        if (Program.WarningLevel.HasFlag(WarningLevels.VERBOSE))
+                                            Terminal.Warn(ErrorTypes.SyntaxError, DecodingPhase.TOKEN,
+                                                "Lines should not end with a semi-colon", SourceLineReference, Tokens.Count, ApplyWiggle(CollectiveContext, StringIndex + 1, 1)
+                                            );
+                                        return Program.WarningLevel.HasFlag(WarningLevels.ERROR) ? default : (Tokens, true);
+                                    }
+
+
+                                    CopyDeltaTokens();
+                                    CopyStepTokens();
+                                    PrepareNextStep();
+
+                                    // modify regex tokens to remove used and stored
+                                    RegexTokens = [.. RegexTokens.TakeLast(RegexTokens.Count - i - 1)]; // trim last step from pattern
+                                    i = 0;
+                                    CollectiveContext = CollectiveContext[(StringIndex + RegexTokens[i].Length)..];
+                                    StringIndex = 0;
+                                    break;
+
+                                // Term Catching
+                                case ",":
+                                    CopyStepDeltaTokens();
+                                    break;
+
+                                default:
+                                    StepDeltaTokens.Add((
+                                        StringIndex,
+                                        RegexTokens[i].Length,
+                                        new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels)> {
+                                        // private for now, but once its determined to be something then it will change accordingly
+                                        { "self", (RegexTokens[i], AssembleTimeTypes.CEXP, AccessLevels.PRIVATE) },
+                                        },
+                                        false
+                                    ));
+                                    LastNonWhiteSpaceIndex = StepDeltaTokens.Count - 1;
+                                    break;
+
                             }
                         }
 
-                        // handle tokens
-                        switch (RegexTokens[i]) {
-                            case "+":   SimpleAddOperator(Operators.ADD         ); break;
-                            case "-":   SimpleAddOperator(Operators.SUB         ); break;
-                            case "*":   SimpleAddOperator(Operators.MULT        ); break;
-                            case "/":   SimpleAddOperator(Operators.DIV         ); break;
-                            case "%":   SimpleAddOperator(Operators.MOD         ); break;
-                            case ">>":  SimpleAddOperator(Operators.RIGHT       ); break;
-                            case "<<":  SimpleAddOperator(Operators.LEFT        ); break;
-                            case "&":   SimpleAddOperator(Operators.BITMASK     ); break;
-                            case "^":   SimpleAddOperator(Operators.BITFLIP     ); break;
-                            case "|":   SimpleAddOperator(Operators.BITSET      ); break;
-                            case "==":  SimpleAddOperator(Operators.EQUAL       ); break;
-                            case "!=":  SimpleAddOperator(Operators.INEQUAL     ); break;
-                            case ">=":  SimpleAddOperator(Operators.GOET        ); break;
-                            case "<=":  SimpleAddOperator(Operators.LOET        ); break;
-                            case ">":   SimpleAddOperator(Operators.GT          ); break;
-                            case "<":   SimpleAddOperator(Operators.LT          ); break;
-                            case "<=>": SimpleAddOperator(Operators.SERIAL      ); break;
-                            case "=":   SimpleAddOperator(Operators.SET         ); break;
-                            case "+=":  SimpleAddOperator(Operators.INCREASE    ); break;
-                            case "-=":  SimpleAddOperator(Operators.DECREASE    ); break;
-                            case "*=":  SimpleAddOperator(Operators.MULTIPLY    ); break;
-                            case "/=":  SimpleAddOperator(Operators.DIVIDE      ); break;
-                            case "%=":  SimpleAddOperator(Operators.MODULATE    ); break;
-                            case ">>=": SimpleAddOperator(Operators.RIGHTSET    ); break;
-                            case "<<=": SimpleAddOperator(Operators.LEFTSET     ); break;
-                            case "&=":  SimpleAddOperator(Operators.ASSIGNMASK  ); break;
-                            case "|=":  SimpleAddOperator(Operators.ASSIGNSET   ); break;
-                            case "^=":  SimpleAddOperator(Operators.ASSIGNFLIP  ); break;
-                            case "??=": SimpleAddOperator(Operators.NULLSET     ); break;
-                            case "??":  SimpleAddOperator(Operators.NULL        ); break;
-                            case ".":   SimpleAddOperator(Operators.PROPERTY    ); break;
-                            case "?.":  SimpleAddOperator(Operators.NULLPROPERTY); break;
-                            case "?":   SimpleAddOperator(Operators.CHECK       ); break;
-                            case ":":   SimpleAddOperator(Operators.ELSE        ); break;
-                            case "!":   SimpleAddOperator(Operators.NOT         ); break;
+                        // If IsLastOperator is enabled, we should only disable it until we have a non-whitespace line. 
+                        IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : StepDeltaTokens.Count != 0 && StepDeltaTokens[LastNonWhiteSpaceIndex].IsOperator;
 
-                            // special case
-                            case "\"":
-                                i++;
-                                if (CaptureCSTRING(SourceLineReference, c => c == '"')) break;
-                                return default;
+                        if (ContainerBuffer.Count == 0 && !IsLastOperator) break;
 
-                            // Container Code
-                            case "(":   OpenContainer(Operators.OPAREN);   break;
-                            case "[":   OpenContainer(Operators.OBRACK);   break;
-                            case "{":   OpenContainer(Operators.OBRACE);   break;
-                            case "$\"": OpenContainer(Operators.FSTRING);  break;
+                        if (++SourceLineReference == SourceFileReference.Length) {
+                            Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Not enough context to satisfy request", SourceLineReference - 1, Tokens.Count, ApplyWiggle(CollectiveContext, CollectiveContext.Length - 1, 1));
+                            return default;
+                        }
 
-                            case ")": if (SimpleCloseContainer(SourceLineReference, Operators.CPAREN)) break; else return default;
-                            case "]": if (SimpleCloseContainer(SourceLineReference, Operators.CBRACK)) break; else return default;
-                            case "}": if (SimpleCloseContainer(SourceLineReference, Operators.CBRACE)) break; else return default;
+                        // fetch more context, restart last StepToken. 
 
-                            case ";":
-                                if (ContainerBuffer.Count > 0) {
-                                    Terminal.Warn(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Unexpected end of command.", SourceLineReference, Tokens.Count, ApplyWiggle(CollectiveContext, StringIndex + 1, 1));
-                                    return default;
-                                }
+                        PrepareNextStep();
+                        RegexTokens = [.. RegexTokens, .. RegexTokenize(SourceFileReference[SourceLineReference])];
+                        CollectiveContext += SourceFileReference[SourceLineReference];
+                    } while (true);
 
-                                
+                    CopyDeltaTokens();                                                                  // process final StepDeltaTokens (valid) to StepTokens end
+                    CopyStepTokens();                                                                   // add last captured StepToken to Tokens
 
-                                if (i == RegexTokens.Count - 1) {
-                                    if (Program.WarningLevel.HasFlag(WarningLevels.VERBOSE))
-                                        Terminal.Warn(ErrorTypes.SyntaxError, DecodingPhase.TOKEN,
-                                            "Lines should not end with a semi-colon", SourceLineReference, Tokens.Count, ApplyWiggle(CollectiveContext, StringIndex + 1, 1)
-                                        );
-                                    return Program.WarningLevel.HasFlag(WarningLevels.ERROR) ? default : (Tokens, true);
-                                }
-  
+                    return (Tokens, true);
 
-                                CopyDeltaTokens();
-                                CopyStepTokens();
-                                PrepareNextStep();
-
-                                // modify regex tokens to remove used and stored
-                                RegexTokens = [.. RegexTokens.TakeLast(RegexTokens.Count - i - 1)]; // trim last step from pattern
-                                i = 0;
-                                CollectiveContext = CollectiveContext[(StringIndex + RegexTokens[i].Length)..];
-                                StringIndex = 0;
-                                break;
-
-                            // Term Catching
-                            case ",":
-                                CopyStepDeltaTokens();
-                                break;
-
-                            default:
-                                StepDeltaTokens.Add((
-                                    StringIndex,
-                                    RegexTokens[i].Length,
-                                    new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels)> {
-                                        // private for now, but once its determined to be something then it will change accordingly
-                                        { "self", (RegexTokens[i], AssembleTimeTypes.CEXP, AccessLevels.PRIVATE) },
-                                    },
-                                    false
-                                ));
-                                LastNonWhiteSpaceIndex = StepDeltaTokens.Count - 1;
-                                break;
-
-                            }
+                    #region Context Fetcher Functions
+                    void PrepareNextStep() {
+                        MaxHierarchy = 0;
+                        StepTokens.Clear();
+                        StepDeltaTokens.Clear();
+                        ContainerBuffer = [];
+                        LastNonWhiteSpaceIndex = -1;
                     }
 
-                    // If IsLastOperator is enabled, we should only disable it until we have a non-whitespace line. 
-                    IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : StepDeltaTokens.Count != 0 && StepDeltaTokens[LastNonWhiteSpaceIndex].IsOperator;
+                    bool CaptureCSTRING(int LineNumber, Func<char, bool> HaltCapturePredicate) {
+                        int csi = StringIndex;
 
-                    if (ContainerBuffer.Count == 0 && !IsLastOperator) break;
+                        for (; i < RegexTokens.Count && !HaltCapturePredicate(RegexTokens[i][0]); i++) {
+                            LITERAL_CSTRING += RegexTokens[i];
+                            StringIndex += RegexTokens[i].Length;
+                        }
 
-                    if (++SourceLineReference == SourceFileReference.Length) {
-                        Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Not enough context to satisfy request", SourceLineReference - 1, Tokens.Count, ApplyWiggle(CollectiveContext, CollectiveContext.Length - 1, 1));
-                        return default;
-                    }
+                        if (i == RegexTokens.Count) {
+                            Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Unterminated String", LineNumber, Tokens.Count, ApplyWiggle(CollectiveContext, csi + 1, StringIndex - csi));
+                            return false;
+                        }
 
-                    // fetch more context, restart last StepToken. 
-
-                    PrepareNextStep();
-                    RegexTokens = [.. RegexTokens, .. RegexTokenize(SourceFileReference[SourceLineReference])];
-                    CollectiveContext += SourceFileReference[SourceLineReference];
-                } while (true);
-
-                CopyDeltaTokens();                                                                  // process final StepDeltaTokens (valid) to StepTokens end
-                CopyStepTokens();                                                                   // add last captured StepToken to Tokens
-
-                return (Tokens, true);
-
-                #region Context Fetcher Functions
-                void PrepareNextStep() {
-                    MaxHierarchy = 0;
-                    StepTokens.Clear();
-                    StepDeltaTokens.Clear();
-                    ContainerBuffer = [];
-                    LastNonWhiteSpaceIndex = -1;
-                }
-
-                bool CaptureCSTRING(int LineNumber, Func<char, bool> HaltCapturePredicate) {
-                    int csi = StringIndex;
-
-                    for (; i < RegexTokens.Count && !HaltCapturePredicate(RegexTokens[i][0]); i++) {
-                        LITERAL_CSTRING += RegexTokens[i];
-                        StringIndex += RegexTokens[i].Length;
-                    }
-
-                    if (i == RegexTokens.Count) {
-                        Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Unterminated String", LineNumber, Tokens.Count, ApplyWiggle(CollectiveContext, csi + 1, StringIndex - csi));
-                        return false;
-                    }
-
-                    if (csi != StringIndex) {
-                        StepDeltaTokens.Add((
-                            csi,
-                            csi - StringIndex,
-                            new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
+                        if (csi != StringIndex) {
+                            StepDeltaTokens.Add((
+                                csi,
+                                csi - StringIndex,
+                                new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
                                 {"self",    (LITERAL_CSTRING,           AssembleTimeTypes.CSTRING,  AccessLevels.PRIVATE) },
                                 {"length",  (LITERAL_CSTRING.Length,    AssembleTimeTypes.CINT,     AccessLevels.PUBLIC) },
-                            },
-                            false
-                        ));
+                                },
+                                false
+                            ));
 
-                        LITERAL_CSTRING = "";   // wipe string for next capture
+                            LITERAL_CSTRING = "";   // wipe string for next capture
+                        }
+
+
+                        return true;
                     }
 
-
-                    return true;
-                }
-
-                void AddOperator(Operators Operator, int sl) {
-                    StepDeltaTokens.Add((StringIndex, sl, Operator, true)); LastNonWhiteSpaceIndex = StepDeltaTokens.Count - 1; ;
-                }
-
-                void SimpleAddOperator(Operators Operator) => AddOperator(Operator, 1);
-
-                void ComplexOpenContainer(int sl, Operators Operator) {
-                    CopyDeltaTokens();
-                    ContainerBuffer.Add(Operator);                                  // register container type
-
-                    AddOperator(Operator, sl);
-                    LastOpenContainerOperatorStringIndex = StringIndex;
-                    MaxHierarchy = Math.Max(ContainerBuffer.Count, MaxHierarchy);
-                }
-
-                void OpenContainer(Operators Operator) => ComplexOpenContainer(1, Operator);
-
-                bool CloseContainer(int SourceLineReference, Operators CloseOperator, Operators OpenOperator) {
-                    SimpleAddOperator(CloseOperator);
-
-                    if (ContainerBuffer.Count == 0) {
-                        Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"No Open Container before Close Container.",
-  SourceLineReference, StepTokens.Count, ApplyWiggle(CollectiveContext, 0, LastNonWhiteSpaceIndex + 1));
-
-                        return false;
+                    void AddOperator(Operators Operator, int sl) {
+                        StepDeltaTokens.Add((StringIndex, sl, Operator, true)); LastNonWhiteSpaceIndex = StepDeltaTokens.Count - 1; ;
                     }
 
-                    if (ContainerBuffer[^1] != OpenOperator) {
-                        Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"Invalid Container Closer '{CollectiveContext[StringIndex]}' for Opening container '{CollectiveContext[LastOpenContainerOperatorStringIndex]}'.",
-                          SourceLineReference, StepTokens.Count, ApplyWiggle(CollectiveContext, LastOpenContainerOperatorStringIndex + 1, StringIndex - LastOpenContainerOperatorStringIndex + 1));
+                    void SimpleAddOperator(Operators Operator) => AddOperator(Operator, 1);
 
-                        return false;
+                    void ComplexOpenContainer(int sl, Operators Operator) {
+                        CopyDeltaTokens();
+                        ContainerBuffer.Add(Operator);                                  // register container type
+
+                        AddOperator(Operator, sl);
+                        LastOpenContainerOperatorStringIndex = StringIndex;
+                        MaxHierarchy = Math.Max(ContainerBuffer.Count, MaxHierarchy);
                     }
 
-                    CopyDeltaTokens();
-                    ContainerBuffer.RemoveAt(ContainerBuffer.Count - 1);
+                    void OpenContainer(Operators Operator) => ComplexOpenContainer(1, Operator);
 
-                    return true;
-                }
+                    bool CloseContainer(int SourceLineReference, Operators CloseOperator, Operators OpenOperator) {
+                        SimpleAddOperator(CloseOperator);
 
-                bool SimpleCloseContainer(int SourceLineReference, Operators Operator) => CloseContainer(SourceLineReference, Operator, Operator - 1);
+                        if (ContainerBuffer.Count == 0) {
+                            Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"No Open Container before Close Container.",
+      SourceLineReference, StepTokens.Count, ApplyWiggle(CollectiveContext, 0, LastNonWhiteSpaceIndex + 1));
 
-                void CopyStepTokens() {
-                    var StepTokenShallowCopy = StepTokens
+                            return false;
+                        }
+
+                        if (ContainerBuffer[^1] != OpenOperator) {
+                            Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"Invalid Container Closer '{CollectiveContext[StringIndex]}' for Opening container '{CollectiveContext[LastOpenContainerOperatorStringIndex]}'.",
+                              SourceLineReference, StepTokens.Count, ApplyWiggle(CollectiveContext, LastOpenContainerOperatorStringIndex + 1, StringIndex - LastOpenContainerOperatorStringIndex + 1));
+
+                            return false;
+                        }
+
+                        CopyDeltaTokens();
+                        ContainerBuffer.RemoveAt(ContainerBuffer.Count - 1);
+
+                        return true;
+                    }
+
+                    bool SimpleCloseContainer(int SourceLineReference, Operators Operator) => CloseContainer(SourceLineReference, Operator, Operator - 1);
+
+                    void CopyStepTokens() {
+                        var StepTokenShallowCopy = StepTokens
+                            .Select(t => (
+                                t.DeltaTokens,                  // reference to a clone, should be fine
+                                t.Hierachy,
+                                t.Representation
+                            )).ToList();
+
+                        Tokens.Add((StepTokenShallowCopy, MaxHierarchy));
+                    }
+
+                    void CopyDeltaTokens() {
+                        CopyStepDeltaTokens();
+                        var DeltaTokensShallowCopy = DeltaTokens.Select(t => t).ToList();
+                        StepTokens.Add((DeltaTokensShallowCopy, ContainerBuffer.Count, i == RegexTokens.Count ? CollectiveContext : CollectiveContext[..(StringIndex + RegexTokens[i].Length)]));
+                    }
+
+                    void CopyStepDeltaTokens() {
+                        if (LastNonWhiteSpaceIndex == -1) return;   // Do not copy whitespace
+
+                        // Clone Delta Tokens thus far
+                        var StepDeltaTokenShallowCopy = StepDeltaTokens
                         .Select(t => (
-                            t.DeltaTokens,                  // reference to a clone, should be fine
-                            t.Hierachy,
-                            t.Representation
+                            t.StringOffset,
+                            t.StringLength,
+                            t.IsOperator
+                                ? t.data
+                                : Clone((Dictionary<string, (object, AssembleTimeTypes, AccessLevels)>)t.data),
+                            t.IsOperator
                         )).ToList();
 
-                    Tokens.Add((StepTokenShallowCopy, MaxHierarchy));
+                        StepDeltaTokens = [];                       // wipe delta tokens for next operation
+                        DeltaTokens.Add(StepDeltaTokenShallowCopy);
+                    }
+                    #endregion Context Fetcher Functions
                 }
-
-                void CopyDeltaTokens() {
-                    CopyStepDeltaTokens();
-                    var DeltaTokensShallowCopy = DeltaTokens.Select(t => t).ToList();
-                    StepTokens.Add((DeltaTokensShallowCopy, ContainerBuffer.Count, i == RegexTokens.Count ? CollectiveContext : CollectiveContext[..(StringIndex + RegexTokens[i].Length)]));
-                }
-
-                void CopyStepDeltaTokens() {
-                    if (LastNonWhiteSpaceIndex == -1) return;   // Do not copy whitespace
-
-                    // Clone Delta Tokens thus far
-                    var StepDeltaTokenShallowCopy = StepDeltaTokens
-                    .Select(t => (
-                        t.StringOffset,
-                        t.StringLength,
-                        t.IsOperator
-                            ? t.data
-                            : Clone((Dictionary<string, (object, AssembleTimeTypes, AccessLevels)>)t.data),
-                        t.IsOperator
-                    )).ToList();
-
-                    StepDeltaTokens = [];                       // wipe delta tokens for next operation
-                    DeltaTokens.Add(StepDeltaTokenShallowCopy);
-                }
-                #endregion Context Fetcher Functions
             }
+
 
 
             // Generated Function | However I do find that this function is how I would code and meets criteria
