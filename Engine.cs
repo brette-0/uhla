@@ -116,12 +116,9 @@ namespace Numinous {
         }
 
         internal enum AssembleTimeTypes : byte {
-            PROPERTY,   // Property (Evaluator Solving)
-            TYPE,       // typeof result
             INT,        // assemble time integer
             STRING,     // assemble time string
-            DEFINE,     // define, capture then tokenize for CF
-            VOID,       // void macro
+            
             SCOPE,      // scope type
             RT,         // Runtime Variable
             REG,        // Register
@@ -132,18 +129,25 @@ namespace Numinous {
             EXP,        // Expression
 
 
-            CONSTANTS,
+            CONSTANT = 0x040,
 
-            CINT,       // Constant int
-            CSTRING,    // Constant string
-            CSCOPE,     // Constant Scope reference
-            CRT,        // Constant runtime reference
-            CREG,       // Constant register reference
-            CFLAG,      // Constant flag reference
-            CPROC,      // Constant procedure reference
-            CINTER,     // Constant interrupt reference
-            CBANK,      // Constant bank reference
-            CEXP,       // Constant Expression
+            CINT = CONSTANT,    // Constant int
+            CSTRING,            // Constant string
+            TYPE,               // typeof result
+
+            COBJECT,            // Begin of Constant Objects
+
+            CSCOPE = COBJECT,   // Constant Scope reference
+            CRT,                // Constant runtime reference
+            CREG,               // Constant register reference
+            CFLAG,              // Constant flag reference
+            CPROC,              // Constant procedure reference
+            CINTER,             // Constant interrupt reference
+            CBANK,              // Constant bank reference
+            CEXP,               // Constant Expression
+
+            IRWN,       // Indexing Register with N             foo[i + 2] situations
+            ICRWN,      // Indexing Constant Register with N    foo[x + 2] situations
 
             MACRO = 0x80,
             // void macro
@@ -209,17 +213,106 @@ namespace Numinous {
                  *          generate constant static object literals
                  */
 
-                internal static (List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> Result, bool Success) LinearEvaluate(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens) {
+                internal static (List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> Result, bool Success) StepLinearEvaluate(List<(int StringOffset, int StringLength, object data, bool IsOperator)> StepDeltaTokens) {
                     List<Operators> ValueMutators = [];
                     List<Operators> OperatorBuffer = [];
                     List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> ValueTokenBuffer = [];
 
                     List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> ResultTermTokens = [];
 
+                    Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>? TargetScope = Program.ActiveScopeBuffer[^1];
+
                     bool ExpectOperator = false;
 
+                    int i = 0; for (; i < StepDeltaTokens.Count; i++) {
+
+                    }
+
                     return default;
+
+                    ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool succses) ResolveCEXP() {
+                        var LocalTargetScope = TargetScope;
+                       for (; i < StepDeltaTokens.Count; i++, ExpectOperator ^= true) {
+                            ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) = GetObjectFromAlias((string)StepDeltaTokens[i].data, LocalTargetScope, AccessLevels.PUBLIC);
+                            if (ExpectOperator != StepDeltaTokens[i].IsOperator) {
+                                // error, violated VOV
+                                return default;
+                            }
+
+                            if (ExpectOperator) {
+                                if ((Operators)(StepDeltaTokens[i].data) != Operators.PROPERTY) {
+                                    ++i; // fetch member name
+                                    if (ctx.data == null) {
+                                        // error, null reference exception
+                                        return default;
+                                    }
+
+                                    // else search object for member of alias
+
+                                    // if const primitive, generate members
+                                    switch (ctx.type) {
+                                        case AssembleTimeTypes.CINT:
+                                            // invoke GenerateCINT(ctx.data)
+                                            break;
+
+                                        case AssembleTimeTypes.CSTRING:
+                                            // invoke GenerateCSTRING(ctx.data)
+                                            break;
+
+                                        default:    // other types
+                                            break;
+                                    }
+
+
+
+                                    TargetScope = (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>)ctx.data;
+
+                                } else if ((Operators)StepDeltaTokens[i].data != Operators.NULLPROPERTY) {
+                                    ++i; // fetch member name
+                                    if (ctx.data == null) {
+                                        continue;               // pass down ctx as null
+                                    }
+
+                                    // else search object for member of alias
+                                } else {
+                                    // end of value resolve, return value
+                                    return (ctx, true);
+                                }
+                            }
+                        }
+
+                        return default;
+                    }
                 }
+
+                /// <summary>
+                /// Converts integer into Constant Integer Object (CINT)
+                /// </summary>
+                /// <param name="data"></param>
+                /// <returns></returns>
+                internal static (object data, AssembleTimeTypes type, AccessLevels access) GenerateCINT(int data) => (
+                    new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> {
+                        {"",    (data, default, default)},
+                        {"lo",  (data & 0x00ff, AssembleTimeTypes.CINT, AccessLevels.PUBLIC) },
+                        {"hi",  (data >> 8 & 0xff, AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
+                    }, AssembleTimeTypes.CINT, AccessLevels.PUBLIC
+                );
+
+                /// <summary>
+                /// Converts string into Constant String Object (CSTRING)
+                /// </summary>
+                /// <param name="data"></param>
+                /// <returns></returns>
+                internal static (object data, AssembleTimeTypes type, AccessLevels access) GenerateCSTRING(string data) => (
+                    new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> {
+                        {"",        (data, default, default)},
+                        {"lower",   (data.ToLower(),    AssembleTimeTypes.CSTRING, AccessLevels.PUBLIC) },
+                        {"higher",  (data.ToUpper(),    AssembleTimeTypes.CSTRING, AccessLevels.PUBLIC) },
+                        {"length",  (data.Length,       AssembleTimeTypes.CINT, AccessLevels.PUBLIC) },
+                    }, AssembleTimeTypes.CINT, AccessLevels.PUBLIC
+                );
+
+
 
                 /// <summary>
                 /// Ensures the left side operator has precedence over the right side operator.

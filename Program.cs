@@ -51,7 +51,7 @@ internal static class Program {
 
         // make language a compiler variable
         LabelDataBase["lang"]   = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
-            {"",        (ActiveLanguage.ToString(), AssembleTimeTypes.CSTRING, AccessLevels.PRIVATE)},
+            {"",        ($"\"{ActiveLanguage}\"", default, AccessLevels.PRIVATE)},
             {"parent",  (LabelDataBase, AssembleTimeTypes.CSCOPE, AccessLevels.PRIVATE)}
         }, AssembleTimeTypes.CSTRING, AccessLevels.PUBLIC);
 
