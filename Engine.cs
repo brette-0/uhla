@@ -1,12 +1,6 @@
-﻿using System.Diagnostics;
-using System.Globalization;
-using System.Reflection.Metadata.Ecma335;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices.Swift;
+﻿using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
-using Antlr4.Runtime;
-using Numinous.Language;
 
 namespace Numinous {
     namespace Engine {
@@ -128,6 +122,8 @@ namespace Numinous {
             BANK,       // Bank
             EXP,        // Expression
 
+            OBJECT,     // The Boxed 'AnyType'
+
 
             CONSTANT = 0x040,
 
@@ -135,9 +131,7 @@ namespace Numinous {
             CSTRING,            // Constant string
             TYPE,               // typeof result
 
-            COBJECT,            // Begin of Constant Objects
-
-            CSCOPE = COBJECT,   // Constant Scope reference
+            CSCOPE,             // Constant Scope reference
             CRT,                // Constant runtime reference
             CREG,               // Constant register reference
             CFLAG,              // Constant flag reference
@@ -149,7 +143,7 @@ namespace Numinous {
             IRWN,       // Indexing Register with N             foo[i + 2] situations
             ICRWN,      // Indexing Constant Register with N    foo[x + 2] situations
 
-            TOKENS,     // Should never be available to the user, this is for code inside codeblocks
+            FUNCTION,   // Macro Function
 
             MACRO = 0x80,
             // void macro
@@ -200,6 +194,9 @@ namespace Numinous {
 
 
         internal static class Engine {
+            internal enum OperationTypes {
+                EVALUATE
+            }
 
             /// <summary>
             /// Remove the Function from the values, ensuring functions are not evaluated.
@@ -209,8 +206,72 @@ namespace Numinous {
             /// </summary>
             /// <param name="Tokens"></param>
             /// <param name="MaxHierarchy"></param>
-            internal static void ExtractTask(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierarchy) { 
-            
+            internal static (object OperationContext, OperationTypes OperationType, bool Success) ExtractTask(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens) {
+                if (DeltaTokens[0].IsOperator) {
+                    // this is a ++foo, or --foo situation. Otherwise its an error. Move to LinearEvaluate
+                    return (default(int), OperationTypes.EVALUATE, true);
+                }
+
+                var ctx = (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)DeltaTokens[0].data;
+
+                // self type is not default for tokens, as they are not objects.
+                if (ctx[""].type != AssembleTimeTypes.CEXP) {
+                    // error, stated value. Even Macros begin as CEXP Tokens before evaluation
+                    return default;
+                }
+
+                string raw_ctx = (string)ctx[""].data;
+
+                if (raw_ctx[0] == '#') {
+                    // assembler directive
+
+                    ctx = (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)DeltaTokens[1].data;
+
+                    // self type is not default for tokens, as they are not objects.
+                    if (ctx[""].type != AssembleTimeTypes.CEXP) {
+                        // error, poorly formatted assembler directive
+                        return default;
+                    }
+
+                    raw_ctx = (string)ctx[""].data;
+                    switch (raw_ctx) {
+                        case "include":             // #include "chr/font0.chr"  Graphics only
+                        case "define":              // #define foo 2
+                                                    // #define v23 (x, y)   vec3(x, y, 0)
+                        case "undefine":            // #undefine foo
+                        case "nes":                 // nes mode, do not treat as fds
+                        case "fds":                 // fds mode, do not treat as stock nes
+
+                        case "rom":                 // Not Recommended : Set ROM Space Address
+                        case "cpu":                 // Not Recommended : Set CPU Space Address
+                            break;
+
+                        default:
+                            throw new Exception();  // TODO: Fill this out
+                    }
+                } else {
+                    
+                }
+
+                return default;
+
+                bool isExplicitInstruction(string ctx) {
+                    switch (ctx) {
+                        default: return false;
+                    }
+                }
+
+                bool isImplicitInstruction(string ctx) {
+                    switch (ctx) {
+                        default: return false;
+                    }
+                }
+
+                bool isKeyWord(string ctx) {
+                    switch (ctx) {
+                        default: return false;
+                    }
+                }  
             }
 
             internal static class Evaluate {

@@ -70,6 +70,12 @@ internal static class Program {
             {"indexing", (0, AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
         }, AssembleTimeTypes.CSTRING, AccessLevels.PUBLIC);
 
+        // Functions are just lambdas, 0 refers to arg 0, and so on. They are of type Function
+        LabelDataBase["typeof"] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
+            {"",        (((object data, AssembleTimeTypes type, AccessLevels access) ctx) => ctx.type, default, AccessLevels.PRIVATE)},
+            {"0",       (0, AssembleTimeTypes.OBJECT, AccessLevels.PRIVATE) }
+        }, AssembleTimeTypes.FUNCTION, AccessLevels.PUBLIC);
+
         Span<int> SourceFileIndexBufferSpan = CollectionsMarshal.AsSpan(SourceFileIndexBuffer);
 
         ActiveScopeBuffer.Add(LabelDataBase);   // add rs to as, default rs
