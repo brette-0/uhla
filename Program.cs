@@ -13,13 +13,13 @@ internal static class Program {
         if (Response == Terminal.Responses.Terminate_Error) return (int)ErrorTypes.ParsingError;   // Exit if parsing returns error
         if (Response == Terminal.Responses.Terminate_Success) return 0;
 
-        if (ActiveLanguage == Languages.Null) ActiveLanguage = Language.CaptureSystemLanguage();
-        if (ActiveLanguage == Languages.Null) {
-            ActiveLanguage = Languages.English_UK;
-            // TODO: Consider SystemError as more suitable?
-            Terminal.Log(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, "Could not detect language, choosing English (UK).",
-                    -1, default, null);
-        }
+        //if (ActiveLanguage == Languages.Null) ActiveLanguage = Language.CaptureSystemLanguage();
+        //if (ActiveLanguage == Languages.Null) {
+        //    ActiveLanguage = Languages.English_UK;
+        //    // TODO: Consider SystemError as more suitable?
+        //    Terminal.Log(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, "Could not detect language, choosing English (UK).",
+        //            -1, default, null);
+        //}
 
         if (InputPath == null) {
             Terminal.Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(ActiveLanguage, "Input path must be provided")]}.",
@@ -70,10 +70,16 @@ internal static class Program {
             {"indexing", (0, AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
         }, AssembleTimeTypes.CSTRING, AccessLevels.PUBLIC);
 
-        // Functions are just lambdas, 0 refers to arg 0, and so on. They are of type Function
+        // Functions are just lambdas, 0 refers to arg 0, and so on. They are of type Function  returns type of type type
+        // The 'self' containing the lambda's type is the return type
         LabelDataBase["typeof"] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
-            {"",        (((object data, AssembleTimeTypes type, AccessLevels access) ctx) => ctx.type, default, AccessLevels.PRIVATE)},
-            {"0",       (0, AssembleTimeTypes.OBJECT, AccessLevels.PRIVATE) }
+            {"",        (((object data, AssembleTimeTypes type, AccessLevels access) ctx) => (ctx.type, AssembleTimeTypes.TYPE, AccessLevels.PUBLIC), AssembleTimeTypes.TYPE, AccessLevels.PRIVATE)},
+            {"0",       (0, AssembleTimeTypes.COBJECT, AccessLevels.PRIVATE) }
+        }, AssembleTimeTypes.FUNCTION, AccessLevels.PUBLIC);
+
+        LabelDataBase["exists"] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
+            {"",        (((object data, AssembleTimeTypes type, AccessLevels access) ctx) => {(object _, bool success) = GetObjectFromAlias((string)ctx.data, ActiveScopeBuffer[^1], AccessLevels.PUBLIC); return success; }, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
+            {"0",       (0, AssembleTimeTypes.COBJECT, AccessLevels.PRIVATE) }
         }, AssembleTimeTypes.FUNCTION, AccessLevels.PUBLIC);
 
         Span<int> SourceFileIndexBufferSpan = CollectionsMarshal.AsSpan(SourceFileIndexBuffer);
@@ -92,7 +98,9 @@ internal static class Program {
     internal static Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> LabelDataBase = [];
     internal static List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>> ActiveScopeBuffer = [];
     internal static List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>> ObjectSearchBuffer = [];
-    
+
+    internal static List<string> SourceFileSearchPaths = [];
+
     internal static Languages ActiveLanguage;
     internal static WarningLevels WarningLevel;
 }

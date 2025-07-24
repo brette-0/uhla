@@ -2,6 +2,9 @@
 using System.Text;
 using System.Text.RegularExpressions;
 
+using Tomlyn;
+using Tomlyn.Model;
+
 namespace Numinous {
     namespace Engine {
         namespace System {
@@ -122,7 +125,8 @@ namespace Numinous {
             BANK,       // Bank
             EXP,        // Expression
 
-            OBJECT,     // The Boxed 'AnyType'
+            OBJECT,     // The Boxed 'AnyType' such as long as its not constant
+            COBJECT,    // The Boxed 'AnyType' clearing object reference from object, or a constant object
 
 
             CONSTANT = 0x040,
@@ -194,10 +198,6 @@ namespace Numinous {
 
 
         internal static class Engine {
-            internal enum OperationTypes {
-                EVALUATE
-            }
-
             /// <summary>
             /// Remove the Function from the values, ensuring functions are not evaluated.
             /// By functions we refer to directives such as #include
@@ -206,35 +206,12 @@ namespace Numinous {
             /// </summary>
             /// <param name="Tokens"></param>
             /// <param name="MaxHierarchy"></param>
-            internal static (object OperationContext, OperationTypes OperationType, bool Success) ExtractTask(List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTokens) {
-                if (DeltaTokens[0].IsOperator) {
-                    // this is a ++foo, or --foo situation. Otherwise its an error. Move to LinearEvaluate
-                    return (default(int), OperationTypes.EVALUATE, true);
-                }
-
-                var ctx = (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)DeltaTokens[0].data;
-
+            internal static (object OperationContext, bool Success) ExtractTask(List<string> StringTokens) {
                 // self type is not default for tokens, as they are not objects.
-                if (ctx[""].type != AssembleTimeTypes.CEXP) {
-                    // error, stated value. Even Macros begin as CEXP Tokens before evaluation
-                    return default;
-                }
-
-                string raw_ctx = (string)ctx[""].data;
-
-                if (raw_ctx[0] == '#') {
+                if (StringTokens[0][0] == '#') {
                     // assembler directive
 
-                    ctx = (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)DeltaTokens[1].data;
-
-                    // self type is not default for tokens, as they are not objects.
-                    if (ctx[""].type != AssembleTimeTypes.CEXP) {
-                        // error, poorly formatted assembler directive
-                        return default;
-                    }
-
-                    raw_ctx = (string)ctx[""].data;
-                    switch (raw_ctx) {
+                    switch (StringTokens[1]) {
                         case "include":             // #include "chr/font0.chr"  Graphics only
                         case "define":              // #define foo 2
                                                     // #define v23 (x, y)   vec3(x, y, 0)
@@ -242,20 +219,316 @@ namespace Numinous {
                         case "nes":                 // nes mode, do not treat as fds
                         case "fds":                 // fds mode, do not treat as stock nes
 
+                        case "charmap":             // default charmap  #charmap charmap_object
+
                         case "rom":                 // Not Recommended : Set ROM Space Address
                         case "cpu":                 // Not Recommended : Set CPU Space Address
                             break;
 
                         default:
-                            throw new Exception();  // TODO: Fill this out
+                            // error, no assembler directive by this alias
+                            return default;
                     }
-                } else {
-                    
+
+                    if (isExplicitInstruction(StringTokens[0])) {
+                        /*
+                         *      ins #foo
+                         *      ins foo
+                         *      ins !foo
+                         *      ins z:foo
+                         *      ins a:foo
+                         *      ins !z:foo
+                         *      ins !a:foo
+                         *      ins foo, r
+                         *      ins !foo, r
+                         *      ins z:foo, r
+                         *      ins a:foo, r
+                         *      ins !a:foo, r
+                         *      ins foo[r]
+                         *      ins z:foo[r]
+                         *      ins a:foo[r]
+                         *      ins !a:foo[r]
+                         *      ins [foo, r]
+                         *      ins [foo], r
+                         */
+
+
+                    }
                 }
+
+
 
                 return default;
 
                 bool isExplicitInstruction(string ctx) {
+                    switch (ctx) {
+                        case "adc":
+
+                        case "and":
+
+                        case "asl":
+
+                        case "bcc":
+                        case "blt":
+
+                        case "bcs":
+                        case "bgt":
+
+                        case "beq":
+                        case "bzs":
+
+                        case "bit":
+
+                        case "bmi":
+                        case "bns":
+
+                        case "bne":
+                        case "bzc":
+
+                        case "bpl":
+                        case "bnc":
+
+                        case "brk":
+
+                        case "bvc":
+
+                        case "bvs":
+
+                        case "clc":
+
+                        case "cld":
+
+                        case "cli":
+
+                        case "clv":
+
+                        case "cmp":
+
+                        case "cpx":
+
+                        case "cpy":
+
+                        case "dec":
+
+                        case "dex":
+
+                        case "dey":
+
+                        case "eor":
+
+                        case "inc":
+
+                        case "inx":
+
+                        case "iny":
+
+                        case "jmp":
+
+                        case "jsr":
+
+                        case "lda":
+
+                        case "ldx":
+
+                        case "ldy":
+
+                        case "lsr":
+
+                        case "nop":
+
+                        case "ora":
+
+                        case "pha":
+
+                        case "php":
+
+                        case "pla":
+
+                        case "plp":
+
+                        case "rol":
+
+                        case "ror":
+
+                        case "rti":
+
+                        case "rts":
+
+                        case "sbc":
+
+                        case "sec":
+
+                        case "sed":
+
+                        case "sei":
+
+                        case "sta":
+
+                        case "stx":
+
+                        case "sty":
+
+                        case "tax":
+
+                        case "tay":
+
+                        case "tsx":
+
+                        case "txa":
+
+                        case "txs":
+
+                        case "txy":
+
+                        // Illegal
+                        case "slo":
+                        case "aso":
+
+                        case "rla":
+                        case "rln":
+
+                        case "sre":
+                        case "lse":
+
+                        case "rra":
+                        case "rrd":
+
+                        case "sax":
+                        case "aax":
+
+                        case "lax":
+
+                        case "dcp":
+                        case "dcm":
+
+                        case "isc":
+                        case "usb":
+
+                        case "anc":
+                        case "ana":
+                        case "anb":
+
+                        case "alr":
+                        case "asr":
+
+                        case "arr":
+                        case "sbx":
+                        case "xma":
+
+                        case "axs":
+
+                        case "sha":
+                        case "axa":
+                        case "ahx":
+
+                        case "shx":
+                        case "sxa":
+                        case "xas":
+
+                        case "shy":
+                        case "sya":
+                        case "say":
+
+                        case "tas":
+                        case "shs":
+
+                        case "las":
+                        case "lar":
+
+                        case "xaa":
+                        case "ane":
+                        case "axm":
+
+                        case "stp":
+                        case "kil":
+                        case "hlt":
+                        case "jam":
+
+                            return true;
+                        
+                        default: return false;
+                    }
+                }
+
+                bool isSyntheticInstruction(string ctx) {
+                    switch (ctx) {
+                        case "mov":
+                            // mov a, x
+                            // mov a, mem
+                            // mov #imm, a
+                            // mov $100, $200
+                        case "neg":
+                            // neg
+                            // neg 10
+                        case "abs":
+                        case "ccf":
+                        case "sex":
+                        case "irl":
+                        case "irr":
+                        case "swp":
+                        
+                        case "rnc":
+                        case "rpl":
+                        case "rns":
+                        case "rmi":
+
+                        case "rcc":
+                        case "rcs":
+                        case "rgt":
+                        case "rlt":
+
+                        case "rvc":
+                        case "rvs":
+
+                        case "req":
+                        case "rzc":
+                        case "rne":
+                        case "rzs":
+
+                        case "jeq":
+                        case "jzs":
+                        case "jne":
+                        case "jzc":
+
+                        case "jcs":
+                        case "jgt":
+                        case "jcc":
+                        case "jlt":
+
+                        case "jvc":
+                        case "jvs":
+
+                        case "jns":
+                        case "jmi":
+                        case "jnc":
+                        case "jpl":
+
+                        case "ceq":
+                        case "czs":
+                        case "cne":
+                        case "czc":
+
+                        case "cmi":
+                        case "cns":
+                        case "cpl":
+                        case "cnc":
+
+                        case "cvs":
+                        case "cvc":
+
+                        case "ccs":
+                        case "cgt":
+                        case "ccc":
+                        case "clt":
+
+                        case "txy": // depend on idtable
+                        case "tyx":
+
+                        default: return false;
+                    }
+                }
+
+                bool isSyntheticImplicitInstruction(string ctx) {
                     switch (ctx) {
                         default: return false;
                     }
@@ -269,12 +542,63 @@ namespace Numinous {
 
                 bool isKeyWord(string ctx) {
                     switch (ctx) {
+                        case "using":
+                            // using math
+                            // using m = math
+                            // using math.add
+                            // using add = math.add
+
+                        case "if":
+                            // if, if else, if elseif, if elseif else
+
+                        case "elseif":
+                            // elseif, elseif else
+
+                        case "else":
+                            // else
+
+                        case "loop":
+                            // loop, break
+
+                        case "break":
+                            // break
+
+                        case "return":
+                            // return
+                            // return foo, bar
+                            break;
+
+                        case "enum":
+                            // enum alias {contents}
+
+                        case "bank":
+                            // bank operation is complicated
+
+                        case "proc":
+                            // proc alias { body }
+
+                        case "charmap":
+                            // charmap  {a = b}
+
+
+                        // case struct
+                        
                         default: return false;
                     }
-                }  
+                    return true;
+                }
             }
 
             internal static class Evaluate {
+
+                internal enum OperationTypes : byte {
+                    FAIL,
+                    DIRECTIVE,          // eg.. #include
+                    OPERATOR,           // eg.. lda foo
+                    EVALUATE,           // function, macros, RODATA writes
+
+                    COMPLETE,           // Needs to do nothing more, handled entirely inside CF
+                }
 
                 /*
                  * Some notes:
@@ -507,18 +831,15 @@ namespace Numinous {
                 /// <param name="SourceLineReference"></param>
                 /// <param name="SourceLineSubStringIndex"></param>
                 /// <returns></returns>
-                internal static (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)>, int Finish, bool Success) ContextFetcher(string[] SourceFileReference, ref int SourceLineReference, int SourceLineSubStringIndex) {
+                internal static (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, OperationTypes OperationType)>, int Finish, bool Success) ContextFetcher(string[] SourceFileReference, ref int SourceLineReference, int SourceLineSubStringIndex) {
                     List<string> RegexTokens = ResolveDefines(RegexTokenize(SourceFileReference[SourceLineReference][SourceLineSubStringIndex ..]));
                     string CollectiveContext = string.Concat(RegexTokens);
 
-                    List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)> Tokens = [];
+                    List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, OperationTypes OperationType)> Tokens = [];
                     List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> StepTokens = [];
-                    List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTermTokens = [];
                     List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens = [];
-
+                    List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTermTokens = [];
                     List<Operators> ContainerBuffer = [];
-
-                    
 
                     int Finish = -1;
                     int MaxHierarchy = 0;
@@ -530,8 +851,10 @@ namespace Numinous {
                     bool IsLastOperator = false;
                     
                     int i = 0, StringIndex = 0;
+                    OperationTypes OperationType = ExtractOperation();
+                    if (OperationType == OperationTypes.FAIL) return default;        // error pass back
                     do {
-                        for (i = 0, StringIndex = 0; i < RegexTokens.Count; StringIndex += RegexTokens[i].Length, i++) {
+                        for (i = 0, StringIndex = 0; i < RegexTokens.Count; step()) {
                             if (RegexTokens[i][0] == ' ' || RegexTokens[i][0] == '\t') continue;                            // do not tokenize whitespace
 
                             if (ContainerBuffer.Count != 0 && ContainerBuffer[^1] == Operators.FSTRING) {
@@ -692,7 +1015,85 @@ namespace Numinous {
                     return Success();
 
                     #region Context Fetcher Functions
-                    (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy)>, int finish, bool Success) Success() => (Tokens, Finish, true);
+                    (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, OperationTypes OperationType)>, int finish, bool Success) Success() => (Tokens, Finish, true);
+                    void step() => StringIndex += RegexTokens[i++].Length;
+
+                    OperationTypes  ExtractOperation() {
+                        if (RegexTokens[i][0] == '#') {
+                            if (DeltaTokens.Count > 0 || StepTokens.Count > 0 || LastNonWhiteSpaceIndex != 0) {
+                                // error, assembler directives must own the entire line. (stylistic enforcement? I'm not sure)
+                                return default;
+                            }
+
+                            step();
+
+                            switch (RegexTokens[i]) {
+                                case "include":
+                                    // demands <> :: We can take over from here
+
+                                    bool Binary = false;
+                                    
+                                    for (; i < RegexTokens.Count; step()) {
+                                        switch (RegexTokens[i]) {
+                                            case " ":
+                                            case "\t":
+                                                continue;
+
+                                            case "<":
+                                                string library_request = CollectiveContext[(StringIndex + 1)..CollectiveContext.LastIndexOf('>')];
+                                                // fetching installed library
+                                                // get string representation from < to > :: ENSURING > exists
+                                                // split string by the forward slashes
+                                                // attempt a FSIO access for the content
+                                                break;
+
+                                            case "\"":
+                                                // including local source material
+                                                // get string rep from first " to last "
+                                                // split string by forward slashes
+                                                // attempt an FSIO access for the content || FIX RELATIVE PATH ISSUES
+                                                break;
+
+                                            case "bin":
+                                                if (Binary) {
+                                                    // error set twice
+                                                    return default;
+                                                }
+
+                                                Binary = true;
+                                                continue;
+
+                                            default:
+                                                // error, erroneous token
+                                                return default;
+                                        }
+                                    }
+                                    
+
+                                    return OperationTypes.COMPLETE;
+                                case "assert":
+                                    // requires a boolean, we'll depend on Eval
+
+                                case "cart":
+                                case "disk":
+                                    // needs nothing else
+
+                                case "define":
+                                    // well take over here
+                                    // define exp ctx
+                                    // define exp(arg, arg) ctx-arg-arg
+                                case "undefine":
+                                    // undefine ctx (we already replace this, so this will require some restructuring
+
+                                case "rom":
+                                    // #rom <CINT>/<INT>
+                                case "cpu":
+                                    // #cpu <CINT>/<INT>
+                                    return OperationTypes.DIRECTIVE;
+                            }
+                        }
+                        return default;
+                    }
 
                     void PrepareNextStep() {
                         MaxHierarchy = 0;
@@ -700,6 +1101,7 @@ namespace Numinous {
                         DeltaTermTokens.Clear();
                         ContainerBuffer = [];
                         LastNonWhiteSpaceIndex = -1;
+                        ExtractOperation();
                     }
 
                     bool CaptureCSTRING(int LineNumber, Func<char, bool> HaltCapturePredicate) {
@@ -783,7 +1185,7 @@ namespace Numinous {
                                 t.Representation
                             )).ToList();
 
-                        Tokens.Add((StepTokenShallowCopy, MaxHierarchy));
+                        Tokens.Add((StepTokenShallowCopy, MaxHierarchy, OperationType));
                     }
 
                     void CopyDeltaTokens() {
@@ -929,6 +1331,7 @@ namespace Numinous {
                     Proceed,
                 }
                 
+                
                 internal static (string InputPath, string OutputPath, Responses Response) Parse(string[] args) {
                     string InputPath = "", OutputPath = "";
                     int StringIndex = 0;
@@ -997,7 +1400,7 @@ namespace Numinous {
                             case "--help":
                                 Response = Responses.Terminate_Success;
 
-                                if (i == args.Length) {
+                                if (i == args.Length - 1) {
                                     // generic help message
                                     Log(ErrorTypes.None, DecodingPhase.TERMINAL,
 $"""
@@ -1142,12 +1545,143 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                         }
                     }
 
-                    if (Program.WarningLevel == WarningLevels.NONE) Program.WarningLevel = WarningLevels.DEFAULT;
+                    return LoadConfig() ? (InputPath, OutputPath, Response) : default;
 
-                    return (InputPath, OutputPath, Response);
+                    static bool LoadConfig() {
+                        if (!File.Exists($"{AppContext.BaseDirectory}/Numinous.toml")) {
+                            File.WriteAllText($"{AppContext.BaseDirectory}/Numinous.toml", """
+[Defaults]
+DefaultLanguage             = "System"
+DefaultWarningLevel         = "Default"
+
+[Paths]
+LibraryIncludePaths         = ["./libs"]
+""");
+                        }
+
+                        var Config = Toml.ToModel<NuminousConfigTomlTemplate>(
+                            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Numinous.toml")),
+                            null,
+                            new TomlModelOptions { ConvertPropertyName = name => name }
+                        );
+
+                        #region Warning level from Config TOML
+                        if (Program.WarningLevel == WarningLevels.NONE) Program.WarningLevel = Config.Defaults.DefaultWarningLevel switch {
+                            "Ignore"        => WarningLevels.IGNORE,
+                            "Default"       => WarningLevels.DEFAULT,
+                            "Error"         => WarningLevels.ERROR,
+                            "Verbose"       => WarningLevels.VERBOSE,
+                            "Strict"        => WarningLevels.STRICT,
+                            "Controlled"    => WarningLevels.CONTROLLED, 
+
+                            _               => WarningLevels.NONE // mark to fix toml
+                        };
+                       
+                        if (Program.WarningLevel == WarningLevels.NONE) {
+                            Warn(ErrorTypes.SyntaxError, DecodingPhase.TERMINAL, $"""
+The config file (at {AppContext.BaseDirectory}/Numinous.toml) is malformed! 
+Ensure that it contains the key 'DefaultWarningLevel' under 'Defaults' table. The data may be any of the following:
+
+Ignore                  : By default will ignore all warnings, great for sloppy vibe coding with minimal output.
+Default                 : Provides few errors and doesn't halt your workflow
+Error                   : Treats warning as errors, not recommended but does enforce clean code.
+Verbose                 : Shows more warnings, even those which are harmless.
+Strict                  : Shows more warnings as errors, not recommended but does enforce clean code.
+Controlled              : Functions like Strict but prevents use of overrides. 
+
+Project Numinous will NOT continue until you fix this or manually specify your Warning Level!
+""", default, default, default);
+                            return false;
+                        }
+                        #endregion Warning level from Config TOML
+
+                        #region Default Langauge from Config TOML
+                        if (Program.ActiveLanguage == Language.Languages.Null) Program.ActiveLanguage = Config.Defaults.DefaultLanguage switch {
+                            "English UK"    => Language.Languages.English_UK,
+                            "English US"    => Language.Languages.English_US,
+                            "Spanish"       => Language.Languages.Spanish,
+                            "German"        => Language.Languages.German,
+                            "Japanese"      => Language.Languages.Japanese,
+                            "French"        => Language.Languages.French,
+                            "Portuguese"    => Language.Languages.Portuguese,
+                            "Russian"       => Language.Languages.Russian,
+                            "Italian"       => Language.Languages.Italian,
+                            "Dutch"         => Language.Languages.Dutch,
+                            "Polish"        => Language.Languages.Polish,
+                            "Turkish"       => Language.Languages.Turkish,
+                            "Vietnamese"    => Language.Languages.Vietnamese,
+                            "Indonesian"    => Language.Languages.Indonesian,
+                            "Czech"         => Language.Languages.Czech,
+                            "Korean"        => Language.Languages.Korean,
+                            "Ukrainian"     => Language.Languages.Ukrainian,
+                            "Arabic"        => Language.Languages.Arabic,
+                            "Swedish"       => Language.Languages.Swedish,
+                            "Persian"       => Language.Languages.Persian,
+                            "Chinese"       => Language.Languages.Chinese,
+
+                            "System"        => Language.Language.CaptureSystemLanguage(),
+                            _               => Language.Languages.Null
+                        };
+
+                        if (Program.ActiveLanguage == Language.Languages.Null) {
+                            Warn(ErrorTypes.SyntaxError, DecodingPhase.TERMINAL, $"""
+The config file (at {AppContext.BaseDirectory}/Numinous.toml) is malformed! 
+Ensure that it contains the key 'DefaultLanguage' under 'Defaults' table. The data may be any of the following:
+
+English UK
+English US
+Spanish
+German
+Japanese
+French
+Portuguese
+Russian
+Italian
+Dutch
+Polish
+Turkish
+Vietnamese
+Indonesian
+Czech
+Korean
+Ukrainian
+Arabic
+Swedish
+Persian
+Chinese
+
+Project Numinous will NOT continue until you fix this or manually specify your language!
+""", default, default, default);
+                            return false;
+                        }
+                        #endregion Default Langauge from Config TOML
+
+                        Program.SourceFileSearchPaths = [.. Config.Paths.LibraryIncludePaths];
+
+                        if (Program.SourceFileSearchPaths.Count == 0) {
+                            // warn, no libraries at all (this is unusual, they should at least have the standard library)
+                            return false;
+                        }
+
+                        return true;
+                    }
                 }
 
-// in event of left in message, don't show on release
+                internal class NuminousConfigTomlTemplate {
+                    public class DefaultsBlock {
+                        public string DefaultWarningLevel { get; set; } = "DefaultWarningLevel";
+                        public string DefaultLanguage { get; set; } = "DefaultLanguage";
+                    }
+
+                    public class PathsBlock {
+                        public string[] LibraryIncludePaths { get; set; } = [];
+                    }
+
+                    public PathsBlock    Paths    { get; set; } = new();
+                    public DefaultsBlock Defaults { get; set; } = new();
+                }
+
+                // in event of left in message, don't show on release
 #if DEBUG
                 internal static void Debug(string message) => Console.WriteLine(message);
 #else
@@ -1163,11 +1697,6 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                 internal static void WriteInfo(ErrorLevels ErrorLevel, ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context) 
 #endif
                 {
-                    Language.Languages UseLanguage = Program.ActiveLanguage;
-                    if (Program.ActiveLanguage == Language.Languages.Null) UseLanguage = Program.ActiveLanguage = Language.Language.CaptureSystemLanguage();
-                    if (Program.ActiveLanguage == Language.Languages.Null) UseLanguage = Program.ActiveLanguage = Program.ActiveLanguage = Language.Languages.English_UK;
-
-
                     Console.ForegroundColor = ErrorLevel switch {
                         ErrorLevels.LOG     => ConsoleColor.Cyan, 
                         ErrorLevels.WARN    => ConsoleColor.Yellow, 
@@ -1183,9 +1712,9 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                         goto Exit;
                     }
 
-                    ErrorTypeString     = Language.Language.ErrorTypeMessages[(UseLanguage, ErrorType)];
-                    ErrorTypeConnective = Language.Language.Connectives[(UseLanguage, "During")];
-                    DecodePhaseString   = Language.Language.DecodePhaseMessages[(UseLanguage, Phase)];
+                    ErrorTypeString     = Language.Language.ErrorTypeMessages[(Program.ActiveLanguage, ErrorType)];
+                    ErrorTypeConnective = Language.Language.Connectives[(Program.ActiveLanguage, "During")];
+                    DecodePhaseString   = Language.Language.DecodePhaseMessages[(Program.ActiveLanguage, Phase)];
                     LocationString      = LineNumber == -1 ? "" : (StepNumber == 0 ? $"({LineNumber})" : $"({LineNumber}, {StepNumber})");
                     Context = Context == null ? "" : $": {Context}";
 

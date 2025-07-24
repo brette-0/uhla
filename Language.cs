@@ -7,6 +7,8 @@ using Numinous.Engine;
 namespace Numinous {
     namespace Language {
         internal enum Languages {
+            Null,               // Used for unrecognized language specify from terminal
+
             English_UK,
             English_US,
             Spanish,
@@ -27,9 +29,7 @@ namespace Numinous {
             Arabic,
             Swedish,
             Persian,
-            Chinese,
-
-            Null                // Used for unrecognized language specify from terminal
+            Chinese
         }
 
         internal class Language {
@@ -52,8 +52,10 @@ namespace Numinous {
                     var outp = Process.Start(psi)!.StandardOutput.ReadToEnd();
                     langCode = outp.Split(['"', ','], StringSplitOptions.RemoveEmptyEntries)
                                .FirstOrDefault(s => s.Length >= 2) ?? "en";
+                } else {
+                    // error, attempted to capture system language
+                    langCode = "";
                 }
-                langCode = CultureInfo.InvariantCulture.Name;
 
                 return langCode switch {
                     "en" or "en-GB" => Languages.English_UK,
