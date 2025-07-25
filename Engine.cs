@@ -17,7 +17,7 @@ namespace Numinous {
             internal enum Registers { A, X, Y }
             
             [Flags]
-            internal enum Flags {
+            internal enum Flags : byte {
                 Carry       = 0x01,
                 Zero        = 0x02,
             //  Interrupt   = 0x04,
@@ -26,6 +26,213 @@ namespace Numinous {
             //  None (1)    = 0x20,
                 Overflow    = 0x40,
                 Negative    = 0x80
+            }
+
+            [Flags]
+            internal enum AddressModeFlags : ushort {
+                Implied             = 1 << 0,
+                Immediate           = 1 << 1,
+                ZeroPage            = 1 << 2,
+                ZeroPageX           = 1 << 3,
+                ZeroPageY           = 1 << 4,
+                Absolute            = 1 << 5,
+                AbsoluteX           = 1 << 6,
+                AbsoluteY           = 1 << 7,
+                Indirect            = 1 << 8,
+                IndirectX           = 1 << 9,
+                IndirectY           = 1 << 10,
+                Accumulator         = 1 << 11,
+                A                   = 1 << 12,
+                X                   = 1 << 13,
+                Y                   = 1 << 14,
+                Relative            = 1 << 15,
+            }
+
+            internal static class System {
+                readonly static internal Dictionary<string, AddressModeFlags> InstructionAddressModes = new() {
+                    { "adc", adc }, { "and", and }, { "cmp", cmp }, { "eor", eor },
+                    { "lda", lda }, { "ora", ora }, { "sta", sta },
+
+                    { "bcc", bcc }, { "bcs", bcs }, { "bnc", bnc }, { "bns", bns },
+                    { "bvc", bvc }, { "bvs", bvs }, { "bzc", bzc }, { "bzs", bzs },
+
+                    { "bit", bit }, { "brk", brk },
+
+                    { "clc", clc }, { "clv", clv }, { "sec", sec },
+                    { "tax", tax }, { "tay", tay }, { "tsx", tsx },
+                    { "txa", txa }, { "txs", txs }, { "txy", txy },
+
+                    { "cpx", cpx }, { "cpy", cpy },
+
+                    { "dec", dec }, { "inc", inc },
+
+                    { "dex", dex }, { "dey", dey }, { "inx", inx }, { "iny", iny },
+                    { "pha", pha }, { "php", php }, { "pla", pla }, { "plp", plp },
+                    { "sei", sei }, { "rti", rti }, { "rts", rts },
+
+                    { "jmp", jmp }, { "jsr", jsr },
+
+                    { "ldx", ldx }, { "ldy", ldy },
+
+                    { "asl", asl }, { "lsr", lsr }, { "rol", rol }, { "ror", ror },
+
+                    { "nop", nop },
+
+                    { "stx", stx }, { "sty", sty }
+                };
+
+                readonly internal static AddressModeFlags[] MemoryAddressModeInstructionTypes = [
+                    // adc and cmp eor lda ora sta
+                    AddressModeFlags.Immediate  |
+                    AddressModeFlags.ZeroPageX  | 
+                    AddressModeFlags.ZeroPageY  |
+                    AddressModeFlags.Absolute   | 
+                    AddressModeFlags.AbsoluteX  |
+                    AddressModeFlags.AbsoluteY  | 
+                    AddressModeFlags.IndirectX  | 
+                    AddressModeFlags.IndirectY  ,
+
+                    // bzc bzs bns bnc bvs bvc bcs bcc
+                    AddressModeFlags.Relative   ,
+
+                    // bit
+                    AddressModeFlags.Immediate  | 
+                    AddressModeFlags.ZeroPage   |
+                    AddressModeFlags.Absolute   ,
+
+                    // brk
+                    AddressModeFlags.Implied    | 
+                    AddressModeFlags.Immediate  ,
+
+                    // clc clv sec tax tay tsx txa txs txy
+                    AddressModeFlags.Implied    ,
+
+                    // cpx cpy
+                    AddressModeFlags.Immediate  | 
+                    AddressModeFlags.ZeroPage   |
+                    AddressModeFlags.Absolute   ,
+
+                    // dec inc
+                    AddressModeFlags.ZeroPage   |
+                    AddressModeFlags.ZeroPageX  |
+                    AddressModeFlags.Absolute   |
+                    AddressModeFlags.AbsoluteX  ,
+
+                    // dex dey inx iny pha php pla plp rti rts sei 
+                    AddressModeFlags.Implied    ,
+
+                    // jmp
+                    AddressModeFlags.Absolute   | 
+                    AddressModeFlags.Indirect   ,
+
+                    // jsr 
+                    AddressModeFlags.Absolute   ,
+
+                    // ldx
+                    AddressModeFlags.Immediate  |
+                    AddressModeFlags.ZeroPage   |
+                    AddressModeFlags.ZeroPageY  |
+                    AddressModeFlags.Absolute   |
+                    AddressModeFlags.AbsoluteY  ,
+
+                    // ldy
+                    AddressModeFlags.Immediate  |
+                    AddressModeFlags.ZeroPage   |
+                    AddressModeFlags.ZeroPageX  |
+                    AddressModeFlags.Absolute   |
+                    AddressModeFlags.AbsoluteX  ,
+
+                    // asl lsr rol ror
+                    AddressModeFlags.Implied    | 
+                    AddressModeFlags.A          |
+                    AddressModeFlags.ZeroPage   |
+                    AddressModeFlags.ZeroPageX  |
+                    AddressModeFlags.Absolute   |
+                    AddressModeFlags.AbsoluteX  ,
+
+                    // nop
+                    AddressModeFlags.Implied    | 
+                    AddressModeFlags.Immediate  | 
+                    AddressModeFlags.ZeroPage   | 
+                    AddressModeFlags.ZeroPageX  | 
+                    AddressModeFlags.Absolute   | 
+                    AddressModeFlags.AbsoluteX  ,
+
+                    // stx
+                    AddressModeFlags.ZeroPage   |
+                    AddressModeFlags.ZeroPageY  |
+                    AddressModeFlags.Absolute   ,
+
+                    // sty
+                    AddressModeFlags.ZeroPage   |
+                    AddressModeFlags.ZeroPageX  |
+                    AddressModeFlags.Absolute   ,
+                ];
+
+                readonly internal static AddressModeFlags adc = MemoryAddressModeInstructionTypes[0],
+                                                          and = MemoryAddressModeInstructionTypes[0],
+                                                          cmp = MemoryAddressModeInstructionTypes[0],
+                                                          eor = MemoryAddressModeInstructionTypes[0],
+                                                          lda = MemoryAddressModeInstructionTypes[0],
+                                                          ora = MemoryAddressModeInstructionTypes[0],
+                                                          sta = MemoryAddressModeInstructionTypes[0];
+
+                readonly internal static  AddressModeFlags bcc = MemoryAddressModeInstructionTypes[1],
+                                                          bcs = MemoryAddressModeInstructionTypes[1],
+                                                          bnc = MemoryAddressModeInstructionTypes[1],
+                                                          bns = MemoryAddressModeInstructionTypes[1],
+                                                          bvc = MemoryAddressModeInstructionTypes[1],
+                                                          bvs = MemoryAddressModeInstructionTypes[1],
+                                                          bzc = MemoryAddressModeInstructionTypes[1],
+                                                          bzs = MemoryAddressModeInstructionTypes[1];
+
+                readonly internal static AddressModeFlags bit = MemoryAddressModeInstructionTypes[2];
+                readonly internal static AddressModeFlags brk = MemoryAddressModeInstructionTypes[3];
+
+                readonly internal static AddressModeFlags clc = MemoryAddressModeInstructionTypes[4],
+                                                          clv = MemoryAddressModeInstructionTypes[4],
+                                                          sec = MemoryAddressModeInstructionTypes[4],
+                                                          tax = MemoryAddressModeInstructionTypes[4],
+                                                          tay = MemoryAddressModeInstructionTypes[4],
+                                                          tsx = MemoryAddressModeInstructionTypes[4],
+                                                          txa = MemoryAddressModeInstructionTypes[4],
+                                                          txs = MemoryAddressModeInstructionTypes[4],
+                                                          txy = MemoryAddressModeInstructionTypes[4];
+
+                readonly internal static AddressModeFlags cpx = MemoryAddressModeInstructionTypes[5],
+                                                          cpy = MemoryAddressModeInstructionTypes[5];
+
+                readonly internal static AddressModeFlags dec = MemoryAddressModeInstructionTypes[6],
+                                                          inc = MemoryAddressModeInstructionTypes[6];
+
+                readonly internal static AddressModeFlags dex = MemoryAddressModeInstructionTypes[7],
+                                                          dey = MemoryAddressModeInstructionTypes[7],
+                                                          inx = MemoryAddressModeInstructionTypes[7],
+                                                          iny = MemoryAddressModeInstructionTypes[7],
+                                                          pha = MemoryAddressModeInstructionTypes[7],
+                                                          php = MemoryAddressModeInstructionTypes[7],
+                                                          pla = MemoryAddressModeInstructionTypes[7],
+                                                          plp = MemoryAddressModeInstructionTypes[7],
+                                                          sei = MemoryAddressModeInstructionTypes[7],
+                                                          rti = MemoryAddressModeInstructionTypes[7],
+                                                          rts = MemoryAddressModeInstructionTypes[7];
+
+                readonly internal static AddressModeFlags jmp = MemoryAddressModeInstructionTypes[8];
+                readonly internal static AddressModeFlags jsr = MemoryAddressModeInstructionTypes[9];
+
+                readonly internal static AddressModeFlags ldx = MemoryAddressModeInstructionTypes[10];
+                readonly internal static AddressModeFlags ldy = MemoryAddressModeInstructionTypes[11];
+
+                readonly internal static AddressModeFlags asl = MemoryAddressModeInstructionTypes[12],
+                                                          lsr = MemoryAddressModeInstructionTypes[12],
+                                                          rol = MemoryAddressModeInstructionTypes[12],
+                                                          ror = MemoryAddressModeInstructionTypes[12];
+
+                readonly internal static AddressModeFlags nop = MemoryAddressModeInstructionTypes[13];
+
+                readonly internal static AddressModeFlags stx = MemoryAddressModeInstructionTypes[14];
+                readonly internal static AddressModeFlags sty = MemoryAddressModeInstructionTypes[15];
+
             }
         }
 
@@ -619,7 +826,7 @@ namespace Numinous {
                 internal enum OperationTypes : byte {
                     FAIL,
                     DIRECTIVE,          // eg.. #include
-                    OPERATOR,           // eg.. lda foo
+                    OPERATION,           // eg.. lda foo
                     EVALUATE,           // function, macros, RODATA writes
                 }
 
@@ -1033,10 +1240,7 @@ namespace Numinous {
                         }
                     }
 
-                    // If IsLastOperator is enabled, we should only disable it until we have a non-whitespace line. 
-                    IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : DeltaTermTokens.Count != 0 && DeltaTermTokens[LastNonWhiteSpaceIndex].IsOperator;
-
-                    if (ContainerBuffer.Count == 0 && !IsLastOperator) {
+                    if (IsThisSuccess()) {
                         // final steps
 
                         CopyDeltaTermTokens();
@@ -1052,6 +1256,51 @@ namespace Numinous {
                     #region Context Fetcher Functions
                     (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, OperationTypes OperationType)>, int finish, bool Success, bool Continue) Success() => (Tokens, Finish, true, false);
                     void step() => StringIndex += RegexTokens[i++].Length;
+
+                    bool IsThisSuccess() {
+                        switch (OperationType) {
+                            default:
+                            case OperationTypes.EVALUATE:
+                                // as long as the container buffer is clear, we didn't end on an operator ... we should be good.
+                                // we do permit ending with ", ;, ), ] and } however    --> although should we be hitting code blocks?
+
+                                IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : DeltaTermTokens.Count != 0 && DeltaTermTokens[LastNonWhiteSpaceIndex].IsOperator;
+                                return (ContainerBuffer.Count == 0 && !IsLastOperator);
+
+                            case OperationTypes.OPERATION:
+                                /*
+                                 * This may end up being more complex
+                                 * 
+                                 * instructions can as a rule result in 0, 1 or 2 terms - it should be impossible for more.
+                                 * 
+                                 * however stuff like rfs/rfc/jfs/jfc optimization get icky - perhaps by default it won't have that.
+                                 */
+
+
+                                return true;
+#if DEBUG
+                                throw new Exception($"Error, unrecognized Operation Type : No means to evaluate CF level success with {OperationType}");
+#else
+                                throw new Exception($"FATAL ERROR :: (REPORT THIS ON THE GITHUB) UNRECOGNIZED OPERATION TYPE {OperationType}")
+#endif
+                        }
+
+                        #region IsThisSuccess Functions
+                        int GetOpCodeTermQuantityLimit() {
+                            // if (idtable) NEW TABLE TODO: Implement idtable integration
+                            return "" switch {
+                                
+
+                                _ =>
+#if DEBUG
+                                     throw new Exception($"Error, unrecognized opcode :{opcode}")
+#else
+                                     throw new Exception($"FATAL ERROR :: (REPORT THIS ON THE GITHUB) UNRECOGNIZED OPCODE {opcode}")
+#endif
+                            };
+                        }
+#endregion
+                    }
 
                     OperationTypes  ExtractOperation() {
                         if (RegexTokens[i][0] == '#') {
@@ -1162,6 +1411,322 @@ namespace Numinous {
                             }
                         }
                         return default;
+
+                        #region         OperationExtract Local Functions
+
+                        (bool success, bool found, bool immediate, bool overrule, bool enforce_zp, bool enforce_abs) FetchInstructionHeader() {
+                            /*
+                             * ldr  (ld) + check for r
+                             * str  (st) + check for r
+                             * 
+                             * tra  (t)  + check for r
+                             * trx  (t)  + check for r
+                             * try  (t)  + check for r
+                             * tar  (ta) + check for r
+                             * tyr  (ty) + check for r
+                             * txr  (tx) + check for r
+                             * tir  (t)  + check for i + check for r
+                             *      check if i == r
+                             * 
+                             * bfc  (b)  + check for f
+                             * bfs  (b)  + check for f
+                             *      f must be flag type
+                             *      
+                             * inr  (in) + check for r
+                             *      r must be:
+                             *          indexing flag type
+                             *          memory location
+                             *          preprocessor INT
+                             *          
+                             * der (de)  + check for r
+                             *      r must be:
+                             *          indexing flag type
+                             *          memory location
+                             *          preprocessor INT
+                             *          
+                             */
+
+                            switch (RegexTokens[i].ToLower()) {
+                                case "adc": goto CheckMemoryAccessRulesWithImmediate;
+                                case "and": goto CheckMemoryAccessRulesWithImmediate;
+                                case "cmp": goto CheckMemoryAccessRulesWithImmediate;
+                                case "eor": goto CheckMemoryAccessRulesWithImmediate;
+                                case "lda": goto CheckMemoryAccessRulesWithImmediate;
+                                case "ora": goto CheckMemoryAccessRulesWithImmediate;
+                                case "sta": goto CheckMemoryAccessRules;
+
+                                case "bgt":
+                                case "blt":
+                                case "bpl":
+                                case "bmi":
+
+                                case "bcc":
+                                case "bcs":
+                                case "bnc":
+                                case "bns":
+                                case "bvc":
+                                case "bvs":
+                                case "bzc":
+                                case "bzs":
+                                    step();
+                                    if (RegexTokens[i][0] == '!') return (true, true, false, true, false, false);
+                                    return (true, true, false, false, false, false);
+
+                                case "bit":
+                                case "brk":
+                                    step();
+                                    if (RegexTokens[i][0] == '#') return (true, true, true, false, false, false);
+                                    return (true, true, false, false, false, false);
+
+
+                                case "clc": 
+                                case "clv": 
+                                case "sec":
+                                    step();
+                                    if (RegexTokens[i][0] == '!') return (true, true, false, true, false, false);
+                                    return (true, true, false, false, false, false);
+
+
+                                //case "txy": 
+                                //case "tyx": 
+
+                                case "cpa": goto CheckMemoryAccessRulesWithImmediate;   // cmp
+                                case "cpx": goto CheckMemoryAccessRulesWithImmediate;
+                                case "cpy": goto CheckMemoryAccessRulesWithImmediate;
+
+                                case "dec": goto CheckMemoryAccessRules;
+                                case "inc": goto CheckMemoryAccessRules;
+
+                                case "tax":
+                                case "tay":
+                                case "tsx":
+                                case "txa":
+                                case "txs":
+                                case "dex": 
+                                case "dey": 
+                                case "inx":
+                                case "iny": 
+                                case "pha":
+                                case "php": 
+                                case "pla": 
+                                case "plp":
+                                case "sei":
+                                case "rti": 
+                                case "rts": return (true, true, false, false, false, false);
+
+                                case "jmp":
+                                case "jsr":
+                                    step();
+                                    if (RegexTokens[i][0] == '!') return (true, true, false, true, false, false);
+                                    return (true, true, false, false, false, false);
+
+                                case "ldx": goto CheckMemoryAccessRulesWithImmediate;
+                                case "ldy": goto CheckMemoryAccessRulesWithImmediate;
+
+                                case "asl": goto CheckMemoryAccessRules;
+                                case "lsr": goto CheckMemoryAccessRules;
+                                case "rol": goto CheckMemoryAccessRules;
+                                case "ror": goto CheckMemoryAccessRules;
+
+                                case "nop": goto CheckMemoryAccessRulesWithImmediate;
+
+                                case "stx": goto CheckMemoryAccessRules;
+                                case "sty": goto CheckMemoryAccessRules;
+
+                                CheckMemoryAccessRulesWithImmediate:
+                                    step();
+                                    if (RegexTokens[i][0] == '#') {
+                                        step();
+                                        return (true, true, false, false, false, false);
+                                    }
+
+                                    goto CheckMemoryAccessRules;
+
+                                CheckMemoryAccessRules:
+                                    step();
+
+                                    if (RegexTokens[i] == "a") return (true, true,  false, false, false, true);
+                                    else if (RegexTokens[i] == "z") return (true, true, false, false, true, false);
+                                    else if (RegexTokens[i][0] == '!') {
+                                        step();
+
+                                        if (RegexTokens[i] == "a") return (true, true, false, true, false, true);
+                                        else if (RegexTokens[i] == "z") return (true, true, false, true, true, false);
+                                        else return (true, true, false, true, false, false);
+                                    } else return (true, true, false, false, false, false);
+                            }
+
+                            switch (RegexTokens[i][..2]) {
+
+                                case "ld":
+                                    switch (RegexTokens[i][2]) {
+                                        case 'c':
+                                        case 'n':
+                                        case 'v':
+                                        case 'z':
+                                            // error : ldc, ldn, ldv and ldz are forbidden terms.
+                                            // ldc   : lda #$00, rol            3 bytes, 4 cycles
+                                            // ldn   : rol, rol, lda #$00       4 bytes, 6 cycles
+                                            // ldv   : nothing
+                                            // ldz   : lda #$00                 2 bytes, 2 cycles
+                                            return default;
+                                    }
+
+                                    goto CheckMemoryAccessRulesWithImmediate;
+
+
+                                case "st":
+                                    switch (RegexTokens[i][2]) {
+                                        case 'c':
+                                        case 'n':
+                                        case 'v':
+                                        case 'z':
+                                            // error not an instruction
+                                            // stz   : ldr #$00, str tar    (uses whichever reg is provably zero if reg awareness enabled, otherwise fails)
+                                            return default;
+                                    }
+
+                                    goto CheckMemoryAccessRules;
+
+                                case "ta":
+                                    switch (RegexTokens[i][2]) {
+                                        case 'c':
+                                        case 'n':
+                                        case 'v':
+                                        case 'z':
+                                        case 'a':
+                                            // error not an instruction
+                                            // tac   : cmp #$01 ?
+                                            return default;
+
+                                        default: return (true, true, false, false, false, false);
+                                    }
+                                case "tx":
+                                    switch (RegexTokens[i][2]) {
+                                        case 'c':
+                                        case 'n':
+                                        case 'v':
+                                        case 'z':
+                                        case 'x':
+                                            // error not an instruction
+                                            // tac   : cmp #$01 ?
+                                            return default;
+
+                                        default: return (true, true, false, false, false, false);
+                                    }
+
+                                case "ty":
+                                    switch (RegexTokens[i][2]) {
+                                        case 'c':
+                                        case 'n':
+                                        case 'v':
+                                        case 'z':
+                                        case 'y':
+                                            // error not an instruction
+                                            // tac   : cmp #$01 ?
+                                            return default;
+
+                                        default: return (true, true, false, false, false, false);
+                                    }
+
+                                case "in":
+                                    switch (RegexTokens[i][2]) {
+                                        case 'c':
+                                            // memory, we be wanting to eval some
+                                            goto CheckMemoryAccessRules;
+
+                                        case 'n':
+                                        case 'v':
+                                        case 'z':
+                                            // error not an instruction
+                                            // tac   : cmp #$01 ?
+                                            return default;
+
+                                        default: return (true, true, false, false, false, false);
+                                    }
+                                case "de":
+                                    switch (RegexTokens[i][2]) {
+                                        case 'c':
+                                            // memory, we be wanting to eval some
+                                            goto CheckMemoryAccessRules;
+
+                                        case 'n':
+                                        case 'v':
+                                        case 'z':
+                                            // error not an instruction
+                                            // tac   : cmp #$01 ?
+                                            return default;
+
+                                        default: return (true, true, false, false, false, false);
+                                    }
+
+                                default:
+                                    if (RegexTokens[i][0] == 'b') {
+                                        switch (RegexTokens[i][1]) {
+                                            case 'a':
+                                            case 'x':
+                                            case 'y':
+                                                return default;
+                                        }
+
+                                        switch (RegexTokens[i][2]) {
+                                            case 's':
+                                            case 'c':
+                                                break;
+
+                                            default: return default;
+                                        }
+
+                                        step();
+                                        if (RegexTokens[i][0] == '!') return (true, true, false, true, false, false);
+                                        return (true, true, false, false, false, false);
+
+                                    } else if (RegexTokens[i][0] == 't') {
+                                        if (RegexTokens[i][1] == RegexTokens[i][2]) {
+                                            // error error nothing to do not an instruction
+                                            return default;
+                                        }
+
+                                        Func<char, bool> isFlag = (char c) => c switch { 'c' or 'n' or 'v' or 'z' => default, _ => true };
+
+                                        if (isFlag(RegexTokens[i][1]) || isFlag(RegexTokens[i][2])) {
+                                            // error not an instruction
+                                            return default;
+                                        }
+
+                                        return (true, true, false, false, false, false);
+                                    }
+
+#if DEBUG
+                                    throw new Exception($"Could not identify as an instruction : {RegexTokens[i]}");
+#else
+                                    throw new Exception($"FATAL ERROR :: (REPORT THIS ON THE GITHUB) COULD NOT IDENTIFY AS AN INSTRUCTION {opcode}")
+#endif
+
+                                CheckMemoryAccessRulesWithImmediate:
+                                    step();
+                                    if (RegexTokens[i][0] == '#') {
+                                        step();
+                                        return (true, true, false, false, false, false);
+                                    }
+
+                                    goto CheckMemoryAccessRules;
+
+                                CheckMemoryAccessRules:
+                                    step();
+
+                                    if (RegexTokens[i] == "a") return (true, true, false, false, false, true);
+                                    else if (RegexTokens[i] == "z") return (true, true, false, false, true, false);
+                                    else if (RegexTokens[i][0] == '!') {
+                                        step();
+
+                                        if (RegexTokens[i] == "a") return (true, true, false, true, false, true);
+                                        else if (RegexTokens[i] == "z") return (true, true, false, true, true, false);
+                                        else return (true, true, false, true, false, false);
+                                    } else return (true, true, false, false, false, false);
+                            }
+                        }
+#endregion      OperationExtract Local Functions
                     }
 
                     void PrepareNextStep() {
@@ -1280,7 +1845,7 @@ namespace Numinous {
                         DeltaTermTokens = [];                       // wipe delta tokens for next operation
                         DeltaTokens.Add(StepDeltaTokenShallowCopy);
                     }
-                    #endregion Context Fetcher Functions
+#endregion Context Fetcher Functions
                 }
             }
 
