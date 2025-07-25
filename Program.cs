@@ -33,14 +33,15 @@ internal static class Program {
             return (int)ErrorTypes.ParsingError;
         }
 
-        string[] InputFile = File.ReadAllLines(InputPath!);
+        string InputFile = File.ReadAllText(InputPath!);
         if (InputFile.Length == 0) {
             Terminal.Error(ErrorTypes.NothingToDo, DecodingPhase.TOKEN, $"{Language.Connectives[(ActiveLanguage, "Source file")]} {InputPath} {Language.Connectives[(ActiveLanguage, "has no contents")]}", -1, 0, null);
             return (int)ErrorTypes.NothingToDo;
         }
         SourceFileNameBuffer.Add(InputPath!);
-        SourceFileContentBuffer.Add(InputFile);
+        RegexTokenizedSourceFileContentBuffer.Add(RegexTokenize(InputFile));
         SourceFileIndexBuffer.Add(0);           // begin from "main.s" (CONTENTS) : (0)
+        SourceSubstringBuffer.Add(0);       // begin from char 0
 
         // rs "Root Scope" has itself as key, value and parent - sitting in the root pointing to itself.
         // this is the only way via asm to directly refer to rs. Useful for when you use a 'as' level keyword but desires rs resolve.
@@ -82,18 +83,26 @@ internal static class Program {
             {"0",       (0, AssembleTimeTypes.COBJECT, AccessLevels.PRIVATE) }
         }, AssembleTimeTypes.FUNCTION, AccessLevels.PUBLIC);
 
-        Span<int> SourceFileIndexBufferSpan = CollectionsMarshal.AsSpan(SourceFileIndexBuffer);
-
         ActiveScopeBuffer.Add(LabelDataBase);   // add rs to as, default rs
         ObjectSearchBuffer = [LabelDataBase];   // by default, contains nothing more than this. For each search AS[^1] is added
-        var Demo = Evaluate.ContextFetcher(SourceFileContentBuffer[^1], ref SourceFileIndexBufferSpan[^1], 0);
+
+        Span<List<string>>  SourceFileContentBufferSpan = CollectionsMarshal.AsSpan(RegexTokenizedSourceFileContentBuffer);
+        Span<string>        SourceFileNameBufferSpan    = CollectionsMarshal.AsSpan(SourceFileNameBuffer);
+        Span<int>           SourceSubstringBufferSpan   = CollectionsMarshal.AsSpan(SourceSubstringBuffer);
+        Span<int>           SourceFileLineBufferSpan    = CollectionsMarshal.AsSpan(SourceFileLineBuffer);
+
+
+
+        var CF_resp = Evaluate.ContextFetcher(ref SourceFileContentBufferSpan[^1], ref SourceSubstringBufferSpan[^1], ref SourceFileLineBufferSpan[^1], SourceFileNameBufferSpan[^1]);
 
         return 0;
     }
 
-    internal static List<string[]> SourceFileContentBuffer = [];
-    internal static List<int> SourceFileIndexBuffer = [];
-    internal static List<string> SourceFileNameBuffer = [];
+    internal static List<List<string>>  RegexTokenizedSourceFileContentBuffer = [];
+    internal static List<int>           SourceFileIndexBuffer = [];
+    internal static List<int>           SourceSubstringBuffer = [];
+    internal static List<string>        SourceFileNameBuffer = [];
+    internal static List<int>           SourceFileLineBuffer = [];  // Used for ERROR REPORT ONLY
 
     internal static Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> LabelDataBase = [];
     internal static List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>> ActiveScopeBuffer = [];
@@ -103,4 +112,6 @@ internal static class Program {
 
     internal static Languages ActiveLanguage;
     internal static WarningLevels WarningLevel;
+
+    internal static Numinous.Modes Mode; 
 }

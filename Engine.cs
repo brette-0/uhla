@@ -1,11 +1,17 @@
 ﻿using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 
 using Tomlyn;
-using Tomlyn.Model;
 
 namespace Numinous {
+    internal enum Modes {
+        None,
+        Cartridge,
+        Disk
+    }
+
     namespace Engine {
         namespace System {
             internal enum Registers { A, X, Y }
@@ -198,6 +204,45 @@ namespace Numinous {
 
 
         internal static class Engine {
+            internal static (object Return, AssembleTimeTypes Type, bool Success) Assemble(List<(object data, AssembleTimeTypes type)> args) {
+
+                Span<List<string>>  SourceFileContentBufferSpan = CollectionsMarshal.AsSpan(Program.RegexTokenizedSourceFileContentBuffer);
+                Span<string>        SourceFileNameBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileNameBuffer);
+                Span<int>           SourceSubstringBufferSpan   = CollectionsMarshal.AsSpan(Program.SourceSubstringBuffer);
+                Span<int>           SourceFileLineBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
+
+                var CF_resp = Evaluate.ContextFetcher(ref SourceFileContentBufferSpan[^1], ref SourceSubstringBufferSpan[^1], ref SourceFileLineBufferSpan[^1], SourceFileNameBufferSpan[^1]);
+                if (!CF_resp.Success) return default;
+
+                // if its to write to ROM, ... figure that out
+                // otherwise delta evaluate each step
+
+                return default;
+            }
+
+
+            internal static (string filepath, bool success) CheckInclude(string target) {
+                foreach (string search in Program.SourceFileSearchPaths) {
+                    string fullPath = Path.Combine(AppContext.BaseDirectory, search, target);
+                    if (File.Exists(fullPath)) {
+                        return (fullPath, true);
+                    }
+                }
+                return default;
+            }
+
+            /// <summary>
+            /// Add Tokenized Source to Buffer
+            /// </summary>
+            /// <param name="FilePath"></param>
+            internal static void AddSourceContext(string FilePath) {
+                Program.SourceFileNameBuffer.Add(FilePath);
+                Program.RegexTokenizedSourceFileContentBuffer.Add(RegexTokenize(File.ReadAllText(FilePath)));
+                Program.SourceSubstringBuffer.Add(0);
+                Program.SourceFileIndexBuffer.Add(0);
+            }
+
+
             /// <summary>
             /// Remove the Function from the values, ensuring functions are not evaluated.
             /// By functions we refer to directives such as #include
@@ -209,26 +254,6 @@ namespace Numinous {
             internal static (object OperationContext, bool Success) ExtractTask(List<string> StringTokens) {
                 // self type is not default for tokens, as they are not objects.
                 if (StringTokens[0][0] == '#') {
-                    // assembler directive
-
-                    switch (StringTokens[1]) {
-                        case "include":             // #include "chr/font0.chr"  Graphics only
-                        case "define":              // #define foo 2
-                                                    // #define v23 (x, y)   vec3(x, y, 0)
-                        case "undefine":            // #undefine foo
-                        case "nes":                 // nes mode, do not treat as fds
-                        case "fds":                 // fds mode, do not treat as stock nes
-
-                        case "charmap":             // default charmap  #charmap charmap_object
-
-                        case "rom":                 // Not Recommended : Set ROM Space Address
-                        case "cpu":                 // Not Recommended : Set CPU Space Address
-                            break;
-
-                        default:
-                            // error, no assembler directive by this alias
-                            return default;
-                    }
 
                     if (isExplicitInstruction(StringTokens[0])) {
                         /*
@@ -596,8 +621,6 @@ namespace Numinous {
                     DIRECTIVE,          // eg.. #include
                     OPERATOR,           // eg.. lda foo
                     EVALUATE,           // function, macros, RODATA writes
-
-                    COMPLETE,           // Needs to do nothing more, handled entirely inside CF
                 }
 
                 /*
@@ -816,8 +839,17 @@ namespace Numinous {
                 *          
                 *          
                 *          TODO:
-                *              SOLVE DEFINES
-                *              TEST MULTI TERM
+                *              REWORK FORMAT
+                *                   
+                *                   We now tokenize regex tokens into proper tokens progressively over the entire source code regex tokenized.
+                *                   Based on detected operation, we'll decide when we need to withdraw.
+                *                   
+                *                   We need to mutate the Index we return for future regex token processing, as well as check the line for error reporting.
+                *                   
+                *                   Now we are dealing with giant data sets, we will need to write less write-heavy code. Accessing is cheap, but restructuring?
+                *               
+                *               
+                *              FIX CollectiveContext issue
                 *              ADD ERROR REPORTS
                 *              MULTI_LANG FOR ERRORS
                 *              
@@ -831,8 +863,9 @@ namespace Numinous {
                 /// <param name="SourceLineReference"></param>
                 /// <param name="SourceLineSubStringIndex"></param>
                 /// <returns></returns>
-                internal static (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, OperationTypes OperationType)>, int Finish, bool Success) ContextFetcher(string[] SourceFileReference, ref int SourceLineReference, int SourceLineSubStringIndex) {
-                    List<string> RegexTokens = ResolveDefines(RegexTokenize(SourceFileReference[SourceLineReference][SourceLineSubStringIndex ..]));
+                internal static (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, OperationTypes OperationType)>, int Finish, bool Success, bool Continue) ContextFetcher(ref List<string> BasicRegexTokens, ref int SourceStringIndex, ref int ErrorReportLineNumber, string SourceFilePath) {
+                    // use BasicRegexTokens => RegexTokens (ref, no cloning?) | Ensures we solve all new defines without mutating the original
+                    List<string> RegexTokens = ResolveDefines(BasicRegexTokens);
                     string CollectiveContext = string.Concat(RegexTokens);
 
                     List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, OperationTypes OperationType)> Tokens = [];
@@ -845,177 +878,179 @@ namespace Numinous {
                     int MaxHierarchy = 0;
                     int LastNonWhiteSpaceIndex = -1;
                     int LastOpenContainerOperatorStringIndex = -1;
-
+                    
                     string LITERAL_CSTRING = "";
 
                     bool IsLastOperator = false;
                     
                     int i = 0, StringIndex = 0;
                     OperationTypes OperationType = ExtractOperation();
-                    if (OperationType == OperationTypes.FAIL) return default;        // error pass back
-                    do {
-                        for (i = 0, StringIndex = 0; i < RegexTokens.Count; step()) {
-                            if (RegexTokens[i][0] == ' ' || RegexTokens[i][0] == '\t') continue;                            // do not tokenize whitespace
 
-                            if (ContainerBuffer.Count != 0 && ContainerBuffer[^1] == Operators.FSTRING) {
-                                CaptureCSTRING(SourceLineReference, c => c == '"' || c == '{');
-                                if (RegexTokens[i][0] != '{') {
-                                    if (RegexTokens[i][0] == '"') {
-                                        if (CloseContainer(SourceLineReference, Operators.STRING, Operators.FSTRING)) continue;
-                                        else return default;
-                                    }
+                    if (OperationType == default) return default;
+                    if (OperationType == OperationTypes.DIRECTIVE) return ([], default, true, false);
+                    
+                    if (OperationType == OperationTypes.FAIL) return default;        // error pass back
+                    for (i = 0, StringIndex = 0; i < RegexTokens.Count; step()) {
+                        if (RegexTokens[i][0] == ' ' || RegexTokens[i][0] == '\t') continue;                            // do not tokenize whitespace
+
+                        if (ContainerBuffer.Count != 0 && ContainerBuffer[^1] == Operators.FSTRING) {
+                            CaptureCSTRING(c => c == '"' || c == '{', ref ErrorReportLineNumber);
+                            if (RegexTokens[i][0] != '{') {
+                                if (RegexTokens[i][0] == '"') {
+                                    if (CloseContainer(ref ErrorReportLineNumber, Operators.STRING, Operators.FSTRING)) continue;
+                                    else return default;
                                 }
                             }
+                        }
 
-                            // handle tokens
-                            switch (RegexTokens[i]) {
-                                case "+": SimpleAddOperator(Operators.ADD); break;
-                                case "-": SimpleAddOperator(Operators.SUB); break;
-                                case "*": SimpleAddOperator(Operators.MULT); break;
-                                case "/": SimpleAddOperator(Operators.DIV); break;
-                                case "%": SimpleAddOperator(Operators.MOD); break;
-                                case ">>": SimpleAddOperator(Operators.RIGHT); break;
-                                case "<<": SimpleAddOperator(Operators.LEFT); break;
-                                case "&": SimpleAddOperator(Operators.BITMASK); break;
-                                case "^": SimpleAddOperator(Operators.BITFLIP); break;
-                                case "|": SimpleAddOperator(Operators.BITSET); break;
-                                case "==": SimpleAddOperator(Operators.EQUAL); break;
-                                case "!=": SimpleAddOperator(Operators.INEQUAL); break;
-                                case ">=": SimpleAddOperator(Operators.GOET); break;
-                                case "<=": SimpleAddOperator(Operators.LOET); break;
-                                case ">": SimpleAddOperator(Operators.GT); break;
-                                case "<": SimpleAddOperator(Operators.LT); break;
-                                case "<=>": SimpleAddOperator(Operators.SERIAL); break;
-                                case "=": SimpleAddOperator(Operators.SET); break;
-                                case "+=": SimpleAddOperator(Operators.INCREASE); break;
-                                case "-=": SimpleAddOperator(Operators.DECREASE); break;
-                                case "*=": SimpleAddOperator(Operators.MULTIPLY); break;
-                                case "/=": SimpleAddOperator(Operators.DIVIDE); break;
-                                case "%=": SimpleAddOperator(Operators.MODULATE); break;
-                                case ">>=": SimpleAddOperator(Operators.RIGHTSET); break;
-                                case "<<=": SimpleAddOperator(Operators.LEFTSET); break;
-                                case "&=": SimpleAddOperator(Operators.ASSIGNMASK); break;
-                                case "|=": SimpleAddOperator(Operators.ASSIGNSET); break;
-                                case "^=": SimpleAddOperator(Operators.ASSIGNFLIP); break;
-                                case "??=": SimpleAddOperator(Operators.NULLSET); break;
-                                case "??": SimpleAddOperator(Operators.NULL); break;
-                                case ".": SimpleAddOperator(Operators.PROPERTY); break;
-                                case "?.": SimpleAddOperator(Operators.NULLPROPERTY); break;
-                                case "?": SimpleAddOperator(Operators.CHECK); break;
-                                case ":": SimpleAddOperator(Operators.ELSE); break;
-                                case "!": SimpleAddOperator(Operators.NOT); break;
+                        // handle tokens
+                        switch (RegexTokens[i]) {
+                            case "\n":
+                                ErrorReportLineNumber++;
+                                // consider return
+                                break;
 
-                                // special case
-                                case "\"":
-                                    i++;
-                                    if (CaptureCSTRING(SourceLineReference, c => c == '"')) break;
+
+                            case "+":   SimpleAddOperator(Operators.ADD);           break;
+                            case "-":   SimpleAddOperator(Operators.SUB);           break;
+                            case "*":   SimpleAddOperator(Operators.MULT);          break;
+                            case "/":   SimpleAddOperator(Operators.DIV);           break;
+                            case "%":   SimpleAddOperator(Operators.MOD);           break;
+                            case ">>":  SimpleAddOperator(Operators.RIGHT);         break;
+                            case "<<":  SimpleAddOperator(Operators.LEFT);          break;
+                            case "&":   SimpleAddOperator(Operators.BITMASK);       break;
+                            case "^":   SimpleAddOperator(Operators.BITFLIP);       break;
+                            case "|":   SimpleAddOperator(Operators.BITSET);        break;
+                            case "==":  SimpleAddOperator(Operators.EQUAL);         break;
+                            case "!=":  SimpleAddOperator(Operators.INEQUAL);       break;
+                            case ">=":  SimpleAddOperator(Operators.GOET);          break;
+                            case "<=":  SimpleAddOperator(Operators.LOET);          break;
+                            case ">":   SimpleAddOperator(Operators.GT);            break;
+                            case "<":   SimpleAddOperator(Operators.LT);            break;
+                            case "<=>": SimpleAddOperator(Operators.SERIAL);        break;
+                            case "=":   SimpleAddOperator(Operators.SET);           break;
+                            case "+=":  SimpleAddOperator(Operators.INCREASE);      break;
+                            case "-=":  SimpleAddOperator(Operators.DECREASE);      break;
+                            case "*=":  SimpleAddOperator(Operators.MULTIPLY);      break;
+                            case "/=":  SimpleAddOperator(Operators.DIVIDE);        break;
+                            case "%=":  SimpleAddOperator(Operators.MODULATE);      break;
+                            case ">>=": SimpleAddOperator(Operators.RIGHTSET);      break;
+                            case "<<=": SimpleAddOperator(Operators.LEFTSET);       break;
+                            case "&=":  SimpleAddOperator(Operators.ASSIGNMASK);    break;
+                            case "|=":  SimpleAddOperator(Operators.ASSIGNSET);     break;
+                            case "^=":  SimpleAddOperator(Operators.ASSIGNFLIP);    break;
+                            case "??=": SimpleAddOperator(Operators.NULLSET);       break;
+                            case "??":  SimpleAddOperator(Operators.NULL);          break;
+                            case ".":   SimpleAddOperator(Operators.PROPERTY);      break;
+                            case "?.":  SimpleAddOperator(Operators.NULLPROPERTY);  break;
+                            case "?":   SimpleAddOperator(Operators.CHECK);         break;
+                            case ":":   SimpleAddOperator(Operators.ELSE);          break;
+                            case "!":   SimpleAddOperator(Operators.NOT);           break;
+
+                            // special case
+                            case "\"":
+                                i++;
+                                if (CaptureCSTRING(c => c == '"', ref ErrorReportLineNumber)) break;
+                                return default;
+
+                            // Container Code
+                            case "(": OpenContainer(Operators.OPAREN); break;
+                            case "[": OpenContainer(Operators.OBRACK); break;
+                            case "{": 
+                                if (ContainerBuffer.Count > 0 && ContainerBuffer[0] == Operators.FSTRING) {
+                                    // Format String
+                                    OpenContainer(Operators.OBRACE);
+                                } else if (ContainerBuffer.Count > 0) {
+                                    // error, codeblock in erroneous location
                                     return default;
-
-                                // Container Code
-                                case "(": OpenContainer(Operators.OPAREN); break;
-                                case "[": OpenContainer(Operators.OBRACK); break;
-                                case "{": 
-                                    if (ContainerBuffer.Count > 0 && ContainerBuffer[0] == Operators.FSTRING) {
-                                        // Format String
-                                        OpenContainer(Operators.OBRACE);
-                                    } else if (ContainerBuffer.Count > 0) {
-                                        // error, codeblock in erroneous location
-                                        return default;
-                                    } else {
-                                        // Early return, this is a code block. Do not context fetch this
-                                        Finish = StringIndex;
-                                        CopyDeltaTermTokens();
-                                        CopyDeltaTokens();
-                                        CopyStepTokens();
-                                        return Success();
-                                    }
-                                    break;
-
-                                case "$\"": 
-                                    if (ContainerBuffer[^1] == Operators.FSTRING) {
-                                        // error layered fstring
-                                        return default;
-                                    }
-
-                                    OpenContainer(Operators.FSTRING); 
-                                    break;
-
-                                case ")": if (SimpleCloseContainer(SourceLineReference, Operators.CPAREN)) break; else return default;
-                                case "]": if (SimpleCloseContainer(SourceLineReference, Operators.CBRACK)) break; else return default;
-                                case "}": if (SimpleCloseContainer(SourceLineReference, Operators.CBRACE)) break; else return default;
-
-                                case ";":
-                                    if (ContainerBuffer.Count > 0) {
-                                        Terminal.Warn(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Unexpected end of command.", SourceLineReference, Tokens.Count, ApplyWiggle(CollectiveContext, StringIndex + 1, 1));
-                                        return default;
-                                    }
-
+                                } else {
+                                    // Early return, this is a code block. Do not context fetch this
+                                    Finish = StringIndex;
+                                    CopyDeltaTermTokens();
                                     CopyDeltaTokens();
                                     CopyStepTokens();
+                                    return Success();
+                                }
+                                break;
 
-                                    if (i == RegexTokens.Count - 1) {
-                                        if (Program.WarningLevel.HasFlag(WarningLevels.VERBOSE))
-                                            Terminal.Warn(ErrorTypes.SyntaxError, DecodingPhase.TOKEN,
-                                                "Lines should not end with a semi-colon", SourceLineReference, Tokens.Count, ApplyWiggle(CollectiveContext, StringIndex + 1, 1)
-                                            );
-                                        return Program.WarningLevel.HasFlag(WarningLevels.ERROR) ? default : Success();
-                                    }
+                            case "$\"": 
+                                if (ContainerBuffer[^1] == Operators.FSTRING) {
+                                    // error layered fstring
+                                    return default;
+                                }
 
-                                    PrepareNextStep();
+                                OpenContainer(Operators.FSTRING); 
+                                break;
 
-                                    // modify regex tokens to remove used and stored
-                                    RegexTokens = [.. RegexTokens.TakeLast(RegexTokens.Count - i - 1)]; // trim last step from pattern
-                                    i = 0;
-                                    CollectiveContext = CollectiveContext[(StringIndex + RegexTokens[i].Length)..];
-                                    StringIndex = 0;
-                                    break;
+                            case ")": if (SimpleCloseContainer(ref ErrorReportLineNumber, Operators.CPAREN)) break; else return default;
+                            case "]": if (SimpleCloseContainer(ref ErrorReportLineNumber, Operators.CBRACK)) break; else return default;
+                            case "}": if (SimpleCloseContainer(ref ErrorReportLineNumber, Operators.CBRACE)) break; else return default;
 
-                                // Term Catching
-                                case ",":
-                                    CopyDeltaTermTokens();
-                                    break;
+                            case ";":
+                                if (ContainerBuffer.Count > 0) {
+                                    Terminal.Warn(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Unexpected end of command.", ErrorReportLineNumber, Tokens.Count, ApplyWiggle(CollectiveContext, StringIndex + 1, 1));
+                                    return default;
+                                }
 
-                                default:
-                                    DeltaTermTokens.Add((
-                                        StringIndex,
-                                        RegexTokens[i].Length,
-                                        new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels)> {
-                                        // private for now, but once its determined to be something then it will change accordingly
-                                        { "self", (RegexTokens[i], AssembleTimeTypes.CEXP, AccessLevels.PRIVATE) },
-                                        },
-                                        false
-                                    ));
-                                    LastNonWhiteSpaceIndex = DeltaTermTokens.Count - 1;
-                                    break;
+                                CopyDeltaTokens();
+                                CopyStepTokens();
 
-                            }
+                                //if (i == RegexTokens.Count - 1) {
+                                //    if (Program.WarningLevel.HasFlag(WarningLevels.VERBOSE))
+                                //        Terminal.Warn(ErrorTypes.SyntaxError, DecodingPhase.TOKEN,
+                                //            "Lines should not end with a semi-colon", ErrorReportLineNumber, Tokens.Count, ApplyWiggle(CollectiveContext, StringIndex + 1, 1)
+                                //        );
+                                //    return Program.WarningLevel.HasFlag(WarningLevels.ERROR) ? default : Success();
+                                //}
+
+                                PrepareNextStep();
+
+                                // modify regex tokens to remove used and stored
+                                RegexTokens = [.. RegexTokens.TakeLast(RegexTokens.Count - i - 1)]; // trim last step from pattern
+                                i = 0;
+                                CollectiveContext = CollectiveContext[(StringIndex + RegexTokens[i].Length)..];
+                                StringIndex = 0;
+                                break;
+
+                            // Term Catching
+                            case ",":
+                                CopyDeltaTermTokens();
+                                break;
+
+                            default:
+                                DeltaTermTokens.Add((
+                                    StringIndex,
+                                    RegexTokens[i].Length,
+                                    new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels)> {
+                                    // private for now, but once its determined to be something then it will change accordingly
+                                    { "self", (RegexTokens[i], AssembleTimeTypes.CEXP, AccessLevels.PRIVATE) },
+                                    },
+                                    false
+                                ));
+                                LastNonWhiteSpaceIndex = DeltaTermTokens.Count - 1;
+                                break;
+
                         }
+                    }
 
-                        // If IsLastOperator is enabled, we should only disable it until we have a non-whitespace line. 
-                        IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : DeltaTermTokens.Count != 0 && DeltaTermTokens[LastNonWhiteSpaceIndex].IsOperator;
+                    // If IsLastOperator is enabled, we should only disable it until we have a non-whitespace line. 
+                    IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : DeltaTermTokens.Count != 0 && DeltaTermTokens[LastNonWhiteSpaceIndex].IsOperator;
 
-                        if (ContainerBuffer.Count == 0 && !IsLastOperator) break;
+                    if (ContainerBuffer.Count == 0 && !IsLastOperator) {
+                        // final steps
 
-                        if (++SourceLineReference == SourceFileReference.Length) {
-                            Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Not enough context to satisfy request", SourceLineReference - 1, Tokens.Count, ApplyWiggle(CollectiveContext, CollectiveContext.Length - 1, 1));
-                            return default;
-                        }
+                        CopyDeltaTermTokens();
+                        CopyDeltaTokens();                                                                  // process final DeltaTermTokens (valid) to StepTokens end
+                        CopyStepTokens();                                                                   // add last captured StepToken to Tokens
 
-                        // fetch more context, restart last StepToken. 
+                        return Success();
+                    }
 
-                        PrepareNextStep();
-                        RegexTokens = [.. RegexTokens, .. RegexTokenize(SourceFileReference[SourceLineReference])];
-                        CollectiveContext += SourceFileReference[SourceLineReference];
-                    } while (true);
-
-                    CopyDeltaTermTokens();
-                    CopyDeltaTokens();                                                                  // process final DeltaTermTokens (valid) to StepTokens end
-                    CopyStepTokens();                                                                   // add last captured StepToken to Tokens
-
-                    return Success();
+                    Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Not enough context to satisfy request", ErrorReportLineNumber - 1, Tokens.Count, ApplyWiggle(CollectiveContext, CollectiveContext.Length - 1, 1));
+                    return default;
 
                     #region Context Fetcher Functions
-                    (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, OperationTypes OperationType)>, int finish, bool Success) Success() => (Tokens, Finish, true);
+                    (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, OperationTypes OperationType)>, int finish, bool Success, bool Continue) Success() => (Tokens, Finish, true, false);
                     void step() => StringIndex += RegexTokens[i++].Length;
 
                     OperationTypes  ExtractOperation() {
@@ -1041,17 +1076,36 @@ namespace Numinous {
 
                                             case "<":
                                                 string library_request = CollectiveContext[(StringIndex + 1)..CollectiveContext.LastIndexOf('>')];
-                                                // fetching installed library
-                                                // get string representation from < to > :: ENSURING > exists
-                                                // split string by the forward slashes
-                                                // attempt a FSIO access for the content
-                                                break;
+                                                (library_request, bool success) = CheckInclude(library_request);
+                                                if (!success) {
+                                                    // error, no lib to include
+                                                    return default;
+                                                }
+
+                                                if (Binary) {
+                                                    // include as RODATA (call write task)
+                                                    return OperationTypes.DIRECTIVE;
+                                                }
+
+                                                // Add the source to the read target
+
+                                                (object _, AssembleTimeTypes _, bool Success) = Assemble([]);   // arg-less no-return-type call to assemble
+                                                if (!Success) return default;
+                                                else return OperationTypes.DIRECTIVE;
 
                                             case "\"":
-                                                // including local source material
-                                                // get string rep from first " to last "
-                                                // split string by forward slashes
-                                                // attempt an FSIO access for the content || FIX RELATIVE PATH ISSUES
+                                                library_request = CollectiveContext[(StringIndex + 1)..CollectiveContext.LastIndexOf('"')];
+                                                if (File.Exists($"{Path.GetDirectoryName(SourceFilePath)}/{library_request}")) {
+                                                    if (Binary) {
+                                                        // include as RODATA (call write task)
+                                                        return OperationTypes.DIRECTIVE;                                                      
+                                                    }
+                                                    // add the source to the read target
+                                                    // recurse to Assemble()
+                                                } else {
+                                                    // error
+                                                    return default;
+                                                }
                                                 break;
 
                                             case "bin":
@@ -1068,15 +1122,30 @@ namespace Numinous {
                                                 return default;
                                         }
                                     }
-                                    
 
-                                    return OperationTypes.COMPLETE;
+
+                                    return default;
                                 case "assert":
                                     // requires a boolean, we'll depend on Eval
 
                                 case "cart":
+                                    if (Program.Mode == Modes.None) {
+                                        Program.Mode = Modes.Cartridge;
+                                        return OperationTypes.DIRECTIVE;
+                                    } else {
+                                        // error already set
+                                        return default;
+                                    }
+                                    
+
                                 case "disk":
-                                    // needs nothing else
+                                    if (Program.Mode == Modes.None) {
+                                        Program.Mode = Modes.Disk;
+                                        return OperationTypes.DIRECTIVE;
+                                    } else {
+                                        // error already set
+                                        return default;
+                                    }
 
                                 case "define":
                                     // well take over here
@@ -1104,7 +1173,7 @@ namespace Numinous {
                         ExtractOperation();
                     }
 
-                    bool CaptureCSTRING(int LineNumber, Func<char, bool> HaltCapturePredicate) {
+                    bool CaptureCSTRING(Func<char, bool> HaltCapturePredicate, ref int ErrorReportLineNumber) {
                         int csi = StringIndex;
 
                         for (; i < RegexTokens.Count && !HaltCapturePredicate(RegexTokens[i][0]); i++) {
@@ -1113,7 +1182,7 @@ namespace Numinous {
                         }
 
                         if (i == RegexTokens.Count) {
-                            Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Unterminated String", LineNumber, Tokens.Count, ApplyWiggle(CollectiveContext, csi + 1, StringIndex - csi));
+                            Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, "Unterminated String", ErrorReportLineNumber, Tokens.Count, ApplyWiggle(CollectiveContext, csi + 1, StringIndex - csi));
                             return false;
                         }
 
@@ -1152,19 +1221,19 @@ namespace Numinous {
 
                     void OpenContainer(Operators Operator) => ComplexOpenContainer(1, Operator);
 
-                    bool CloseContainer(int SourceLineReference, Operators CloseOperator, Operators OpenOperator) {
+                    bool CloseContainer(ref int ErrorReportLineNumber, Operators CloseOperator, Operators OpenOperator) {
                         SimpleAddOperator(CloseOperator);
 
                         if (ContainerBuffer.Count == 0) {
                             Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"No Open Container before Close Container.",
-      SourceLineReference, StepTokens.Count, ApplyWiggle(CollectiveContext, 0, LastNonWhiteSpaceIndex + 1));
+      ErrorReportLineNumber, StepTokens.Count, ApplyWiggle(CollectiveContext, 0, LastNonWhiteSpaceIndex + 1));
 
                             return false;
                         }
 
                         if (ContainerBuffer[^1] != OpenOperator) {
                             Terminal.Error(ErrorTypes.SyntaxError, DecodingPhase.TOKEN, $"Invalid Container Closer '{CollectiveContext[StringIndex]}' for Opening container '{CollectiveContext[LastOpenContainerOperatorStringIndex]}'.",
-                              SourceLineReference, StepTokens.Count, ApplyWiggle(CollectiveContext, LastOpenContainerOperatorStringIndex + 1, StringIndex - LastOpenContainerOperatorStringIndex + 1));
+                              ErrorReportLineNumber, StepTokens.Count, ApplyWiggle(CollectiveContext, LastOpenContainerOperatorStringIndex + 1, StringIndex - LastOpenContainerOperatorStringIndex + 1));
 
                             return false;
                         }
@@ -1175,7 +1244,7 @@ namespace Numinous {
                         return true;
                     }
 
-                    bool SimpleCloseContainer(int SourceLineReference, Operators Operator) => CloseContainer(SourceLineReference, Operator, Operator - 1);
+                    bool SimpleCloseContainer(ref int ErrorReportLineNumber, Operators Operator) => CloseContainer(ref ErrorReportLineNumber, Operator, Operator - 1);
 
                     void CopyStepTokens() {
                         var StepTokenShallowCopy = StepTokens
