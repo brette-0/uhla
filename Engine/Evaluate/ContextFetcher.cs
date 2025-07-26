@@ -1,5 +1,7 @@
 ﻿using static Numinous.Engine.Engine;
 
+// immediate illegal overruling might not work
+
 namespace Numinous.Engine {
     internal static partial class Evaluate {
         /// <summary>
@@ -188,7 +190,8 @@ namespace Numinous.Engine {
                 }
             }
 
-            if (IsThisSuccess()) {
+            IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : DeltaTermTokens.Count != 0 && DeltaTermTokens[LastNonWhiteSpaceIndex].IsOperator;
+            if (ContainerBuffer.Count == 0 && !IsLastOperator) {
                 // final steps
 
                 CopyDeltaTermTokens();
@@ -208,51 +211,6 @@ namespace Numinous.Engine {
                 while (SeekPredicate()) {
                     step();
                 }
-            }
-
-            bool IsThisSuccess() {
-                switch (OperationType.oper) {
-                    default:
-                    case OperationTypes.EVALUATE:
-                        // as long as the container buffer is clear, we didn't end on an operator ... we should be good.
-                        // we do permit ending with ", ;, ), ] and } however    --> although should we be hitting code blocks?
-
-                        IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : DeltaTermTokens.Count != 0 && DeltaTermTokens[LastNonWhiteSpaceIndex].IsOperator;
-                        return (ContainerBuffer.Count == 0 && !IsLastOperator);
-
-                    case OperationTypes.INSTRUCTION:
-                        /*
-                         * This may end up being more complex
-                         * 
-                         * instructions can as a rule result in 0, 1 or 2 terms - it should be impossible for more.
-                         * 
-                         * however stuff like rfs/rfc/jfs/jfc optimization get icky - perhaps by default it won't have that.
-                         */
-
-
-                        return true;
-#if DEBUG
-                        throw new Exception($"Error, unrecognized Operation Type : No means to evaluate CF level success with {OperationType}");
-#else
-                                throw new Exception($"FATAL ERROR :: (REPORT THIS ON THE GITHUB) UNRECOGNIZED OPERATION TYPE {OperationType}")
-#endif
-                }
-
-                #region IsThisSuccess Functions
-//                int GetOpCodeTermQuantityLimit() {
-//                    // if (idtable) NEW TABLE TODO: Implement idtable integration
-//                    return "" switch {
-
-
-//                        _ =>
-//#if DEBUG
-//                             throw new Exception($"Error, unrecognized opcode :{opcode}")
-//#else
-//                                     throw new Exception($"FATAL ERROR :: (REPORT THIS ON THE GITHUB) UNRECOGNIZED OPCODE {opcode}")
-//#endif
-//                    };
-//                }
-                #endregion
             }
 
             (OperationTypes oper, object ctx) ExtractOperation() {
@@ -390,6 +348,22 @@ namespace Numinous.Engine {
 
                 (ctx, success) = ParseAsVariable();
                 if (success) return (OperationTypes.KEYWORD, ctx);
+
+                if (RegexTokens[i + 1][0] == ':') {
+                    if (RegexTokens[i][0] == '-') {
+                        step();
+                        step();
+
+                        // next branch back is here | when we need to "beq -" we now can
+                        return (OperationTypes.ANON_REL_BRANCH, '-');
+                    } else if (RegexTokens[i][0] == '+') {
+                        step();
+                        step();
+
+                        // for terms waiting on the next forward branch, we can now solve for "beq +"
+                        return (OperationTypes.ANON_REL_BRANCH, '+');
+                    }
+                }
 
                 //(ctx, success) = ParseAsFilter();
                 //if (success) return (OperationTypes.KEYWORD, ctx);
@@ -644,6 +618,23 @@ namespace Numinous.Engine {
                         case "sei":
                         case "rti":
                         case "rts":
+                        case "ccf":
+                        case "sex":
+                        case "abs":
+                        case "rnc":
+                        case "rns":
+                        case "rpl":
+                        case "rmi":
+                        case "rvc":
+                        case "rvs":
+                        case "rcc":
+                        case "rlt":
+                        case "rcs":
+                        case "rgt":
+                        case "req":
+                        case "rzs":
+                        case "rne":
+                        case "rzc":
                             step();
                             if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t' && RegexTokens[i][0] != '\n') {
                                 // error malformed instruction
@@ -653,7 +644,35 @@ namespace Numinous.Engine {
                             return InstructionHeaderFlags.Found;
 
                         case "jmp":
+                        case "jeq":
+                        case "jne":
+                        case "jzs":
+                        case "jzc":
+                        case "jpl":
+                        case "jmi":
+                        case "jns":
+                        case "jnc":
+                        case "jcs":
+                        case "jcc":
+                        case "jgt":
+                        case "jlt":
+                        case "jvc":
+                        case "jvs":
                         case "jsr":
+                        case "ceq":
+                        case "cne":
+                        case "czs":
+                        case "czc":
+                        case "cpl":
+                        case "cmi":
+                        case "cns":
+                        case "cnc":
+                        case "ccs":
+                        case "ccc":
+                        case "cgt":
+                        case "clt":
+                        case "cvc":
+                        case "cvs":
                             step();
                             if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t') {
                                 // error malformed instruction
@@ -668,6 +687,8 @@ namespace Numinous.Engine {
                         case "lsr":
                         case "rol":
                         case "ror": // implied or memory
+                        case "irl":
+                        case "irr":
                             step();
                             if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t' && RegexTokens[i][0] != '\n') {
                                 // error malformed instruction
@@ -690,6 +711,21 @@ namespace Numinous.Engine {
                             }
 
                             goto CheckMemoryAccessRulesWithImmediate;
+
+                        case "neg":
+                            step();
+                            if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t') {
+                                // error malformed instruction
+                                return default;
+                            }
+
+                            seek_no_whitespace();
+                            if (RegexTokens[i] == "//" || RegexTokens[i] == "/*") {
+                                // error malformed instruction
+                                return default;
+                            }
+
+                            goto CheckImmediate;
 
                         // Illegal instructions
 
@@ -1025,53 +1061,85 @@ namespace Numinous.Engine {
                             }
 
                         default:
-                            // branch on flag value
-                            if (RegexTokens[i][0] == 'b') {
-                                switch (RegexTokens[i][1]) {
-                                    case 'a':
-                                    case 'x':
-                                    case 'y':
-                                        return default;
-                                }
+                            switch (RegexTokens[i][0]) {
+                                case 'b':
+                                case 'r':
+                                    switch (RegexTokens[i][1]) {
+                                        case 'a':
+                                        case 'x':
+                                        case 'y':
+                                            return default;
+                                    }
 
-                                switch (RegexTokens[i][2]) {
-                                    case 's':
-                                    case 'c':
-                                        break;
+                                    switch (RegexTokens[i][2]) {
+                                        case 's':
+                                        case 'c':
+                                            break;
 
-                                    default: return default;
-                                }
+                                        default: return default;
+                                    }
 
-                                step();
-
-                                if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t') {
-                                    // error, no space after opcode
-                                    return default;
-                                }
-
-                                if (RegexTokens[i][0] == '!') {
                                     step();
-                                    return InstructionHeaderFlags.Overruled;
-                                }
-                                return InstructionHeaderFlags.Found;
 
-                            } else if (RegexTokens[i][0] == 't') {
-                                if (RegexTokens[i][1] == RegexTokens[i][2]) {
-                                    // error error nothing to do not an instruction
-                                    return default;
-                                }
+                                    if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t') {
+                                        // error, no space after opcode
+                                        return default;
+                                    }
 
-                                Func<char, bool> isFlag = (char c) => c switch { 'c' or 'n' or 'v' or 'z' => default, _ => true };
+                                    if (RegexTokens[i][0] == '!') {
+                                        step();
+                                        return InstructionHeaderFlags.Overruled;
+                                    }
+                                    return InstructionHeaderFlags.Found;
 
-                                if (isFlag(RegexTokens[i][1]) || isFlag(RegexTokens[i][2])) {
-                                    // error not an instruction
-                                    return default;
-                                }
+                                case 't':
+                                    if (RegexTokens[i][1] == RegexTokens[i][2]) {
+                                        // error error nothing to do not an instruction
+                                        return default;
+                                    }
 
-                                return InstructionHeaderFlags.Found;
+                                    Func<char, bool> isFlag = (char c) => c switch { 'c' or 'n' or 'v' or 'z' => default, _ => true };
+
+                                    if (isFlag(RegexTokens[i][1]) || isFlag(RegexTokens[i][2])) {
+                                        // error not an instruction
+                                        return default;
+                                    }
+
+                                    return InstructionHeaderFlags.Found;
+
+                                
+                                case 'c':
+                                case 'j':
+                                    switch (RegexTokens[i][1]) {
+                                        case 'a':
+                                        case 'x':
+                                        case 'y':
+                                            return default;
+                                    }
+
+                                    switch (RegexTokens[i][2]) {
+                                        case 's':
+                                        case 'c':
+                                            break;
+
+                                        default: return default;
+                                    }
+
+                                    step();
+                                    if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t') {
+                                        // error malformed instruction
+                                        return default;
+                                    }
+                                    seek_no_whitespace();
+                                    if (RegexTokens[i] == "//" || RegexTokens[i] == "/*") {
+                                        // error malformed instruction
+                                        return default;
+                                    }
+
+                                    goto CheckMemoryAccessRules;
+
                             }
-
-                            return InstructionHeaderFlags.Missing;
+                            return InstructionHeaderFlags.Missing; ;
 
                         CheckMemoryAccessRulesWithImmediate:
                             step();

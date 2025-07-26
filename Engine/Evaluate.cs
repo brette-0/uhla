@@ -13,6 +13,8 @@ namespace Numinous {
                 INSTRUCTION,        // eg.. lda foo
                 EVALUATE,           // function, macros, RODATA writes
                 KEYWORD,            // int foo = bar
+
+                ANON_REL_BRANCH,    // +: and -:
             }
 
             /// <summary>
@@ -203,7 +205,7 @@ namespace Numinous {
 #if DEBUG
                 _ => throw new NotSupportedException($"Unusable Operator Type {Operator}")
 #else
-                    _ => throw new NotSupportedException($"FATAL ERROR :: (REPORT THIS ON THE GITHUB) INVALID OPERATOR TYPE {Operator}")
+                _ => throw new NotSupportedException($"FATAL ERROR :: (REPORT THIS ON THE GITHUB) INVALID OPERATOR TYPE {Operator}")
 #endif
             };
             

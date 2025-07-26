@@ -1,1 +1,1 @@
-(lang, lang)
+lda #foo
