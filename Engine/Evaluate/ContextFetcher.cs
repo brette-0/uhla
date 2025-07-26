@@ -30,12 +30,10 @@ namespace Numinous.Engine {
             bool IsLastOperator = false;
 
             int i = 0, StringIndex = 0;
-            OperationTypes OperationType = ExtractOperation();
+            (OperationTypes oper, object ctx) OperationType = ExtractOperation();
 
-            if (OperationType == default) return default;
-            if (OperationType == OperationTypes.DIRECTIVE) return ([], default, true, false);
-
-            if (OperationType == OperationTypes.FAIL) return default;        // error pass back
+            if (OperationType == default) return default;                                                       // error pass back
+            if (OperationType.oper == OperationTypes.DIRECTIVE) return ([], default, true, false);
             for (i = 0, StringIndex = 0; i < RegexTokens.Count; step()) {
                 if (RegexTokens[i][0] == ' ' || RegexTokens[i][0] == '\t') continue;                            // do not tokenize whitespace
 
@@ -62,47 +60,47 @@ namespace Numinous.Engine {
 
                     case "/*":
                         while (RegexTokens[i] != "*/") {
-                            steps(() => RegexTokens[i][0] != '\n');
+                            steps(() => RegexTokens[i][0] != '\n' || RegexTokens[i] != "*/");
                             ErrorReportLineNumber++;
                         }
                         step();
                         break;
 
-                    case "+": SimpleAddOperator(Operators.ADD); break;
-                    case "-": SimpleAddOperator(Operators.SUB); break;
-                    case "*": SimpleAddOperator(Operators.MULT); break;
-                    case "/": SimpleAddOperator(Operators.DIV); break;
-                    case "%": SimpleAddOperator(Operators.MOD); break;
-                    case ">>": SimpleAddOperator(Operators.RIGHT); break;
-                    case "<<": SimpleAddOperator(Operators.LEFT); break;
-                    case "&": SimpleAddOperator(Operators.BITMASK); break;
-                    case "^": SimpleAddOperator(Operators.BITFLIP); break;
-                    case "|": SimpleAddOperator(Operators.BITSET); break;
-                    case "==": SimpleAddOperator(Operators.EQUAL); break;
-                    case "!=": SimpleAddOperator(Operators.INEQUAL); break;
-                    case ">=": SimpleAddOperator(Operators.GOET); break;
-                    case "<=": SimpleAddOperator(Operators.LOET); break;
-                    case ">": SimpleAddOperator(Operators.GT); break;
-                    case "<": SimpleAddOperator(Operators.LT); break;
-                    case "<=>": SimpleAddOperator(Operators.SERIAL); break;
-                    case "=": SimpleAddOperator(Operators.SET); break;
-                    case "+=": SimpleAddOperator(Operators.INCREASE); break;
-                    case "-=": SimpleAddOperator(Operators.DECREASE); break;
-                    case "*=": SimpleAddOperator(Operators.MULTIPLY); break;
-                    case "/=": SimpleAddOperator(Operators.DIVIDE); break;
-                    case "%=": SimpleAddOperator(Operators.MODULATE); break;
-                    case ">>=": SimpleAddOperator(Operators.RIGHTSET); break;
-                    case "<<=": SimpleAddOperator(Operators.LEFTSET); break;
-                    case "&=": SimpleAddOperator(Operators.ASSIGNMASK); break;
-                    case "|=": SimpleAddOperator(Operators.ASSIGNSET); break;
-                    case "^=": SimpleAddOperator(Operators.ASSIGNFLIP); break;
-                    case "??=": SimpleAddOperator(Operators.NULLSET); break;
-                    case "??": SimpleAddOperator(Operators.NULL); break;
-                    case ".": SimpleAddOperator(Operators.PROPERTY); break;
-                    case "?.": SimpleAddOperator(Operators.NULLPROPERTY); break;
-                    case "?": SimpleAddOperator(Operators.CHECK); break;
-                    case ":": SimpleAddOperator(Operators.ELSE); break;
-                    case "!": SimpleAddOperator(Operators.NOT); break;
+                    case "+":   SimpleAddOperator(Operators.ADD);           break;
+                    case "-":   SimpleAddOperator(Operators.SUB);           break;
+                    case "*":   SimpleAddOperator(Operators.MULT);          break;
+                    case "/":   SimpleAddOperator(Operators.DIV);           break;
+                    case "%":   SimpleAddOperator(Operators.MOD);           break;
+                    case ">>":  SimpleAddOperator(Operators.RIGHT);         break;
+                    case "<<":  SimpleAddOperator(Operators.LEFT);          break;
+                    case "&":   SimpleAddOperator(Operators.BITMASK);       break;
+                    case "^":   SimpleAddOperator(Operators.BITFLIP);       break;
+                    case "|":   SimpleAddOperator(Operators.BITSET);        break;
+                    case "==":  SimpleAddOperator(Operators.EQUAL);         break;
+                    case "!=":  SimpleAddOperator(Operators.INEQUAL);       break;
+                    case ">=":  SimpleAddOperator(Operators.GOET);          break;
+                    case "<=":  SimpleAddOperator(Operators.LOET);          break;
+                    case ">":   SimpleAddOperator(Operators.GT);            break;
+                    case "<":   SimpleAddOperator(Operators.LT);            break;
+                    case "<=>": SimpleAddOperator(Operators.SERIAL);        break;
+                    case "=":   SimpleAddOperator(Operators.SET);           break;
+                    case "+=":  SimpleAddOperator(Operators.INCREASE);      break;
+                    case "-=":  SimpleAddOperator(Operators.DECREASE);      break;
+                    case "*=":  SimpleAddOperator(Operators.MULTIPLY);      break;
+                    case "/=":  SimpleAddOperator(Operators.DIVIDE);        break;
+                    case "%=":  SimpleAddOperator(Operators.MODULATE);      break;
+                    case ">>=": SimpleAddOperator(Operators.RIGHTSET);      break;
+                    case "<<=": SimpleAddOperator(Operators.LEFTSET);       break;
+                    case "&=":  SimpleAddOperator(Operators.ASSIGNMASK);    break;
+                    case "|=":  SimpleAddOperator(Operators.ASSIGNSET);     break;
+                    case "^=":  SimpleAddOperator(Operators.ASSIGNFLIP);    break;
+                    case "??=": SimpleAddOperator(Operators.NULLSET);       break;
+                    case "??":  SimpleAddOperator(Operators.NULL);          break;
+                    case ".":   SimpleAddOperator(Operators.PROPERTY);      break;
+                    case "?.":  SimpleAddOperator(Operators.NULLPROPERTY);  break;
+                    case "?":   SimpleAddOperator(Operators.CHECK);         break;
+                    case ":":   SimpleAddOperator(Operators.ELSE);          break;
+                    case "!":   SimpleAddOperator(Operators.NOT);           break;
 
                     // special case
                     case "\"":
@@ -213,7 +211,7 @@ namespace Numinous.Engine {
             }
 
             bool IsThisSuccess() {
-                switch (OperationType) {
+                switch (OperationType.oper) {
                     default:
                     case OperationTypes.EVALUATE:
                         // as long as the container buffer is clear, we didn't end on an operator ... we should be good.
@@ -222,7 +220,7 @@ namespace Numinous.Engine {
                         IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : DeltaTermTokens.Count != 0 && DeltaTermTokens[LastNonWhiteSpaceIndex].IsOperator;
                         return (ContainerBuffer.Count == 0 && !IsLastOperator);
 
-                    case OperationTypes.OPERATION:
+                    case OperationTypes.INSTRUCTION:
                         /*
                          * This may end up being more complex
                          * 
@@ -257,7 +255,8 @@ namespace Numinous.Engine {
                 #endregion
             }
 
-            OperationTypes ExtractOperation() {
+            (OperationTypes oper, object ctx) ExtractOperation() {
+                object ctx; bool success;
                 if (RegexTokens[i][0] == '#') {
                     if (DeltaTokens.Count > 0 || StepTokens.Count > 0 || LastNonWhiteSpaceIndex != 0) {
                         // error, assembler directives must own the entire line. (stylistic enforcement? I'm not sure)
@@ -280,7 +279,7 @@ namespace Numinous.Engine {
 
                                     case "<":
                                         string library_request = CollectiveContext[(StringIndex + 1)..CollectiveContext.LastIndexOf('>')];
-                                        (library_request, bool success) = CheckInclude(library_request);
+                                        (library_request, success) = CheckInclude(library_request);
                                         if (!success) {
                                             // error, no lib to include
                                             return default;
@@ -288,21 +287,21 @@ namespace Numinous.Engine {
 
                                         if (Binary) {
                                             // include as RODATA (call write task)
-                                            return OperationTypes.DIRECTIVE;
+                                            return (OperationTypes.DIRECTIVE, default(int));
                                         }
 
                                         // Add the source to the read target
 
                                         (object _, AssembleTimeTypes _, bool Success) = Assemble([]);   // arg-less no-return-type call to assemble
                                         if (!Success) return default;
-                                        else return OperationTypes.DIRECTIVE;
+                                        else return (OperationTypes.DIRECTIVE, default(int));
 
                                     case "\"":
                                         library_request = CollectiveContext[(StringIndex + 1)..CollectiveContext.LastIndexOf('"')];
                                         if (File.Exists($"{Path.GetDirectoryName(SourceFilePath)}/{library_request}")) {
                                             if (Binary) {
                                                 // include as RODATA (call write task)
-                                                return OperationTypes.DIRECTIVE;
+                                                return (OperationTypes.DIRECTIVE, default(int));
                                             }
                                             // add the source to the read target
                                             // recurse to Assemble()
@@ -335,7 +334,7 @@ namespace Numinous.Engine {
                         case "cart":
                             if (Program.Mode == Modes.None) {
                                 Program.Mode = Modes.Cartridge;
-                                return OperationTypes.DIRECTIVE;
+                                return (OperationTypes.DIRECTIVE, default(int));
                             } else {
                                 // error already set
                                 return default;
@@ -345,7 +344,7 @@ namespace Numinous.Engine {
                         case "disk":
                             if (Program.Mode == Modes.None) {
                                 Program.Mode = Modes.Disk;
-                                return OperationTypes.DIRECTIVE;
+                                return (OperationTypes.DIRECTIVE, default(int));
                             } else {
                                 // error already set
                                 return default;
@@ -362,12 +361,114 @@ namespace Numinous.Engine {
                         // #rom <CINT>/<INT>
                         case "cpu":
                             // #cpu <CINT>/<INT>
-                            return OperationTypes.DIRECTIVE;
+                            return (OperationTypes.DIRECTIVE, default(int));
                     }
                 }
-                return default;
+
+                // keywords
+                switch (RegexTokens[i]) {
+                    // functions ... typeof()
+                    case "if":                  // (bool) code  OR  (bool) {code block}
+                    case "else":                // else if (bool code) or (bool) {code block}
+                    case "loop":                // loop {code block}
+                    case "break":               // exit loop
+                    case "return":              // return from macro
+                    case "del":                 // delete RT or AT variable
+
+                    // AssembleTime Variables   : could be macro return or declaration
+                    case "bank":
+                    case "proc":
+                    case "interrupt":
+                    case "int":
+                    case "string":
+                    case "register":
+                    case "flag":
+                    case "const":
+                        // const int, const string ... etc  (macro return type OR constant declaration)
+                        break;
+                }
+
+                (ctx, success) = ParseAsVariable();
+                if (success) return (OperationTypes.KEYWORD, ctx);
+
+                //(ctx, success) = ParseAsFilter();
+                //if (success) return (OperationTypes.KEYWORD, ctx);
+
+
+                InstructionHeaderFlags FIS_ctx = FetchInstructionHeader();
+                if (FIS_ctx == default) return default;                 // error pass back
+                if (FIS_ctx == InstructionHeaderFlags.Missing)          return (OperationTypes.EVALUATE, default(int));
+                else return (OperationTypes.INSTRUCTION, FIS_ctx);
 
                 #region         OperationExtract Local Functions
+
+                (RunTimeVariableType ctx, bool succses) ParseAsVariable() {
+                    string type = RegexTokens[i].ToLower();
+                    if (type.Length < 2) return default;
+                    RunTimeVariableType ctx = default;
+
+                    ctx.signed = type[0] == 'i';
+                    if (!ctx.signed && type[0] != 'u') return default;
+                    
+
+                    int substring = 2;
+                    if      (type[1] == 'b') ctx.endian = true;
+                    else if (type[1] != 'l') substring = 1;
+
+                    if (substring == type.Length) return default;
+                    if (!uint.TryParse(type[substring..], out ctx.size)) return default;
+                    
+
+                    if ((ctx.size & 0b111) > 0) return default;
+                    
+
+                    ctx.size >>= 3;
+                    if (ctx.size == 0u) return default;
+                    return (ctx, true);
+                }
+
+                (RunTimeVariableFilterType ctx, bool succses) ParseAsFilter() {
+                    string type = RegexTokens[i];
+                    if (type.Length < 2) return default;
+                    RunTimeVariableFilterType ctx = default;
+
+                    if (type == "num") return (default, true);
+
+                    uint size = 0;
+
+                    if      (type[0] == 'i') ctx.signed = true;                         // ix, ilx, ibx
+                    else if (type[0] == 'u') ctx.signed = false;                        // ux, ulx, ubx
+                    else if (type[0] == 'l') ctx.endian = false;                        // lx, l16, l32, l64..
+                    else if (type[0] == 'b') ctx.endian = true;                         // bx, b16, b32, b64
+                    else if (type[0] == 'x') {
+                        if (!uint.TryParse(type[1..], out size))    return default;
+                        if ((size & 0b111) > 0)                     return default;     // impossible size
+                        if (size == 0u)                             return default;     // impossible size
+                    } else                                          return default;
+
+                    if      (type[1] == 'l') {                                          // ilx, ulx
+                        if (ctx.endian != null)                     return default;
+                        else ctx.endian = false;
+                    }
+                    else if (type[1] == 'b') {                                          // ibx, ubx
+                        if (ctx.endian != null)                     return default;
+                        else ctx.endian = true;
+                    } else if (type[1] == 'x') {                                        // ix, ux, bx, lx
+                        if (!uint.TryParse(type[2..], out size))    return default;
+                        if ((size & 0b111) > 0)                     return default;     // impossible size
+                        if (size == 0u)                             return default;     // impossible size
+                        ctx.size = size >> 3;                       return (ctx, true); // specified size (one type allowed, exclusive filter)
+                    } else                                          return default;
+
+                    if (type.Length < 3)                            return default;     // il, bl, ul and ub are not valid
+                    if (type[2] == 'x')                             return (ctx, true); // null size
+
+                    if (type.Length == 3)                           return default;
+                    if (!uint.TryParse(type[2..], out size))        return default;
+                    if ((size & 0b111) > 0)                         return default;     // impossible size
+                    if (size == 0u)                                 return default;     // impossible size
+                    ctx.size = size >> 3;                           return (ctx, true); // specified size (one type allowed, exclusive filter)
+                }
 
                 InstructionHeaderFlags FetchInstructionHeader() {
                     string[] CanUseA = ["asl", "lsr", "rol", "ror"];    // asl a, lsr a, rol a and ror a are all valid instructions with a as operand, no others.
@@ -970,11 +1071,7 @@ namespace Numinous.Engine {
                                 return InstructionHeaderFlags.Found;
                             }
 
-#if DEBUG
-                            throw new Exception($"Could not identify as an instruction : {RegexTokens[i]}");
-#else
-                                    throw new Exception($"FATAL ERROR :: (REPORT THIS ON THE GITHUB) COULD NOT IDENTIFY AS AN INSTRUCTION {opcode}")
-#endif
+                            return InstructionHeaderFlags.Missing;
 
                         CheckMemoryAccessRulesWithImmediate:
                             step();

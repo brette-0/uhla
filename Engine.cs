@@ -386,8 +386,14 @@ namespace Numinous {
             UNTERMINATED
         }
 
-        internal struct RunTimeVariable {
-            internal int size;      // in bytes
+        internal struct RunTimeVariableFilterType {
+            internal uint? size;
+            internal bool? signed;
+            internal bool? endian;
+        }
+
+        internal struct RunTimeVariableType {
+            internal uint size;     // in bytes
             internal bool signed;   // false => unsigned
             internal bool endian;   // false => little
         }

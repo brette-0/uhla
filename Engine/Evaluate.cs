@@ -10,8 +10,9 @@ namespace Numinous {
             internal enum OperationTypes : byte {
                 FAIL,
                 DIRECTIVE,          // eg.. #include
-                OPERATION,           // eg.. lda foo
+                INSTRUCTION,        // eg.. lda foo
                 EVALUATE,           // function, macros, RODATA writes
+                KEYWORD,            // int foo = bar
             }
 
             /// <summary>
@@ -29,6 +30,7 @@ namespace Numinous {
                 Overruled       = 1 << 4,   // !
 
                 Complete        = 1 << 5,   // for when there is no information after an instruction that supports implied addressing
+                Missing         = 1 << 6,   // does not count as a fail, just means CF for RODATA later
             }
 
             /*
