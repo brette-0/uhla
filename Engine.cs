@@ -1472,9 +1472,15 @@ Project Numinous will NOT continue until you fix this or manually specify your l
             /// </summary>
             /// <param name="input"></param>
             /// <returns></returns>
+            /// <summary>
+            /// Tokenizes a line of code. SPACES ARE IMPORTANT FOR LINE INDEX MATH
+            /// </summary>
+            /// <param name="input"></param>
+            /// <returns></returns>
             internal static List<string> RegexTokenize(string input) {
-                // Wide multi-character operators and atomic tokens
+                // Wide multi-character operators and atomic tokens, now including comment tokens
                 string[] atomicTokens = new[] {
+                    "//", "/*", "*/",
                     "$\"", "<=>", "==", "!=", "<=", ">=", "&&", "||", "++", "--",
                     "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<", ">>", "->", "??", "?."
                 };
