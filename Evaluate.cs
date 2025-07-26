@@ -1,10 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection.Emit;
-using System.Text;
-using System.Threading.Tasks;
-using static Numinous.Engine.Engine;
+﻿using static Numinous.Engine.Engine;
+
+// YOU NEED TO WRITE RULES FOR LOADING INSTRUCTIONS
+// REMEMBER WE STILL NEED THE CF TO BE COOL
 
 namespace Numinous {
     namespace Engine {
@@ -17,15 +14,21 @@ namespace Numinous {
                 EVALUATE,           // function, macros, RODATA writes
             }
 
+            /// <summary>
+            /// default : error
+            /// found   : not immediate, overruled or enforced
+            /// if has Immediate, Enforced or Overruled it counts as found
+            /// </summary>
             [Flags]
             internal enum InstructionHeaderFlags : byte {
-                Success         = 1 << 0,
-                Found           = 1 << 1,
+                Found           = 1 << 0,   // something
 
-                Immediate       = 1 << 2,
-                Enforced_ABS    = 1 << 3,
-                Enforced_ZP     = 1 << 4,
-                Overruled       = 1 << 5
+                Immediate       = 1 << 1,   // #
+                Enforced_ABS    = 1 << 2,   // a:
+                Enforced_ZP     = 1 << 3,   // z:
+                Overruled       = 1 << 4,   // !
+
+                Complete        = 1 << 5,   // for when there is no information after an instruction that supports implied addressing
             }
 
             /*
@@ -201,6 +204,7 @@ namespace Numinous {
                     _ => throw new NotSupportedException($"FATAL ERROR :: (REPORT THIS ON THE GITHUB) INVALID OPERATOR TYPE {Operator}")
 #endif
             };
+            
 
             /*
             * Some notes:
@@ -456,6 +460,11 @@ namespace Numinous {
                 #region Context Fetcher Functions
                 (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, OperationTypes OperationType)>, int finish, bool Success, bool Continue) Success() => (Tokens, Finish, true, false);
                 void step() => StringIndex += RegexTokens[i++].Length;
+                void steps(Func<bool> SeekPredicate) {
+                    while (SeekPredicate()) {
+                        step();
+                    }
+                }
 
                 bool IsThisSuccess() {
                     switch (OperationType) {
@@ -615,6 +624,7 @@ namespace Numinous {
                     #region         OperationExtract Local Functions
 
                     InstructionHeaderFlags FetchInstructionHeader() {
+                        string[] CanUseA = ["asl", "lsr", "rol", "ror"];    // asl a, lsr a, rol a and ror a are all valid instructions with a as operand, no others.
                         /*
                          * ldr  (ld) + check for r
                          * str  (st) + check for r
@@ -647,19 +657,42 @@ namespace Numinous {
                          */
 
                         switch (RegexTokens[i].ToLower()) {
-                            case "adc": goto CheckMemoryAccessRulesWithImmediate;
-                            case "and": goto CheckMemoryAccessRulesWithImmediate;
-                            case "cmp": goto CheckMemoryAccessRulesWithImmediate;
-                            case "eor": goto CheckMemoryAccessRulesWithImmediate;
-                            case "lda": goto CheckMemoryAccessRulesWithImmediate;
-                            case "ora": goto CheckMemoryAccessRulesWithImmediate;
-                            case "sta": goto CheckMemoryAccessRules;
+                            case "cpa": // cmp
+                            case "cpx":
+                            case "cpy":
+                            case "adc":
+                            case "and":
+                            case "cmp":
+                            case "eor":
+                            case "lda":
+                            case "ldx":
+                            case "ldy":
+                            case "ora":
+                                step();
+                                if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t') {
+                                    // error malformed instruction
+                                    return default;
+                                }
+                                seek_nowhitespace();
+                                goto CheckMemoryAccessRulesWithImmediate;
+
+                            case "sta":
+                            case "stx":
+                            case "sty":
+                            case "dec":
+                            case "inc":
+                                step();
+                                if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t') {
+                                    // error malformed instruction
+                                    return default;
+                                }
+                                seek_nowhitespace();
+                                goto CheckMemoryAccessRules;
 
                             case "bgt":
                             case "blt":
                             case "bpl":
                             case "bmi":
-
                             case "bcc":
                             case "bcs":
                             case "bnc":
@@ -669,36 +702,55 @@ namespace Numinous {
                             case "bzc":
                             case "bzs":
                                 step();
-                                if (RegexTokens[i][0] == '!') return InstructionHeaderFlags.Overruled | InstructionHeaderFlags.Found | InstructionHeaderFlags.Success;
+                                if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t') {
+                                    // error malformed instruction
+                                    return default;
+                                }
+                                seek_nowhitespace();
+
+                                // this check is if they are at $8000 and are branching a hard 128 bytes into PRGRAM 
+                                if (RegexTokens[i][0] == '!') return InstructionHeaderFlags.Overruled;
                                 step();
-                                return InstructionHeaderFlags.Found | InstructionHeaderFlags.Success;
+                                return InstructionHeaderFlags.Found;
 
                             case "bit":
+                                step();
+                                if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t') {
+                                    // error malformed instruction
+                                    return default;
+                                }
+                                seek_nowhitespace();
+                                goto CheckMemoryAccessRulesWithImmediate;
+
+                            // if (id table && matching immediate do some magic) else its : u8 temp; sta temp; lda #reorg; php; lda temp; del temp
                             case "brk":
                                 step();
-                                if (RegexTokens[i][0] == '#') return InstructionHeaderFlags.Immediate | InstructionHeaderFlags.Found | InstructionHeaderFlags.Success;
+                                if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t' && RegexTokens[i][0] != '\n') {
+                                    // error malformed instruction
+                                    return default;
+                                }
+                                seek_nowhitespace();
+                                if (RegexTokens[i][0] == '#') return InstructionHeaderFlags.Immediate;
                                 step();
-                                return (true, true, false, false, false, false);
+                                return InstructionHeaderFlags.Found;
 
 
                             case "clc":
                             case "clv":
                             case "sec":
                                 step();
-                                if (RegexTokens[i][0] == '!') return (true, true, false, true, false, false);
+                                if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t' && RegexTokens[i][0] != '\n') {
+                                    // error malformed instruction
+                                    return default;
+                                }
+                                seek_nowhitespace();
+                                if (RegexTokens[i][0] == '!') return InstructionHeaderFlags.Overruled;
                                 step();
-                                return (true, true, false, false, false, false);
+                                return InstructionHeaderFlags.Found;
 
 
                             //case "txy": 
                             //case "tyx": 
-
-                            case "cpa": goto CheckMemoryAccessRulesWithImmediate;   // cmp
-                            case "cpx": goto CheckMemoryAccessRulesWithImmediate;
-                            case "cpy": goto CheckMemoryAccessRulesWithImmediate;
-
-                            case "dec": goto CheckMemoryAccessRules;
-                            case "inc": goto CheckMemoryAccessRules;
 
                             case "tax":
                             case "tay":
@@ -715,118 +767,155 @@ namespace Numinous {
                             case "plp":
                             case "sei":
                             case "rti":
-                            case "rts": return (true, true, false, false, false, false);
+                            case "rts":
+                                step();
+                                if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t' && RegexTokens[i][0] != '\n') {
+                                    // error malformed instruction
+                                    return default;
+                                }
+                                step();  
+                                return InstructionHeaderFlags.Found;
 
                             case "jmp":
                             case "jsr":
                                 step();
-                                if (RegexTokens[i][0] == '!') return (true, true, false, true, false, false);
+                                if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t') {
+                                    // error malformed instruction
+                                    return default;
+                                }
                                 step();
-                                return (true, true, false, false, false, false);
+                                if (RegexTokens[i][0] == '!') return InstructionHeaderFlags.Overruled;
+                                step();
+                                return InstructionHeaderFlags.Found;
 
-                            case "ldx": goto CheckMemoryAccessRulesWithImmediate;
-                            case "ldy": goto CheckMemoryAccessRulesWithImmediate;
+                            case "asl":
+                            case "lsr": 
+                            case "rol": 
+                            case "ror": // implied or memory
+                                step();
+                                if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t' && RegexTokens[i][0] != '\n') {
+                                    // error malformed instruction
+                                    return default;
+                                }
+                                step();
+                                goto CheckMemoryAccessRules;
 
-                            case "asl": goto CheckMemoryAccessRules;
-                            case "lsr": goto CheckMemoryAccessRules;
-                            case "rol": goto CheckMemoryAccessRules;
-                            case "ror": goto CheckMemoryAccessRules;
 
-                            case "nop": goto CheckMemoryAccessRulesWithImmediate;
-
-                            case "stx": goto CheckMemoryAccessRules;
-                            case "sty": goto CheckMemoryAccessRules;
+                            case "nop":
+                                step();
+                                if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t' && RegexTokens[i][0] != '\n') {
+                                    // error malformed instruction
+                                    return default;
+                                }
+                                seek_nowhitespace();
+                                goto CheckMemoryAccessRulesWithImmediate;
 
                             // Illegal instructions
 
                             case "aso":
-                            case "slo": goto CheckMemoryAccessRules;
-
+                            case "slo":
+                            case "rla":
                             case "rln":
-                            case "rla": goto CheckMemoryAccessRules;
-
                             case "lse":
-                            case "sre": goto CheckMemoryAccessRules;
-
+                            case "sre":
                             case "rrd":
-                            case "rra": goto CheckMemoryAccessRules;
-
+                            case "rra":
                             case "aax":
-                            case "sax": goto CheckMemoryAccessRules;
+                            case "sax":
+                            case "dcm":
+                            case "dcp":
+                            case "usb":
+                            case "isc":
+                            case "axa":
+                            case "ahx":
+                            case "sha":
+                            case "sxa":
+                            case "xas":
+                            case "shx":
+                            case "sya":
+                            case "say":
+                            case "shy":
+                            case "shs":
+                            case "tas":
+                                step();
+                                if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t') {
+                                    // error malformed instruction
+                                    return default;
+                                }
+
+                                seek_nowhitespace();
+                                if (RegexTokens[i][0] == '!' && RegexTokens[i + 1][0] == '#') {
+                                    step();
+                                    return InstructionHeaderFlags.Immediate;
+                                }
+
+                                goto CheckMemoryAccessRules;
 
                             case "lax":
                                 step();
+                                if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t') {
+                                    // error malformed instruction
+                                    return default;
+                                }
 
-                                if (RegexTokens[i][0] == '!' && RegexTokens[i + 1][0] == '#') return (true, true, true, true, false, false);
+                                seek_nowhitespace();
+                                if (RegexTokens[i][0] == '!' && RegexTokens[i + 1][0] == '#') return InstructionHeaderFlags.Immediate;
                                 goto CheckMemoryAccessRules;
 
-                            case "dcm":
-                            case "dcp": goto CheckMemoryAccessRules;
-
-                            case "usb":
-                            case "isc": goto CheckMemoryAccessRules;
 
                             case "ana":
                             case "asb":
-                            case "anc": goto CheckImmediate;
-
+                            case "anc":
                             case "asr":
-                            case "alr": goto CheckImmediate;
-
+                            case "alr":
                             case "sbx":
                             case "xma":
-                            case "arr": goto CheckImmediate;
-
-                            case "axs": goto CheckImmediate;
-
-                            case "axa":
-                            case "ahx":
-                            case "sha": goto CheckMemoryAccessRules;
-
-                            case "sxa":
-                            case "xas":
-                            case "shx": goto CheckMemoryAccessRules;
-
-                            case "sya":
-                            case "say":
-                            case "shy": goto CheckMemoryAccessRules;
-
-                            case "shs":
-                            case "tas": goto CheckMemoryAccessRules;
+                            case "arr":
+                            case "axs":
+                            case "axm":
+                            case "ane":
+                            case "xaa":
+                                step();
+                                goto CheckImmediate;
 
                             case "lar":
                             case "las":
                                 step();
-                                if (RegexTokens[i][0] == '!') {
-                                    step();
-                                    return (true, true, false, true, false, false);
+                                if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t') {
+                                    // error malformed instruction
+                                    return default;
                                 }
 
-                                step();
-                                return (true, true, false, false, false, false);
+                                seek_nowhitespace();
+                                if (RegexTokens[i][0] == '!') {
+                                    step();
+                                    return InstructionHeaderFlags.Overruled;
+                                }
 
-                            case "axm":
-                            case "ane":
-                            case "xaa": goto CheckImmediate;
+                                return InstructionHeaderFlags.Found;
 
                             case "kil":
                             case "hlt":
                             case "jam":
                             case "stp":
                                 step();
+                                if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t') {
+                                    // error malformed instruction
+                                    return default;
+                                }
+
+                                seek_nowhitespace();
                                 if (RegexTokens[i][0] == '!') {
                                     step();
-                                    return (true, true, false, true, false, false);
+                                    return InstructionHeaderFlags.Overruled;
                                 }
                                 
-                                step();
-                                return (true, true, false, false, false, false);
+                                return InstructionHeaderFlags.Found;
 
 
                                 CheckImmediate:
-                                step();
                                 if (RegexTokens[i][0] == '!') {
-                                    step();
+                                    seek_nowhitespace();
 
                                     if (RegexTokens[i][0] != '#') {
                                         // error, instruction is immediate only
@@ -834,7 +923,7 @@ namespace Numinous {
                                     }
                                     
                                     step();
-                                    return (true, true, true, true, false, false);
+                                    return InstructionHeaderFlags.Immediate | InstructionHeaderFlags.Overruled;
                                 }
                                 if (RegexTokens[i][0] != '#') {
                                     // error, instruction is immediate only
@@ -842,29 +931,18 @@ namespace Numinous {
                                 }
 
                                 step();
-                                return (true, true, true, false, false, false);
+                                return InstructionHeaderFlags.Immediate;
 
                             CheckMemoryAccessRulesWithImmediate:
-                                step();
                                 if (RegexTokens[i][0] == '#') {
                                     step();
-                                    return (true, true, false, false, false, false);
+                                    return InstructionHeaderFlags.Immediate;
                                 }
 
                                 goto CheckMemoryAccessRules;
 
                             CheckMemoryAccessRules:
-                                step();
-
-                                if (RegexTokens[i] == "a") return (true, true, false, false, false, true);
-                                else if (RegexTokens[i] == "z") return (true, true, false, false, true, false);
-                                else if (RegexTokens[i][0] == '!') {
-                                    step();
-
-                                    if (RegexTokens[i] == "a") return (true, true, false, true, false, true);
-                                    else if (RegexTokens[i] == "z") return (true, true, false, true, true, false);
-                                    else return (true, true, false, true, false, false);
-                                } else return (true, true, false, false, false, false);
+                                return CheckMemoryAccessRules();
                         }
 
                         switch (RegexTokens[i][..2]) {
@@ -922,7 +1000,9 @@ namespace Numinous {
                                         // tac   : cmp #$01 ?
                                         return default;
 
-                                    default: return (true, true, false, false, false, false);
+                                    default:
+                                        step();
+                                        return InstructionHeaderFlags.Found;
                                 }
                             case "tx":
                                 switch (RegexTokens[i][2]) {
@@ -935,7 +1015,9 @@ namespace Numinous {
                                         // tac   : cmp #$01 ?
                                         return default;
 
-                                    default: return (true, true, false, false, false, false);
+                                    default:
+                                        step();
+                                        return InstructionHeaderFlags.Found;
                                 }
 
                             case "ty":
@@ -949,13 +1031,16 @@ namespace Numinous {
                                         // tac   : cmp #$01 ?
                                         return default;
 
-                                    default: return (true, true, false, false, false, false);
+                                    default:
+                                        step();
+                                        return InstructionHeaderFlags.Found;
                                 }
 
                             case "in":
                                 switch (RegexTokens[i][2]) {
                                     case 'c':
                                         // memory, we be wanting to eval some
+                                        step();
                                         goto CheckMemoryAccessRules;
 
                                     case 'n':
@@ -965,12 +1050,15 @@ namespace Numinous {
                                         // tac   : cmp #$01 ?
                                         return default;
 
-                                    default: return (true, true, false, false, false, false);
+                                    default:
+                                        step();
+                                        return InstructionHeaderFlags.Found;
                                 }
                             case "de":
                                 switch (RegexTokens[i][2]) {
                                     case 'c':
                                         // memory, we be wanting to eval some
+                                        step();
                                         goto CheckMemoryAccessRules;
 
                                     case 'n':
@@ -980,10 +1068,14 @@ namespace Numinous {
                                         // tac   : cmp #$01 ?
                                         return default;
 
-                                    default: return (true, true, false, false, false, false);
+
+                                    default:
+                                        step();
+                                        return InstructionHeaderFlags.Found;
                                 }
 
                             default:
+                                // branch on flag value
                                 if (RegexTokens[i][0] == 'b') {
                                     switch (RegexTokens[i][1]) {
                                         case 'a':
@@ -1001,8 +1093,17 @@ namespace Numinous {
                                     }
 
                                     step();
-                                    if (RegexTokens[i][0] == '!') return (true, true, false, true, false, false);
-                                    return (true, true, false, false, false, false);
+
+                                    if (RegexTokens[i][0] != ' ' && RegexTokens[i][0] != '\t') {
+                                        // error, no space after opcode
+                                        return default;
+                                    }
+
+                                    if (RegexTokens[i][0] == '!') {
+                                        step();
+                                        return InstructionHeaderFlags.Overruled;
+                                    }
+                                    return InstructionHeaderFlags.Found;
 
                                 } else if (RegexTokens[i][0] == 't') {
                                     if (RegexTokens[i][1] == RegexTokens[i][2]) {
@@ -1017,7 +1118,7 @@ namespace Numinous {
                                         return default;
                                     }
 
-                                    return (true, true, false, false, false, false);
+                                    return InstructionHeaderFlags.Found;
                                 }
 
 #if DEBUG
@@ -1030,18 +1131,65 @@ namespace Numinous {
                                 step();
                                 if (RegexTokens[i][0] == '#') {
                                     step();
-                                    return (true, true, false, false, false, false);
+                                    return InstructionHeaderFlags.Immediate;
                                 }
 
                                 goto CheckMemoryAccessRules;
 
 
                             CheckMemoryAccessRules:
-                                step();
+                                return CheckMemoryAccessRules(); ; // rules
+                        }
 
-                                return default; // rules
+                        InstructionHeaderFlags CheckMemoryAccessRules() {
+                            if (RegexTokens[i] == "a") {
+                                step();
+                                if (RegexTokens[i][0] == ':') {
+                                    step();
+                                    return InstructionHeaderFlags.Enforced_ABS;
+                                } else if (CanUseA.Contains(RegexTokens[i - 3])) {
+                                    step();
+                                    return InstructionHeaderFlags.Found;
+                                } else {
+                                    // error, a is reserved
+                                    return default;
+                                }
+                            } else if (RegexTokens[i] == "z") {
+                                step();
+                                if (RegexTokens[i][0] == ':') {
+                                    step();
+                                    return InstructionHeaderFlags.Enforced_ZP;
+                                } else {
+                                    // error, z is reserved
+                                    return default;
+                                }
+                            } else if (RegexTokens[i][0] == '!') {
+                                step();
+                                if (RegexTokens[i][0] == ':') {
+                                    step();
+                                    return InstructionHeaderFlags.Enforced_ABS | InstructionHeaderFlags.Overruled;
+                                } else {
+                                    // error, a is reserved
+                                    return default;
+                                }
+                            } else if (RegexTokens[i] == "z") {
+                                step();
+                                if (RegexTokens[i][0] == ':') {
+                                    step();
+                                    return InstructionHeaderFlags.Enforced_ZP | InstructionHeaderFlags.Overruled;
+                                } else {
+                                    // error, z is reserved
+                                    return default;
+                                }
+                            }
+
+                            return InstructionHeaderFlags.Found;
                         }
                     }
+
+                    // keep seeking beyond whitespace
+                    void seek_nowhitespace() => steps(() => (RegexTokens[i][0] == ' ' || RegexTokens[i][0] == '\t'));
+
                     #endregion      OperationExtract Local Functions
                 }
 
