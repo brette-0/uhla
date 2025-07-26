@@ -9,12 +9,12 @@ namespace Numinous.Engine {
         /// <param name="SourceLineReference"></param>
         /// <param name="SourceLineSubStringIndex"></param>
         /// <returns></returns>
-        internal static (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, OperationTypes OperationType)>, int Finish, bool Success, bool Continue) ContextFetcher(ref List<string> BasicRegexTokens, ref int SourceStringIndex, ref int ErrorReportLineNumber, string SourceFilePath) {
+        internal static (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, (OperationTypes Type, object Context) Operation)>, int Finish, bool Success, bool Continue) ContextFetcher(ref List<string> BasicRegexTokens, ref int SourceStringIndex, ref int ErrorReportLineNumber, string SourceFilePath) {
             // use BasicRegexTokens => RegexTokens (ref, no cloning?) | Ensures we solve all new defines without mutating the original
             List<string> RegexTokens = ResolveDefines(BasicRegexTokens);
             string CollectiveContext = string.Concat(RegexTokens);
 
-            List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, OperationTypes OperationType)> Tokens = [];
+            List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, (OperationTypes Type, object Context) Operation)> Tokens = [];
             List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> StepTokens = [];
             List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens = [];
             List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTermTokens = [];
@@ -202,7 +202,7 @@ namespace Numinous.Engine {
             return default;
 
             #region Context Fetcher Functions
-            (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, OperationTypes OperationType)>, int finish, bool Success, bool Continue) Success() => (Tokens, Finish, true, false);
+            (List<(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, (OperationTypes Type, object Context) Operation)>, int finish, bool Success, bool Continue) Success() => (Tokens, Finish, true, false);
             void step() => StringIndex += RegexTokens[i++].Length;
             void steps(Func<bool> SeekPredicate) {
                 while (SeekPredicate()) {
