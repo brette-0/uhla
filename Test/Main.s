@@ -1,1 +1,1 @@
-lda #foo
+beq
