@@ -914,13 +914,7 @@ namespace Numinous.Engine {
                                         default: return default;
                                     }
 
-                                    if (CheckFormat(true)) {
-                                        if (RegexTokens[i][0] == '#') {
-                                            step();
-                                            return InstructionHeaderFlags.Immediate;
-                                        } else return InstructionHeaderFlags.Found;
-                                    }
-
+                                    if (CheckFormat(false)) goto CheckMemoryAccessRulesWithImmediate;
                                     // error malformed instruction
                                     return default;
 
