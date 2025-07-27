@@ -41,7 +41,9 @@ internal static class Program {
         SourceFileNameBuffer.Add(InputPath!);
         RegexTokenizedSourceFileContentBuffer.Add(RegexTokenize(InputFile));
         SourceFileIndexBuffer.Add(0);           // begin from "main.s" (CONTENTS) : (0)
-        SourceSubstringBuffer.Add(0);       // begin from char 0
+        SourceSubstringBuffer.Add(0);           // begin from char 0
+        SourceFileLineBuffer.Add(0);            // begin from char 0
+
 
         // rs "Root Scope" has itself as key, value and parent - sitting in the root pointing to itself.
         // this is the only way via asm to directly refer to rs. Useful for when you use a 'as' level keyword but desires rs resolve.
@@ -59,17 +61,17 @@ internal static class Program {
         LabelDataBase["a"] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
             {"",        (Numinous.Engine.System.Registers.A, AssembleTimeTypes.CREG, AccessLevels.PRIVATE)},
             {"indexing", (0, AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
-        }, AssembleTimeTypes.CSTRING, AccessLevels.PUBLIC);
+        }, AssembleTimeTypes.CREG, AccessLevels.PUBLIC);
 
         LabelDataBase["x"] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
             {"",        (Numinous.Engine.System.Registers.X, default, AccessLevels.PRIVATE)},
             {"indexing", (0, AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
-        }, AssembleTimeTypes.CSTRING, AccessLevels.PUBLIC);
+        }, AssembleTimeTypes.CREG, AccessLevels.PUBLIC);
 
         LabelDataBase["y"] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
             {"",        (Numinous.Engine.System.Registers.Y, default, AccessLevels.PRIVATE)},
             {"indexing", (0, AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
-        }, AssembleTimeTypes.CSTRING, AccessLevels.PUBLIC);
+        }, AssembleTimeTypes.CREG, AccessLevels.PUBLIC);
 
         // Functions are just lambdas, 0 refers to arg 0, and so on. They are of type Function  returns type of type type
         // The 'self' containing the lambda's type is the return type

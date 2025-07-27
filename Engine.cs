@@ -924,7 +924,7 @@ namespace Numinous {
                     for (int i = 0; i < tokens.Count; i++) {
                         string token = tokens[i];
                         ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) = Database.GetObjectFromAlias(token, AccessLevels.PUBLIC);
-                        if (success && ctx.type == AssembleTimeTypes.CSTRING) {
+                        if (success && ctx.type == AssembleTimeTypes.CEXP) {
                             var foo = (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)ctx.data;
                             var bar = foo[""].data;
                             string Capture = (string)bar;
