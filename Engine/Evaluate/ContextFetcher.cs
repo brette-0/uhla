@@ -519,6 +519,63 @@ namespace Numinous.Engine {
                         case "sty": // !a:
                         case "dec": // a:
                         case "inc": // z:
+                        case "jmp":
+                        case "jeq":
+                        case "jne":
+                        case "jzs":
+                        case "jzc":
+                        case "jpl":
+                        case "jmi":
+                        case "jns":
+                        case "jnc":
+                        case "jcs":
+                        case "jcc":
+                        case "jgt":
+                        case "jlt":
+                        case "jvc":
+                        case "jvs":
+                        case "jsr":
+                        case "ceq":
+                        case "cne":
+                        case "czs":
+                        case "czc":
+                        case "cpl":
+                        case "cmi":
+                        case "cns":
+                        case "cnc":
+                        case "ccs":
+                        case "ccc":
+                        case "cgt":
+                        case "clt":
+                        case "cvc": // jmp !foo
+                        case "cvs": // jmp foo
+                        case "aso":
+                        case "slo":
+                        case "rla":
+                        case "rln":
+                        case "lse":
+                        case "sre":
+                        case "rrd":
+                        case "rra":
+                        case "aax":
+                        case "sax":
+                        case "dcm":
+                        case "dcp":
+                        case "usb":
+                        case "isc":
+                        case "axa":
+                        case "ahx":
+                        case "sha":
+                        case "sxa":
+                        case "xas":
+                        case "shx":
+                        case "sya":
+                        case "say":
+                        case "shy": // !foo
+                        case "shs": // !z:foo
+                        case "tas": // !a:foo
+                        case "lar": // z:foo
+                        case "las": // a:foo
                             if (CheckFormat(false)) goto CheckMemoryAccessRulesNotPermittingImmediate;
                             // error malformed instruction
                             return default;
@@ -614,67 +671,6 @@ namespace Numinous.Engine {
                             if (CheckFormat(true)) return InstructionHeaderFlags.Found;
                             // error malformed instruction
                             return default;
-
-                        case "jmp":
-                        case "jeq":
-                        case "jne":
-                        case "jzs":
-                        case "jzc":
-                        case "jpl":
-                        case "jmi":
-                        case "jns":
-                        case "jnc":
-                        case "jcs":
-                        case "jcc":
-                        case "jgt":
-                        case "jlt":
-                        case "jvc":
-                        case "jvs":
-                        case "jsr":
-                        case "ceq":
-                        case "cne":
-                        case "czs":
-                        case "czc":
-                        case "cpl":
-                        case "cmi":
-                        case "cns":
-                        case "cnc":
-                        case "ccs":
-                        case "ccc":
-                        case "cgt":
-                        case "clt":
-                        case "cvc": // jmp !foo
-                        case "cvs": // jmp foo
-                        case "aso":
-                        case "slo":
-                        case "rla":
-                        case "rln":
-                        case "lse":
-                        case "sre":
-                        case "rrd":
-                        case "rra":
-                        case "aax":
-                        case "sax":
-                        case "dcm":
-                        case "dcp":
-                        case "usb":
-                        case "isc":
-                        case "axa":
-                        case "ahx":
-                        case "sha":
-                        case "sxa":
-                        case "xas":
-                        case "shx":
-                        case "sya":
-                        case "say":
-                        case "shy": // !foo
-                        case "shs": // !z:foo
-                        case "tas": // !a:foo
-                        case "lar": // z:foo
-                        case "las": // a:foo
-                            if (CheckFormat(false)) goto CheckMemoryAccessRulesNotPermittingImmediate;
-                            // error malformed instruction
-                            return default;
                                 
                                     // #foo
                                     // !foo
@@ -732,11 +728,7 @@ namespace Numinous.Engine {
                         CheckImmediate:
                             if (RegexTokens[i][0] == '!') {
                                 seek_no_whitespace();
-
-                                if (RegexTokens[i] == "//" || RegexTokens[i] == "/*") {
-                                    // error malformed instruction
-                                    return default;
-                                }
+                                if (CheckLineTerminated()) return default;
 
                                 if (RegexTokens[i][0] != '#') {
                                     // error, instruction is immediate only
@@ -746,6 +738,7 @@ namespace Numinous.Engine {
                                 step();
                                 return InstructionHeaderFlags.Immediate | InstructionHeaderFlags.Overruled;
                             }
+
                             if (RegexTokens[i][0] != '#') {
                                 // error, instruction is immediate only
                                 return default;
@@ -973,20 +966,18 @@ namespace Numinous.Engine {
                             }
                             return InstructionHeaderFlags.Missing; ;
 
-                        CheckMemoryAccessRulesWithImmediate:
-                            step();
+                        CheckMemoryAccessRulesNotPermittingImmediate:
                             if (RegexTokens[i][0] == '#') {
-                                step();
-                                return InstructionHeaderFlags.Immediate;
+                                // error, does not permit immediate
+                                return default;
                             }
 
                             goto CheckMemoryAccessRules;
 
-                        CheckMemoryAccessRulesNotPermittingImmediate:
-                            step();
+                        CheckMemoryAccessRulesWithImmediate:
                             if (RegexTokens[i][0] == '#') {
-                                // error, does not permit immediate
-                                return default;
+                                step();
+                                return InstructionHeaderFlags.Immediate;
                             }
 
                             goto CheckMemoryAccessRules;
@@ -1011,24 +1002,27 @@ namespace Numinous.Engine {
 
                     InstructionHeaderFlags CheckMemoryAccessRules() {
                         if (RegexTokens[i] == "a") {
-                            if (i == RegexTokens.Count - 1&& CanUseA.Contains(RegexTokens[i - 2])) {
+                            if (CanUseA.Contains(RegexTokens[i - 2])) {
                                 step();
                                 return InstructionHeaderFlags.Found;
                             }
 
                             step();
+                            if (CheckLineTerminated()) {                                                // we've already established we can't use the syntax a here
+                                // error malformed
+                                return default;
+                            }
+                            
                             if (RegexTokens[i][0] == ':') {
                                 step();
                                 return InstructionHeaderFlags.Enforced_ABS;
-                            } else if (CanUseA.Contains(RegexTokens[i - 3])) {
-                                step();
-                                return InstructionHeaderFlags.Found;
                             } else {
                                 // error, a is reserved
                                 return default;
                             }
                         } else if (RegexTokens[i] == "z") {
                             step();
+                            if (CheckLineTerminated()) return default;                                  // standalone z refers to zero flag, not implicit and unsuitable here
                             if (RegexTokens[i][0] == ':') {
                                 step();
                                 return InstructionHeaderFlags.Enforced_ZP;
@@ -1038,14 +1032,16 @@ namespace Numinous.Engine {
                             }
                         } else if (RegexTokens[i][0] == '!') {
                             step();
+                            if (CheckLineTerminated()) {                                                // must overrule something
+                                // error malformed
+                                return default;
+                            }
+
                             if (RegexTokens[i] == "a") {
                                 step();
                                 if (RegexTokens[i][0] == ':') {
                                     step();
                                     return InstructionHeaderFlags.Enforced_ABS | InstructionHeaderFlags.Overruled;
-                                } else if (CanUseA.Contains(RegexTokens[i - 3])) {
-                                    step();
-                                    return InstructionHeaderFlags.Found;
                                 } else {
                                     // error, a is reserved
                                     return default;
