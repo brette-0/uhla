@@ -23,7 +23,7 @@ namespace Numinous {
             /// if has Immediate, Enforced or Overruled it counts as found
             /// </summary>
             [Flags]
-            internal enum InstructionHeaderFlags : byte {
+            internal enum OperandDecorators : byte {
                 Found           = 1 << 0,   // something
 
                 Immediate       = 1 << 1,   // #

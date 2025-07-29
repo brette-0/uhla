@@ -17,25 +17,25 @@ internal static class Program {
         //if (ActiveLanguage == Languages.Null) {
         //    ActiveLanguage = Languages.English_UK;
         //    // TODO: Consider SystemError as more suitable?
-        //    Terminal.Log(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, "Could not detect language, choosing English (UK).",
+        //    Terminal.Log(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, "Could not detect language, choosing English (UK).",
         //            -1, default, null);
         //}
 
         if (InputPath == null) {
-            Terminal.Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(ActiveLanguage, "Input path must be provided")]}.",
+            Terminal.Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{Language.Connectives[(ActiveLanguage, "Input path must be provided")]}.",
                 -1, default, null);
             return (int)ErrorTypes.ParsingError;
         }
 
         if (OutputPath == null) {
-            Terminal.Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{Language.Connectives[(ActiveLanguage, "Output path must be provided")]}.",
+            Terminal.Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{Language.Connectives[(ActiveLanguage, "Output path must be provided")]}.",
                     -1, default, null);
             return (int)ErrorTypes.ParsingError;
         }
 
         string InputFile = File.ReadAllText(InputPath!);
         if (InputFile.Length == 0) {
-            Terminal.Error(ErrorTypes.NothingToDo, DecodingPhase.TOKEN, $"{Language.Connectives[(ActiveLanguage, "Source file")]} {InputPath} {Language.Connectives[(ActiveLanguage, "has no contents")]}", -1, 0, null);
+            Terminal.Error(ErrorTypes.NothingToDo, DecodingPhases.TOKEN, $"{Language.Connectives[(ActiveLanguage, "Source file")]} {InputPath} {Language.Connectives[(ActiveLanguage, "has no contents")]}", -1, 0, null);
             return (int)ErrorTypes.NothingToDo;
         }
         SourceFileNameBuffer.Add(InputPath!);
@@ -92,10 +92,10 @@ internal static class Program {
         Span<string>        SourceFileNameBufferSpan    = CollectionsMarshal.AsSpan(SourceFileNameBuffer);
         Span<int>           SourceSubstringBufferSpan   = CollectionsMarshal.AsSpan(SourceSubstringBuffer);
         Span<int>           SourceFileLineBufferSpan    = CollectionsMarshal.AsSpan(SourceFileLineBuffer);
+        Span<int>           SourceFileStepBufferSpan    = CollectionsMarshal.AsSpan(SourceFileStepBuffer);
 
 
-
-        var CF_resp = Evaluate.ContextFetcher(ref SourceFileContentBufferSpan[^1], ref SourceSubstringBufferSpan[^1], ref SourceFileLineBufferSpan[^1], SourceFileNameBufferSpan[^1]);
+        var CF_resp = Evaluate.ContextFetcher(ref SourceFileContentBufferSpan[^1], ref SourceSubstringBufferSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
 
         return 0;
     }
@@ -103,8 +103,9 @@ internal static class Program {
     internal static List<List<string>>  RegexTokenizedSourceFileContentBuffer = [];
     internal static List<int>           SourceFileIndexBuffer = [];
     internal static List<int>           SourceSubstringBuffer = [];
-    internal static List<string>        SourceFileNameBuffer = [];
-    internal static List<int>           SourceFileLineBuffer = [];  // Used for ERROR REPORT ONLY
+    internal static List<string>        SourceFileNameBuffer  = [];
+    internal static List<int>           SourceFileLineBuffer  = [];  // Used for ERROR REPORT ONLY
+    internal static List<int>           SourceFileStepBuffer  = [];  // Used for ERROR REPORT ONLY
 
     internal static Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> LabelDataBase = [];
     internal static List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>> ActiveScopeBuffer = [];

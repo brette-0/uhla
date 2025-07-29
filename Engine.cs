@@ -399,14 +399,14 @@ namespace Numinous {
         }
 
         internal enum ErrorLevels : byte {
-            LOG, WARN, ERROR
+            NONE, LOG, WARN, ERROR
         }
 
         internal enum ErrorTypes : byte {
             None, SyntaxError, ParsingError, NothingToDo
         }
 
-        internal enum DecodingPhase : byte {
+        internal enum DecodingPhases : byte {
             TERMINAL, TOKEN, EVALUATION
         }
 
@@ -423,8 +423,10 @@ namespace Numinous {
                 Span<string>        SourceFileNameBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileNameBuffer);
                 Span<int>           SourceSubstringBufferSpan   = CollectionsMarshal.AsSpan(Program.SourceSubstringBuffer);
                 Span<int>           SourceFileLineBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
+                Span<int>           SourceFileStepBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
 
-                var CF_resp = Evaluate.ContextFetcher(ref SourceFileContentBufferSpan[^1], ref SourceSubstringBufferSpan[^1], ref SourceFileLineBufferSpan[^1], SourceFileNameBufferSpan[^1]);
+
+                var CF_resp = Evaluate.ContextFetcher(ref SourceFileContentBufferSpan[^1], ref SourceSubstringBufferSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
                 if (!CF_resp.Success) return default;
 
                 // if its to write to ROM, ... figure that out
@@ -454,381 +456,6 @@ namespace Numinous {
                 Program.SourceSubstringBuffer.Add(0);
                 Program.SourceFileIndexBuffer.Add(0);
             }
-
-
-            /// <summary>
-            /// Remove the Function from the values, ensuring functions are not evaluated.
-            /// By functions we refer to directives such as #include
-            /// or assembler level functions such as typeof()
-            /// Here we also attempt to identify if, loop or things of that nature
-            /// </summary>
-            /// <param name="Tokens"></param>
-            /// <param name="MaxHierarchy"></param>
-            internal static (object OperationContext, bool Success) ExtractTask(List<string> StringTokens) {
-                // self type is not default for tokens, as they are not objects.
-                if (StringTokens[0][0] == '#') {
-
-                    if (isExplicitInstruction(StringTokens[0])) {
-                        /*
-                         *      ins #foo
-                         *      ins foo
-                         *      ins !foo
-                         *      ins z:foo
-                         *      ins a:foo
-                         *      ins !z:foo
-                         *      ins !a:foo
-                         *      ins foo, r
-                         *      ins !foo, r
-                         *      ins z:foo, r
-                         *      ins a:foo, r
-                         *      ins !a:foo, r
-                         *      ins foo[r]
-                         *      ins z:foo[r]
-                         *      ins a:foo[r]
-                         *      ins !a:foo[r]
-                         *      ins [foo, r]
-                         *      ins [foo], r
-                         */
-
-
-                    }
-                }
-
-
-
-                return default;
-
-                bool isExplicitInstruction(string ctx) {
-                    switch (ctx) {
-                        case "adc":
-
-                        case "and":
-
-                        case "asl":
-
-                        case "bcc":
-                        case "blt":
-
-                        case "bcs":
-                        case "bgt":
-
-                        case "beq":
-                        case "bzs":
-
-                        case "bit":
-
-                        case "bmi":
-                        case "bns":
-
-                        case "bne":
-                        case "bzc":
-
-                        case "bpl":
-                        case "bnc":
-
-                        case "brk":
-
-                        case "bvc":
-
-                        case "bvs":
-
-                        case "clc":
-
-                        case "cld":
-
-                        case "cli":
-
-                        case "clv":
-
-                        case "cmp":
-
-                        case "cpx":
-
-                        case "cpy":
-
-                        case "dec":
-
-                        case "dex":
-
-                        case "dey":
-
-                        case "eor":
-
-                        case "inc":
-
-                        case "inx":
-
-                        case "iny":
-
-                        case "jmp":
-
-                        case "jsr":
-
-                        case "lda":
-
-                        case "ldx":
-
-                        case "ldy":
-
-                        case "lsr":
-
-                        case "nop":
-
-                        case "ora":
-
-                        case "pha":
-
-                        case "php":
-
-                        case "pla":
-
-                        case "plp":
-
-                        case "rol":
-
-                        case "ror":
-
-                        case "rti":
-
-                        case "rts":
-
-                        case "sbc":
-
-                        case "sec":
-
-                        case "sed":
-
-                        case "sei":
-
-                        case "sta":
-
-                        case "stx":
-
-                        case "sty":
-
-                        case "tax":
-
-                        case "tay":
-
-                        case "tsx":
-
-                        case "txa":
-
-                        case "txs":
-
-                        case "txy":
-
-                        // Illegal
-                        case "slo":
-                        case "aso":
-
-                        case "rla":
-                        case "rln":
-
-                        case "sre":
-                        case "lse":
-
-                        case "rra":
-                        case "rrd":
-
-                        case "sax":
-                        case "aax":
-
-                        case "lax":
-
-                        case "dcp":
-                        case "dcm":
-
-                        case "isc":
-                        case "usb":
-
-                        case "anc":
-                        case "ana":
-                        case "anb":
-
-                        case "alr":
-                        case "asr":
-
-                        case "arr":
-                        case "sbx":
-                        case "xma":
-
-                        case "axs":
-
-                        case "sha":
-                        case "axa":
-                        case "ahx":
-
-                        case "shx":
-                        case "sxa":
-                        case "xas":
-
-                        case "shy":
-                        case "sya":
-                        case "say":
-
-                        case "tas":
-                        case "shs":
-
-                        case "las":
-                        case "lar":
-
-                        case "xaa":
-                        case "ane":
-                        case "axm":
-
-                        case "stp":
-                        case "kil":
-                        case "hlt":
-                        case "jam":
-
-                            return true;
-                        
-                        default: return false;
-                    }
-                }
-
-                bool isSyntheticInstruction(string ctx) {
-                    switch (ctx) {
-                        case "mov":
-                            // mov a, x
-                            // mov a, mem
-                            // mov #imm, a
-                            // mov $100, $200
-                        case "neg":
-                            // neg
-                            // neg 10
-                        case "abs":
-                        case "ccf":
-                        case "sex":
-                        case "irl":
-                        case "irr":
-                        case "swp":
-                        
-                        case "rnc":
-                        case "rpl":
-                        case "rns":
-                        case "rmi":
-
-                        case "rcc":
-                        case "rcs":
-                        case "rgt":
-                        case "rlt":
-
-                        case "rvc":
-                        case "rvs":
-
-                        case "req":
-                        case "rzc":
-                        case "rne":
-                        case "rzs":
-
-                        case "jeq":
-                        case "jzs":
-                        case "jne":
-                        case "jzc":
-
-                        case "jcs":
-                        case "jgt":
-                        case "jcc":
-                        case "jlt":
-
-                        case "jvc":
-                        case "jvs":
-
-                        case "jns":
-                        case "jmi":
-                        case "jnc":
-                        case "jpl":
-
-                        case "ceq":
-                        case "czs":
-                        case "cne":
-                        case "czc":
-
-                        case "cmi":
-                        case "cns":
-                        case "cpl":
-                        case "cnc":
-
-                        case "cvs":
-                        case "cvc":
-
-                        case "ccs":
-                        case "cgt":
-                        case "ccc":
-                        case "clt":
-
-                        case "txy": // depend on idtable
-                        case "tyx":
-
-                        default: return false;
-                    }
-                }
-
-                bool isSyntheticImplicitInstruction(string ctx) {
-                    switch (ctx) {
-                        default: return false;
-                    }
-                }
-
-                bool isImplicitInstruction(string ctx) {
-                    switch (ctx) {
-                        default: return false;
-                    }
-                }
-
-                bool isKeyWord(string ctx) {
-                    switch (ctx) {
-                        case "using":
-                            // using math
-                            // using m = math
-                            // using math.add
-                            // using add = math.add
-
-                        case "if":
-                            // if, if else, if elseif, if elseif else
-
-                        case "elseif":
-                            // elseif, elseif else
-
-                        case "else":
-                            // else
-
-                        case "loop":
-                            // loop, break
-
-                        case "break":
-                            // break
-
-                        case "return":
-                            // return
-                            // return foo, bar
-                            break;
-
-                        case "enum":
-                            // enum alias {contents}
-
-                        case "bank":
-                            // bank operation is complicated
-
-                        case "proc":
-                            // proc alias { body }
-
-                        case "charmap":
-                            // charmap  {a = b}
-
-
-                        // case struct
-                        
-                        default: return false;
-                    }
-                    return true;
-                }
-            }
-
-            
-
 
 
             // Generated Function | However I do find that this function is how I would code and meets criteria
@@ -961,10 +588,10 @@ namespace Numinous {
                             case "-i":
                             case "--input":
                                 if (i == args.Length - 1) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Input Path Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Input Path Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 } else if (InputPath.Length > 0) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Input Source File Path has already been specified")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Input Source File Path has already been specified")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 } else {
                                     InputPath = args[++i];
@@ -974,10 +601,10 @@ namespace Numinous {
                             case "-o":
                             case "--output":
                                 if (i == args.Length - 1) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Output Path Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Output Path Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 } else if (OutputPath.Length > 0) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Output Binary File Path has already been specified")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Output Binary File Path has already been specified")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 }
                                 OutputPath = args[++i];
@@ -1016,7 +643,7 @@ namespace Numinous {
 
                                 if (i == args.Length - 1) {
                                     // generic help message
-                                    Log(ErrorTypes.None, DecodingPhase.TERMINAL,
+                                    Log(ErrorTypes.None, DecodingPhases.TERMINAL,
 $"""
 Numinous 2a03 - GPL V2 Brette Allen 2026
 
@@ -1036,7 +663,7 @@ Numinous 2a03 - GPL V2 Brette Allen 2026
                                         case "lang":
                                         case "languages":
                                             // language specific help message.
-                                            Log(ErrorTypes.None, DecodingPhase.TERMINAL, @"
+                                            Log(ErrorTypes.None, DecodingPhases.TERMINAL, @"
 English (UK)      ""-l en_gb""
 English (US)      ""-l en_us""
 Español           ""-l es""
@@ -1065,7 +692,7 @@ Svenska           ""-l sw""
                                         case "warn":
                                         case "warnings":
                                             // warnings specific help message
-                                            Log(ErrorTypes.None, DecodingPhase.TERMINAL,
+                                            Log(ErrorTypes.None, DecodingPhases.TERMINAL,
                                             $"""
 Numinous Warning Types and how they work
 
@@ -1081,7 +708,7 @@ controlled  : Acts as 'strict' but prevents overruling.
 
                                         case "i":
                                         case "input":
-                                            Log(ErrorTypes.None, DecodingPhase.TERMINAL,
+                                            Log(ErrorTypes.None, DecodingPhases.TERMINAL,
 $"""
 Numinous Input File
 
@@ -1094,7 +721,7 @@ This decides what the root of the "include path" is, includes from here must be 
 
                                         case "o":
                                         case "output":
-                                            Log(ErrorTypes.None, DecodingPhase.TERMINAL,
+                                            Log(ErrorTypes.None, DecodingPhases.TERMINAL,
 $"""
 Numinous Output File
 
@@ -1117,7 +744,7 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                             case "-l":
                             case "--language":
                                 if (i == args.Length - 1) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Language Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Language Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 }
 
@@ -1148,13 +775,13 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                                 };
 
                                 if (Program.ActiveLanguage == Language.Languages.Null) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Invalid Language Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Invalid Language Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
                                     return default;
                                 }
                                 break;
 
                             default:
-                                Error(ErrorTypes.ParsingError, DecodingPhase.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Unrecognized Terminal Argument")])}.", -1, default, ApplyWiggle(Flattened, 1 + StringIndex, args[i].Length));
+                                Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Unrecognized Terminal Argument")])}.", -1, default, ApplyWiggle(Flattened, 1 + StringIndex, args[i].Length));
                                 return default;
                         }
                     }
@@ -1192,7 +819,7 @@ LibraryIncludePaths         = ["./libs"]
                         };
                        
                         if (Program.WarningLevel == WarningLevels.NONE) {
-                            Warn(ErrorTypes.SyntaxError, DecodingPhase.TERMINAL, $"""
+                            Warn(ErrorTypes.SyntaxError, DecodingPhases.TERMINAL, $"""
 The config file (at {AppContext.BaseDirectory}/Numinous.toml) is malformed! 
 Ensure that it contains the key 'DefaultWarningLevel' under 'Defaults' table. The data may be any of the following:
 
@@ -1238,7 +865,7 @@ Project Numinous will NOT continue until you fix this or manually specify your W
                         };
 
                         if (Program.ActiveLanguage == Language.Languages.Null) {
-                            Warn(ErrorTypes.SyntaxError, DecodingPhase.TERMINAL, $"""
+                            Warn(ErrorTypes.SyntaxError, DecodingPhases.TERMINAL, $"""
 The config file (at {AppContext.BaseDirectory}/Numinous.toml) is malformed! 
 Ensure that it contains the key 'DefaultLanguage' under 'Defaults' table. The data may be any of the following:
 
@@ -1295,6 +922,15 @@ Project Numinous will NOT continue until you fix this or manually specify your l
                     public DefaultsBlock Defaults { get; set; } = new();
                 }
 
+                internal struct ErrorContext {
+                    internal ErrorLevels ErrorLevel;
+                    internal ErrorTypes ErrorType;
+                    internal DecodingPhases DecodingPhase;
+                    internal string Message;
+                    internal int LineNumber, StepNumber;
+                    internal Func<string?> Context;
+                }
+
                 // in event of left in message, don't show on release
 #if DEBUG
                 internal static void Debug(string message) => Console.WriteLine(message);
@@ -1303,7 +939,7 @@ Project Numinous will NOT continue until you fix this or manually specify your l
 #endif
 
 #if DEBUG
-                internal static void WriteInfo(ErrorLevels ErrorLevel, ErrorTypes ErrorType, DecodingPhase Phase, string Message, int LineNumber, int StepNumber, string? Context,
+                internal static void WriteInfo(ErrorLevels ErrorLevel, ErrorTypes ErrorType, DecodingPhases Phase, string Message, int LineNumber, int StepNumber, string? Context,
                     int     lineNumber = 0, 
                     string  filePath = "", 
                     string  memberName = "")
@@ -1345,20 +981,54 @@ Project Numinous will NOT continue until you fix this or manually specify your l
                 }
 
 #if DEBUG
-                    
-                internal static void   Log(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int LineNumber, int StepNumber, string? Context,
+                internal static void Log(ErrorContext ctx,
+                    [CallerLineNumber] int lineNumber = 0,
+                    [CallerFilePath] string filePath = "",
+                    [CallerMemberName] string memberName = "") {
+                    if (ctx.ErrorLevel != ErrorLevels.LOG)
+                        throw new InvalidOperationException($"Log() called with mismatched ErrorLevel: {ctx.ErrorLevel}");
+
+                    WriteInfo(ErrorLevels.LOG, ctx.ErrorType, ctx.DecodingPhase, ctx.Message, ctx.LineNumber, ctx.StepNumber, ctx.Context(),
+                              lineNumber, filePath, memberName);
+                }
+
+                internal static void Warn(ErrorContext ctx,
+                    [CallerLineNumber] int lineNumber = 0,
+                    [CallerFilePath] string filePath = "",
+                    [CallerMemberName] string memberName = "") {
+                    var expectedLevel = Program.WarningLevel.HasFlag(WarningLevels.ERROR) ? ErrorLevels.ERROR : ErrorLevels.WARN;
+                    if (ctx.ErrorLevel != expectedLevel)
+                        throw new InvalidOperationException($"Warn() called with mismatched ErrorLevel: {ctx.ErrorLevel}, expected: {expectedLevel}");
+
+                    WriteInfo(expectedLevel, ctx.ErrorType, ctx.DecodingPhase, ctx.Message, ctx.LineNumber, ctx.StepNumber, ctx.Context(),
+                              lineNumber, filePath, memberName);
+                }
+
+                internal static void Error(ErrorContext ctx,
+                    [CallerLineNumber] int lineNumber = 0,
+                    [CallerFilePath] string filePath = "",
+                    [CallerMemberName] string memberName = "") {
+                    if (ctx.ErrorLevel != ErrorLevels.ERROR)
+                        throw new InvalidOperationException($"Error() called with mismatched ErrorLevel: {ctx.ErrorLevel}");
+
+                    WriteInfo(ErrorLevels.ERROR, ctx.ErrorType, ctx.DecodingPhase, ctx.Message, ctx.LineNumber, ctx.StepNumber, ctx.Context(),
+                              lineNumber, filePath, memberName);
+                }
+
+
+                internal static void   Log(ErrorTypes ErrorType, DecodingPhases Phase, string Message, int LineNumber, int StepNumber, string? Context,
                     [CallerLineNumber] int lineNumber = 0,
                     [CallerFilePath] string filePath = "",
                     [CallerMemberName] string memberName = "") => WriteInfo(ErrorLevels.LOG,   ErrorType, Phase, Message, LineNumber, StepNumber, Context, lineNumber, filePath, memberName);
                 
 
-                internal static void  Warn(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int LineNumber, int StepNumber, string? Context,
+                internal static void  Warn(ErrorTypes ErrorType, DecodingPhases Phase, string Message, int LineNumber, int StepNumber, string? Context,
                     [CallerLineNumber] int lineNumber = 0,
                     [CallerFilePath] string filePath = "",
                     [CallerMemberName] string memberName = "") => WriteInfo(Program.WarningLevel.HasFlag(WarningLevels.ERROR) ? ErrorLevels.ERROR : ErrorLevels.WARN,  ErrorType, Phase, Message, LineNumber, StepNumber, Context, lineNumber, filePath, memberName);
 
 
-                internal static void Error(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int LineNumber, int StepNumber, string? Context,
+                internal static void Error(ErrorTypes ErrorType, DecodingPhases Phase, string Message, int LineNumber, int StepNumber, string? Context,
                     [CallerLineNumber] int lineNumber = 0,
                     [CallerFilePath] string filePath = "",
                     [CallerMemberName] string memberName = "") => WriteInfo(ErrorLevels.ERROR, ErrorType, Phase, Message, LineNumber, StepNumber, Context, lineNumber, filePath, memberName);
@@ -1374,6 +1044,31 @@ Project Numinous will NOT continue until you fix this or manually specify your l
 
                 internal static void Error(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context) {
                     WriteInfo(ErrorLevels.ERROR, ErrorType, Phase, Message, LineNumber, StepNumber, Context);
+                }
+
+                internal static void Log(ErrorContext ctx)
+                {
+                    if (ctx.ErrorLevel != ErrorLevels.LOG)
+                        throw new InvalidOperationException($"Log() called with mismatched ErrorLevel: {ctx.ErrorLevel}");
+
+                    WriteInfo(ErrorLevels.LOG, ctx.ErrorType, ctx.DecodingPhase, ctx.Message, ctx.LineNumber, ctx.StepNumber, ctx.Context());
+                }
+
+                internal static void Warn(ErrorContext ctx)
+                {
+                    var expectedLevel = ErrorLevels.WARN; // No error override in release
+                    if (ctx.ErrorLevel != expectedLevel)
+                        throw new InvalidOperationException($"Warn() called with mismatched ErrorLevel: {ctx.ErrorLevel}");
+
+                    WriteInfo(expectedLevel, ctx.ErrorType, ctx.DecodingPhase, ctx.Message, ctx.LineNumber, ctx.StepNumber, ctx.Context());
+                }
+
+                internal static void Error(ErrorContext ctx)
+                {
+                    if (ctx.ErrorLevel != ErrorLevels.ERROR)
+                        throw new InvalidOperationException($"Error() called with mismatched ErrorLevel: {ctx.ErrorLevel}");
+
+                    WriteInfo(ErrorLevels.ERROR, ctx.ErrorType, ctx.DecodingPhase, ctx.Message, ctx.LineNumber, ctx.StepNumber, ctx.Context());
                 }
 #endif
             }
