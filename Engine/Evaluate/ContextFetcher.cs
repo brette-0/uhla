@@ -1,10 +1,9 @@
 ﻿using Microsoft.CodeAnalysis;
-using static Numinous.Engine.Engine;
 
 // immediate illegal overruling might not work
 
 namespace Numinous.Engine {
-    internal static partial class Evaluate {
+    internal static partial class Engine {
         /// <summary>
         /// Tokenizes referred source code at referred line from referred substring index into tokens split by step, then by delta in hierarchy, then by term.
         /// </summary>
@@ -12,15 +11,19 @@ namespace Numinous.Engine {
         /// <param name="SourceLineReference"></param>
         /// <param name="SourceLineSubStringIndex"></param>
         /// <returns></returns>
-        internal static (List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, (OperationTypes Type, object Context) Operation, int Finish, bool Success, bool Continue) ContextFetcher(ref List<string> BasicRegexTokens, ref int SourceStringIndex, ref int ErrorReportLineNumber, ref int ErrorReportStepNumber, string SourceFilePath) {
+        internal static (List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, (OperationTypes Type, object Context) Operation, int Finish, bool Success, bool Continue) ContextFetcher(Memory<string> BasicRegexTokens, ref int SourceTokenIndex, ref int ErrorReportLineNumber, ref int ErrorReportStepNumber, string SourceFilePath) {
             // use BasicRegexTokens => RegexTokens (ref, no cloning?) | Ensures we solve all new defines without mutating the original
-            List<string> RegexTokens = ResolveDefines(BasicRegexTokens);
-            string CollectiveContext = string.Concat(RegexTokens);
+            //List<string> RegexTokens = ResolveDefines(BasicRegexTokens);
+            string CollectiveContext = "";
 
             List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens = [];
             List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens = [];
             List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTermTokens = [];
             List<Operators> ContainerBuffer = [];
+
+            List<string> DefineResolveBuffer = [];
+
+            int LocalSourceTokenIndex = SourceTokenIndex, LocalErrorReportLineNumber = ErrorReportLineNumber, LocalErrorReportStepNumber = ErrorReportStepNumber;
 
             int Finish = -1;
             int MaxHierarchy = 0;
@@ -33,26 +36,35 @@ namespace Numinous.Engine {
 
             Terminal.ErrorContext ErrorContext = new();
 
-            int i = 0, StringIndex = 0;
-            (OperationTypes oper, object ctx) OperationType = ExtractOperation(ref ErrorReportLineNumber, ref ErrorReportStepNumber);
+            int i = 0, StringIndex = 0; string ActiveToken;
+
+            for (; DefineResolveBuffer.Count == 0; step()) {                                                    // all terms taken from resolved buffer
+                DefineResolveBuffer = PartialResolveDefine(BasicRegexTokens.Span[++i]);
+            }
+
+            ActiveToken = DefineResolveBuffer[0];
+            DefineResolveBuffer.RemoveAt(0);
+            (OperationTypes oper, object ctx) OperationType = ExtractOperation();
 
             if (OperationType == default) return default;                                                       // error pass back
             if (OperationType.oper == OperationTypes.DIRECTIVE) return default;
-            for (i = 0, StringIndex = 0; i < RegexTokens.Count; step(true)) {
-                if (RegexTokens[i][0] == ' ' || RegexTokens[i][0] == '\t') continue;                            // do not tokenize whitespace
+
+            for (i = 0, StringIndex = 0; DefineResolveBuffer.Count > 0 && i < BasicRegexTokens.Length; step(true)) {
+
+                if (ActiveToken[0] == ' ' || ActiveToken[0] == '\t') continue;                          // do not tokenize whitespace
 
                 if (ContainerBuffer.Count != 0 && ContainerBuffer[^1] == Operators.FSTRING) {
-                    CaptureCSTRING(c => c == '"' || c == '{', ref ErrorReportLineNumber, ref ErrorReportStepNumber);
-                    if (RegexTokens[i][0] != '{') {
-                        if (RegexTokens[i][0] == '"') {
-                            if (CloseContainer(ref ErrorReportLineNumber, ref ErrorReportStepNumber, Operators.STRING, Operators.FSTRING)) continue;
+                    CaptureCSTRING(c => c == '"' || c == '{');
+                    if (ActiveToken[0] != '{') {
+                        if (ActiveToken[0] == '"') {
+                            if (CloseContainer(Operators.STRING, Operators.FSTRING)) continue;
                             else return default;
                         }
                     }
                 }
 
                 // handle tokens
-                switch (RegexTokens[i]) {
+                switch (ActiveToken) {
                     //case "\n":
                     //    // marks the end of this tasks ctx
                     //    //ErrorReportLineNumber++;
@@ -60,13 +72,13 @@ namespace Numinous.Engine {
 
                     case "//":
                         // marks the end of this tasks ctx
-                        steps(() => RegexTokens[i][0] != '\n');
+                        steps(() => ActiveToken[0] != '\n');
                         break;
 
                     case "/*":
                         // marks the end of this tasks ctx
-                        while (RegexTokens[i] != "*/") {
-                            steps(() => RegexTokens[i][0] != '\n' || RegexTokens[i] != "*/");
+                        while (ActiveToken != "*/") {
+                            steps(() => ActiveToken[0] != '\n' || ActiveToken != "*/");
                             ErrorReportLineNumber++;
                         }
                         step();
@@ -111,9 +123,9 @@ namespace Numinous.Engine {
                         //}
 
                         // modify regex tokens to remove used and stored
-                        RegexTokens = [.. RegexTokens.TakeLast(RegexTokens.Count - i - 1)]; // trim last step from pattern
+                        //RegexTokens = [.. RegexTokens.TakeLast(RegexTokens.Count - i - 1)]; // trim last step from pattern
                         i = 0;
-                        CollectiveContext = CollectiveContext[(StringIndex + RegexTokens[i].Length)..];
+                        CollectiveContext = CollectiveContext[(StringIndex + ActiveToken.Length)..];
                         StringIndex = 0;
                         break;
 
@@ -156,7 +168,7 @@ namespace Numinous.Engine {
                     // special case
                     case "\"":
                         i++;
-                        if (CaptureCSTRING(c => c == '"', ref ErrorReportLineNumber, ref ErrorReportStepNumber)) break;
+                        if (CaptureCSTRING(c => c == '"')) break;
                         return default;
 
                     // Container Code
@@ -187,9 +199,9 @@ namespace Numinous.Engine {
                         OpenContainer(Operators.FSTRING);
                         break;
 
-                    case ")": if (SimpleCloseContainer(ref ErrorReportLineNumber, ref ErrorReportStepNumber, Operators.CPAREN)) break; else return default;
-                    case "]": if (SimpleCloseContainer(ref ErrorReportLineNumber, ref ErrorReportStepNumber, Operators.CBRACK)) break; else return default;
-                    case "}": if (SimpleCloseContainer(ref ErrorReportLineNumber, ref ErrorReportStepNumber, Operators.CBRACE)) break; else return default;
+                    case ")": if (SimpleCloseContainer(Operators.CPAREN)) break; else return default;
+                    case "]": if (SimpleCloseContainer(Operators.CBRACK)) break; else return default;
+                    case "}": if (SimpleCloseContainer(Operators.CBRACE)) break; else return default;
 
                     // Term Catching
                     case ",":
@@ -199,10 +211,10 @@ namespace Numinous.Engine {
                     default:
                         DeltaTermTokens.Add((
                             StringIndex,
-                            RegexTokens[i].Length,
+                            ActiveToken.Length,
                             new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels)> {
                                     // private for now, but once its determined to be something then it will change accordingly
-                                    { "self", (RegexTokens[i], AssembleTimeTypes.CEXP, AccessLevels.PRIVATE) },
+                                    { "self", (ActiveToken, AssembleTimeTypes.CEXP, AccessLevels.PRIVATE) },
                             },
                             false
                         ));
@@ -228,9 +240,20 @@ namespace Numinous.Engine {
 
             #region Context Fetcher Functions
             (List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, (OperationTypes Type, object Context) Operation, int Finish, bool Success, bool Continue) Success() => (Tokens, MaxHierarchy, OperationType, Finish, true, false);
+            
             void step(bool CollectContext = false) {
-                if (CollectContext) CollectiveContext += RegexTokens[i];
-                StringIndex += RegexTokens[i++].Length;
+                
+                if (DefineResolveBuffer.Count == 0) {                                                   // si to be mutated ONLY by typed tokens
+                    if (CollectContext) CollectiveContext += BasicRegexTokens.Span[0];
+                    StringIndex += BasicRegexTokens.Span[0].Length;                     
+                }
+
+                for (; DefineResolveBuffer.Count == 0; step()) {                                        // process passed token through regex tokenizing
+                    DefineResolveBuffer = PartialResolveDefine(BasicRegexTokens.Span[++i]);
+                }
+
+                ActiveToken = DefineResolveBuffer[0];                                                   // tokenized from basic, queue system. Validated
+                DefineResolveBuffer.RemoveAt(0);
             }
 
             void steps(Func<bool> SeekPredicate, bool skip = false) {
@@ -246,24 +269,24 @@ namespace Numinous.Engine {
                 }
             }
 
-            (OperationTypes oper, object ctx) ExtractOperation(ref int ErrorReportLineNumber, ref int ErrorReportStepNumber) {
+            (OperationTypes oper, object ctx) ExtractOperation() {
                 object ctx; bool success;
-                if (RegexTokens[i][0] == '#') {
-                    if (DeltaTokens.Count > 0 || ErrorReportStepNumber >= 0 || LastNonWhiteSpaceIndex != 0) {
+                if (ActiveToken[0] == '#') {
+                    if (DeltaTokens.Count > 0 || LocalErrorReportStepNumber >= 0 || LastNonWhiteSpaceIndex != 0) {
                         // error, assembler directives must own the entire line. (stylistic enforcement? I'm not sure)
                         return default;
                     }
 
                     step();
 
-                    switch (RegexTokens[i]) {
+                    switch (ActiveToken) {
                         case "include":
                             // demands <> :: We can take over from here
 
                             bool Binary = false;
 
-                            for (; i < RegexTokens.Count; step()) {
-                                switch (RegexTokens[i]) {
+                            for (step(); DefineResolveBuffer.Count > 0 && i < BasicRegexTokens.Length; step()) {
+                                switch (ActiveToken) {
                                     case " ":
                                     case "\t":
                                         continue;
@@ -357,7 +380,7 @@ namespace Numinous.Engine {
                 }
 
                 // keywords
-                switch (RegexTokens[i]) {
+                switch (ActiveToken) {
                     // functions ... typeof()
                     case "if":                  // (bool) code  OR  (bool) {code block}
                     case "else":                // else if (bool code) or (bool) {code block}
@@ -382,29 +405,28 @@ namespace Numinous.Engine {
                 (ctx, success) = ParseAsVariable();
                 if (success) return (OperationTypes.KEYWORD, ctx);
 
-                // any token could be the last, we might end on an implied instruction with no implied mode for example
-                if (i + 1 != RegexTokens.Count && RegexTokens[i + 1][0] == ':') {
-                    if (RegexTokens[i][0] == '-') {
-                        step();
-                        step();
 
-                        // next branch back is here | when we need to "beq -" we now can
-                        return (OperationTypes.ANON_REL_BRANCH, '-');
-                    } else if (RegexTokens[i][0] == '+') {
-                        step();
-                        step();
+                if (ActiveToken == "-:") {
+                    step();
 
-                        // for terms waiting on the next forward branch, we can now solve for "beq +"
-                        return (OperationTypes.ANON_REL_BRANCH, '+');
-                    }
+                    // next branch back is here | when we need to "beq -" we now can
+                    return (OperationTypes.ANON_REL_BRANCH, '-');
+                } else if (ActiveToken == "+:") {
+                    step();
+
+                    // for terms waiting on the next forward branch, we can now solve for "beq +"
+                    return (OperationTypes.ANON_REL_BRANCH, '+');
                 }
 
                 //(ctx, success) = ParseAsFilter();
                 //if (success) return (OperationTypes.KEYWORD, ctx);
 
 
-                string opcode = RegexTokens[i];
-                OperandDecorators FIS_ctx = VerifyInstruction(ref ErrorReportLineNumber, ref ErrorReportStepNumber);
+                string opcode = ActiveToken;
+
+                // Gather Instruction Information
+                OperandDecorators FIS_ctx = VerifyInstruction();
+
                 if (FIS_ctx == default) return default;                 // error pass back
                 if (FIS_ctx == OperandDecorators.Missing)          return (OperationTypes.EVALUATE, default(int));
                 else return (OperationTypes.INSTRUCTION, (opcode, FIS_ctx));
@@ -412,7 +434,7 @@ namespace Numinous.Engine {
                 #region         OperationExtract Local Functions
 
                 (RunTimeVariableType ctx, bool succses) ParseAsVariable() {
-                    string type = RegexTokens[i].ToLower();
+                    string type = ActiveToken.ToLower();
                     if (type.Length < 2) return default;
                     RunTimeVariableType ctx = default;
 
@@ -437,7 +459,7 @@ namespace Numinous.Engine {
                 }
 
                 (RunTimeVariableFilterType ctx, bool succses) ParseAsFilter() {
-                    string type = RegexTokens[i];
+                    string type = ActiveToken;
                     if (type.Length < 2) return default;
                     RunTimeVariableFilterType ctx = default;
 
@@ -479,7 +501,8 @@ namespace Numinous.Engine {
                     ctx.size = size >> 3;                           return (ctx, true); // specified size (one type allowed, exclusive filter)
                 }
 
-                OperandDecorators VerifyInstruction(ref int ErrorReportLineNumber, ref int ErrorReportStepNumber) {
+                
+                OperandDecorators VerifyInstruction() {
                     string[] CanUseA = ["asl", "lsr", "rol", "ror"];    // asl a, lsr a, rol a and ror a are all valid instructions with a as operand, no others.
                     /*
                      * ldr  (ld) + check for r
@@ -512,7 +535,8 @@ namespace Numinous.Engine {
                      *          
                      */
 
-                    switch (RegexTokens[i].ToLower()) {
+                    string opcode = ActiveToken.ToLower();
+                    switch (opcode) {
                         #region     Explicit Instructions Supporting Immediate
                         case "nop":
                         case "cpa": // cmp
@@ -634,7 +658,7 @@ namespace Numinous.Engine {
                         case "sec": //      Implied or Implied Overruled
                             if (CheckFormat(true)) {
                                 if (CheckLineTerminated()) return OperandDecorators.Found;
-                                else if (RegexTokens[i][0] == '!') {
+                                else if (ActiveToken[0] == '!') {
                                     step();
                                     if (CheckLineTerminated()) return OperandDecorators.Overruled;
                                     seek_no_whitespace();
@@ -710,19 +734,19 @@ namespace Numinous.Engine {
                         case "brk": // brk  : Immediate OR Implied OR Implied (Overruled)
                             if (CheckFormat(true)) {
                                 if (CheckLineTerminated()) return OperandDecorators.Found;
-                                else if (RegexTokens[i][0] == '!') {
+                                else if (ActiveToken[0] == '!') {
                                     step();
                                     if (CheckLineTerminated()) return OperandDecorators.Overruled;
                                     seek_no_whitespace();
                                     if (CheckLineTerminated()) return OperandDecorators.Overruled;
-                                    Terminal.Log(ErrorTypes.SyntaxError, DecodingPhases.TOKEN, "Malformed Instruction", ErrorReportLineNumber, ErrorReportStepNumber, CollectiveContext);
+                                    Terminal.Log(ErrorTypes.SyntaxError, DecodingPhases.TOKEN, "Malformed Instruction", LocalErrorReportLineNumber, LocalErrorReportStepNumber, CollectiveContext);
                                     // malformed instruction
                                     return default;
                                 }
 
                                 seek_no_whitespace(false);
                                 if (CheckLineTerminated()) return OperandDecorators.Found;
-                                else if (RegexTokens[i][0] == '#') goto CheckImmediate;
+                                else if (ActiveToken[0] == '#') goto CheckImmediate;
                             }
                             // error malformed instruction
                             return default;
@@ -741,11 +765,11 @@ namespace Numinous.Engine {
                             return default;
 
                         CheckImmediate:
-                            if (RegexTokens[i][0] == '!') {
+                            if (ActiveToken[0] == '!') {
                                 seek_no_whitespace();
                                 if (CheckLineTerminated()) return default;
 
-                                if (RegexTokens[i][0] != '#') {
+                                if (ActiveToken[0] != '#') {
                                     // error, instruction is immediate only
                                     return default;
                                 }
@@ -754,7 +778,7 @@ namespace Numinous.Engine {
                                 return OperandDecorators.Immediate | OperandDecorators.Overruled;
                             }
 
-                            if (RegexTokens[i][0] != '#') {
+                            if (ActiveToken[0] != '#') {
                                 // error, instruction is immediate only
                                 return default;
                             }
@@ -763,7 +787,7 @@ namespace Numinous.Engine {
                             return OperandDecorators.Immediate;
 
                         CheckMemoryAccessRulesNotPermittingImmediate:
-                            if (RegexTokens[i][0] == '#') {
+                            if (ActiveToken[0] == '#') {
                                 // error, does not permit immediate
                                 return default;
                             }
@@ -771,7 +795,7 @@ namespace Numinous.Engine {
                             goto CheckMemoryAccessRules;
 
                         CheckMemoryAccessRulesWithImmediate:
-                            if (RegexTokens[i][0] == '#') {
+                            if (ActiveToken[0] == '#') {
                                 step();
                                 return OperandDecorators.Immediate;
                             }
@@ -783,11 +807,11 @@ namespace Numinous.Engine {
                     }
 
                     #region     Implicit Instruction Checking
-                    switch (RegexTokens[i][..2]) {
+                    switch (opcode[..2]) {
 
                         case "ld":
                         case "cp":
-                            switch (RegexTokens[i][2]) {
+                            switch (opcode[2]) {
                                 case 'c':
                                 case 'n':
                                 case 'v':
@@ -806,7 +830,7 @@ namespace Numinous.Engine {
 
 
                         case "st":
-                            switch (RegexTokens[i][2]) {
+                            switch (opcode[2]) {
                                 case 'c':
                                 case 'n':
                                 case 'v':
@@ -821,7 +845,7 @@ namespace Numinous.Engine {
                             return default;
 
                         case "ta":
-                            switch (RegexTokens[i][2]) {
+                            switch (opcode[2]) {
                                 case 'c':
                                 case 'n':
                                 case 'v':
@@ -837,7 +861,7 @@ namespace Numinous.Engine {
                                     return default;
                             }
                         case "tx":
-                            switch (RegexTokens[i][2]) {
+                            switch (opcode[2]) {
                                 case 'c':
                                 case 'n':
                                 case 'v':
@@ -854,7 +878,7 @@ namespace Numinous.Engine {
                             }
 
                         case "ty":
-                            switch (RegexTokens[i][2]) {
+                            switch (opcode[2]) {
                                 case 'c':
                                 case 'n':
                                 case 'v':
@@ -871,7 +895,7 @@ namespace Numinous.Engine {
                             }
 
                         case "in":
-                            switch (RegexTokens[i][2]) {
+                            switch (opcode[2]) {
                                 case 'n':
                                 case 'v':
                                 case 'z':
@@ -885,7 +909,7 @@ namespace Numinous.Engine {
                                     return default;
                             }
                         case "de":
-                            switch (RegexTokens[i][2]) {
+                            switch (opcode[2]) {
                                 case 'n':
                                 case 'v':
                                 case 'z':
@@ -901,17 +925,17 @@ namespace Numinous.Engine {
                             }
 
                         default:
-                            switch (RegexTokens[i][0]) {
+                            switch (opcode[0]) {
                                 case 'b':
                                 case 'r':
-                                    switch (RegexTokens[i][1]) {
+                                    switch (opcode[1]) {
                                         case 'a':
                                         case 'x':
                                         case 'y':
                                             return default;
                                     }
 
-                                    switch (RegexTokens[i][2]) {
+                                    switch (opcode[2]) {
                                         case 's':
                                         case 'c':
                                             break;
@@ -924,14 +948,14 @@ namespace Numinous.Engine {
                                     return default;
 
                                 case 't':
-                                    if (RegexTokens[i][1] == RegexTokens[i][2]) {
+                                    if (opcode[1] == opcode[2]) {
                                         // error error nothing to do not an instruction
                                         return default;
                                     }
 
                                     Func<char, bool> isFlag = (char c) => c switch { 'c' or 'n' or 'v' or 'z' => default, _ => true };
 
-                                    if (isFlag(RegexTokens[i][1]) || isFlag(RegexTokens[i][2])) {
+                                    if (isFlag(opcode[1]) || isFlag(opcode[2])) {
                                         // error not an instruction
                                         return default;
                                     }
@@ -943,14 +967,14 @@ namespace Numinous.Engine {
 
                                 case 'c':
                                 case 'j':
-                                    switch (RegexTokens[i][1]) {
+                                    switch (opcode[1]) {
                                         case 'a':
                                         case 'x':
                                         case 'y':
                                             return default;
                                     }
 
-                                    switch (RegexTokens[i][2]) {
+                                    switch (opcode[2]) {
                                         case 's':
                                         case 'c':
                                             break;
@@ -966,7 +990,7 @@ namespace Numinous.Engine {
                             return OperandDecorators.Missing; ;
 
                         CheckMemoryAccessRulesNotPermittingImmediate:
-                            if (RegexTokens[i][0] == '#') {
+                            if (ActiveToken[0] == '#') {
                                 // error, does not permit immediate
                                 return default;
                             }
@@ -974,7 +998,7 @@ namespace Numinous.Engine {
                             goto CheckMemoryAccessRules;
 
                         CheckMemoryAccessRulesWithImmediate:
-                            if (RegexTokens[i][0] == '#') {
+                            if (ActiveToken[0] == '#') {
                                 step();
                                 return OperandDecorators.Immediate;
                             }
@@ -989,18 +1013,18 @@ namespace Numinous.Engine {
 
                     bool CheckFormat(bool SupportsImplied) {
                         step();
-                        if (i == RegexTokens.Count)     return SupportsImplied;                         // implied may complete source (might be fail later)
+                        if ((BasicRegexTokens.Length + DefineResolveBuffer.Count == i))     return SupportsImplied;                         // implied may complete source (might be fail later)
                         if (CheckLineTerminated())      return SupportsImplied;                         // implied may complete line
-                        if (RegexTokens[i][0] != ' ')   return false;                                   // if space does not follow opcode, fail
+                        if (ActiveToken[0] != ' ')   return false;                                   // if space does not follow opcode, fail
                         seek_no_whitespace();
-                        if (i == RegexTokens.Count)     return SupportsImplied;                         // if only whitespace follows, safe if implied supported
+                        if ((BasicRegexTokens.Length + DefineResolveBuffer.Count == i))     return SupportsImplied;                         // if only whitespace follows, safe if implied supported
                         if (CheckLineTerminated())      return SupportsImplied;                         // implied may complete line
                         return true;                                                                    // otherwise its safe to interpret
                     }
 
                     OperandDecorators CheckMemoryAccessRules() {
-                        if (RegexTokens[i] == "a") {
-                            if (CanUseA.Contains(RegexTokens[i - 2])) {
+                        if (ActiveToken == "a") {
+                            if (CanUseA.Contains(opcode)) {
                                 step();
                                 return OperandDecorators.Found;
                             }
@@ -1011,42 +1035,42 @@ namespace Numinous.Engine {
                                 return default;
                             }
                             
-                            if (RegexTokens[i][0] == ':') {
+                            if (ActiveToken[0] == ':') {
                                 step();
                                 return OperandDecorators.Enforced_ABS;
                             } else {
                                 // error, a is reserved
                                 return default;
                             }
-                        } else if (RegexTokens[i] == "z") {
+                        } else if (ActiveToken == "z") {
                             step();
                             if (CheckLineTerminated()) return default;                                  // standalone z refers to zero flag, not implicit and unsuitable here
-                            if (RegexTokens[i][0] == ':') {
+                            if (ActiveToken[0] == ':') {
                                 step();
                                 return OperandDecorators.Enforced_ZP;
                             } else {
                                 // error, z is reserved
                                 return default;
                             }
-                        } else if (RegexTokens[i][0] == '!') {
+                        } else if (ActiveToken[0] == '!') {
                             step();
                             if (CheckLineTerminated()) {                                                // must overrule something
                                 // error malformed
                                 return default;
                             }
 
-                            if (RegexTokens[i] == "a") {
+                            if (ActiveToken == "a") {
                                 step();
-                                if (RegexTokens[i][0] == ':') {
+                                if (ActiveToken[0] == ':') {
                                     step();
                                     return OperandDecorators.Enforced_ABS | OperandDecorators.Overruled;
                                 } else {
                                     // error, a is reserved
                                     return default;
                                 }
-                            } else if (RegexTokens[i] == "z") {
+                            } else if (ActiveToken == "z") {
                                 step();
-                                if (RegexTokens[i][0] == ':') {
+                                if (ActiveToken[0] == ':') {
                                     step();
                                     return OperandDecorators.Enforced_ZP | OperandDecorators.Overruled;
                                 } else {
@@ -1059,10 +1083,10 @@ namespace Numinous.Engine {
                         return OperandDecorators.Found;
                     }
                 }
-                bool CheckLineTerminated() => i == RegexTokens.Count || RegexTokens[i][0] == ';' || RegexTokens[i][0] == '\n' || RegexTokens[i] == "//" || RegexTokens[i] == "/*";
+                bool CheckLineTerminated() => (BasicRegexTokens.Length + DefineResolveBuffer.Count == i) || ActiveToken[0] == ';' || ActiveToken[0] == '\n' || ActiveToken == "//" || ActiveToken == "/*";
 
                 // keep seeking beyond whitespace
-                void seek_no_whitespace(bool skip = false) => steps(() => !CheckLineTerminated() && (RegexTokens[i][0] == ' ' || RegexTokens[i][0] == '\t'), skip);
+                void seek_no_whitespace(bool skip = false) => steps(() => !CheckLineTerminated() && (ActiveToken[0] == ' ' || ActiveToken[0] == '\t'), skip);
 
                 #endregion      OperationExtract Local Functions
             }
@@ -1076,42 +1100,9 @@ namespace Numinous.Engine {
             //    ExtractOperation(ref ErrorReportLineNumber);
             //}
 
-            bool CaptureCSTRING(Func<char, bool> HaltCapturePredicate, ref int ErrorReportLineNumber, ref int ErrorReportStepNumber) {
-                int csi = StringIndex;
+            bool CaptureCSTRING(Func<char, bool> HaltCapturePredicate) {
 
-                for (; i < RegexTokens.Count && !HaltCapturePredicate(RegexTokens[i][0]); i++) {
-                    LITERAL_CSTRING += RegexTokens[i];
-                    StringIndex += RegexTokens[i].Length;
-                }
-
-                if (i == RegexTokens.Count && ErrorContext.ErrorLevel == default) {
-                    // Unterminated String
-                    ErrorContext = new() {
-                        ErrorLevel      = ErrorLevels.ERROR,
-                        ErrorType       = ErrorTypes.SyntaxError,
-                        DecodingPhase   = DecodingPhases.TOKEN,
-                        Message         = "Unterminated String",
-                        LineNumber      = ErrorReportLineNumber,
-                        StepNumber      = ErrorReportStepNumber,
-                        Context         = () => ApplyWiggle(CollectiveContext, csi + 1, StringIndex - csi)
-                    };
-                    return false;
-                }
-
-                if (csi != StringIndex) {
-                    DeltaTermTokens.Add((
-                        csi,
-                        csi - StringIndex,
-                        new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
-                                {"self",    (LITERAL_CSTRING,           AssembleTimeTypes.CSTRING,  AccessLevels.PRIVATE) },
-                                {"length",  (LITERAL_CSTRING.Length,    AssembleTimeTypes.CINT,     AccessLevels.PUBLIC) },
-                        },
-                        false
-                    ));
-
-                    LITERAL_CSTRING = "";   // wipe string for next capture
-                }
-
+// FEATURE ROLLED BACK UNTIL REST OF CF IS WORKING
 
                 return true;
             }
@@ -1133,7 +1124,7 @@ namespace Numinous.Engine {
 
             void OpenContainer(Operators Operator) => ComplexOpenContainer(1, Operator);
 
-            bool CloseContainer(ref int ErrorReportLineNumber, ref int ErrorReportStepNumber, Operators CloseOperator, Operators OpenOperator) {
+            bool CloseContainer(Operators CloseOperator, Operators OpenOperator) {
                 SimpleAddOperator(CloseOperator);
 
                 if (ContainerBuffer.Count == 0 && ErrorContext.ErrorLevel == default) {
@@ -1142,8 +1133,8 @@ namespace Numinous.Engine {
                         ErrorType = ErrorTypes.SyntaxError,
                         DecodingPhase = DecodingPhases.TOKEN,
                         Message = "No Open Container before Close Container.",
-                        LineNumber = ErrorReportLineNumber,
-                        StepNumber = ErrorReportStepNumber,
+                        LineNumber = LocalErrorReportLineNumber,
+                        StepNumber = LocalErrorReportStepNumber,
                         Context = () => ApplyWiggle(CollectiveContext, 0, LastNonWhiteSpaceIndex + 1)
                     };
 
@@ -1156,8 +1147,8 @@ namespace Numinous.Engine {
                         ErrorType = ErrorTypes.SyntaxError,
                         DecodingPhase = DecodingPhases.TOKEN,
                         Message = $"Invalid Container Closer '{CollectiveContext[StringIndex]}' for Opening container '{CollectiveContext[LastOpenContainerOperatorStringIndex]}'.",
-                        LineNumber = ErrorReportLineNumber,
-                        StepNumber = ErrorReportStepNumber,
+                        LineNumber = LocalErrorReportLineNumber,
+                        StepNumber = LocalErrorReportStepNumber,
                         Context = () => ApplyWiggle(CollectiveContext, LastOpenContainerOperatorStringIndex + 1, StringIndex - LastOpenContainerOperatorStringIndex + 1)
                     };
 
@@ -1170,7 +1161,7 @@ namespace Numinous.Engine {
                 return true;
             }
 
-            bool SimpleCloseContainer(ref int ErrorReportLineNumber, ref int ErrorReportStepNumber, Operators Operator) => CloseContainer(ref ErrorReportLineNumber, ref ErrorReportStepNumber, Operator, Operator - 1);
+            bool SimpleCloseContainer(Operators Operator) => CloseContainer(Operator, Operator - 1);
 
             //void CopyStepTokens() {
             //    var StepTokenShallowCopy = StepTokens
@@ -1186,7 +1177,7 @@ namespace Numinous.Engine {
             void CopyDeltaTokens() {
                 CopyDeltaTermTokens();
                 var DeltaTokensShallowCopy = DeltaTokens.Select(t => t).ToList();
-                Tokens.Add((DeltaTokensShallowCopy, ContainerBuffer.Count, i == RegexTokens.Count ? CollectiveContext : CollectiveContext[..(StringIndex + RegexTokens[i].Length)]));
+                Tokens.Add((DeltaTokensShallowCopy, ContainerBuffer.Count, CollectiveContext));
             }
 
             void CopyDeltaTermTokens() {

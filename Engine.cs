@@ -1,4 +1,5 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -416,7 +417,7 @@ namespace Numinous {
         }
 
 
-        internal static class Engine {
+        internal static partial class Engine {
             internal static (object Return, AssembleTimeTypes Type, bool Success) Assemble(List<(object data, AssembleTimeTypes type)> args) {
 
                 Span<List<string>>  SourceFileContentBufferSpan = CollectionsMarshal.AsSpan(Program.RegexTokenizedSourceFileContentBuffer);
@@ -426,7 +427,7 @@ namespace Numinous {
                 Span<int>           SourceFileStepBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
 
 
-                var CF_resp = Evaluate.ContextFetcher(ref SourceFileContentBufferSpan[^1], ref SourceSubstringBufferSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
+                var CF_resp = ContextFetcher(Program.RegexTokenizedSourceFileContentBuffer[^1].ToArray(), ref SourceSubstringBufferSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
                 if (!CF_resp.Success) return default;
 
                 // if its to write to ROM, ... figure that out
@@ -541,28 +542,32 @@ namespace Numinous {
                 ";", ":", "#", "\\", "\"", "{", "}", "?", ">", "<", "!", ".", ","
             ];
 
-            internal static List<string> ResolveDefines(List<string> tokens) {
-                bool DidReplace;
+            /// <summary>
+            /// Should iteratively resolve defines for the token being handled, the return is not FULL resolution
+            /// it is fully resolved for the first term, following terms will need to be recomputed
+            /// </summary>
+            /// <param name="token"></param>
+            /// <returns></returns>
+            internal static List<string> PartialResolveDefine(string token) {
+                
+
+                List<string> Resolved = [token];
+                (object data, AssembleTimeTypes type, AccessLevels access) ctx;
+                bool success;
 
                 do {
-                    DidReplace = false;
-                    List<string> UpdatedTokens = [];
+                    (ctx, success) = Database.GetObjectFromAlias(Resolved[0], AccessLevels.PUBLIC);
 
-                    for (int i = 0; i < tokens.Count; i++) {
-                        string token = tokens[i];
-                        ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) = Database.GetObjectFromAlias(token, AccessLevels.PUBLIC);
-                        if (success && ctx.type == AssembleTimeTypes.CEXP) {
-                            var foo = (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)ctx.data;
-                            var bar = foo[""].data;
-                            string Capture = (string)bar;
-                            UpdatedTokens.AddRange(RegexTokenize(Capture));
-                            DidReplace = true;
-                        } else UpdatedTokens.Add(token);
+                    if (success && ctx.type == AssembleTimeTypes.CEXP) {
+                        Resolved.RemoveAt(0);
+                        Resolved.InsertRange(0, RegexTokenize((string)((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)ctx.data)[""].data));
                     }
-                    
-                    tokens = UpdatedTokens;
-                } while (DidReplace);
-                return tokens;
+
+                } while (success && ctx.type == AssembleTimeTypes.CEXP);
+
+
+
+                return [.. Resolved.Where((t) => t.Length > 0)];
             }
 
             internal static class Terminal {
@@ -1180,11 +1185,11 @@ Project Numinous will NOT continue until you fix this or manually specify your l
             /// <returns></returns>
             internal static List<string> RegexTokenize(string input) {
                 // Wide multi-character operators and atomic tokens, now including comment tokens
-                string[] atomicTokens = new[] {
+                string[] atomicTokens = [
                     "//", "/*", "*/",
                     "$\"", "<=>", "==", "!=", "<=", ">=", "&&", "||", "++", "--",
-                    "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<", ">>", "->", "??", "?."
-                };
+                    "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<", ">>", "->", "??", "?.", "+:", "-:"
+                ];
 
                 // Escape them for regex and order by length
                 string escapedTokens = string.Join("|", atomicTokens

@@ -88,14 +88,13 @@ internal static class Program {
         ActiveScopeBuffer.Add(LabelDataBase);   // add rs to as, default rs
         ObjectSearchBuffer = [LabelDataBase];   // by default, contains nothing more than this. For each search AS[^1] is added
 
-        Span<List<string>>  SourceFileContentBufferSpan = CollectionsMarshal.AsSpan(RegexTokenizedSourceFileContentBuffer);
         Span<string>        SourceFileNameBufferSpan    = CollectionsMarshal.AsSpan(SourceFileNameBuffer);
         Span<int>           SourceSubstringBufferSpan   = CollectionsMarshal.AsSpan(SourceSubstringBuffer);
         Span<int>           SourceFileLineBufferSpan    = CollectionsMarshal.AsSpan(SourceFileLineBuffer);
         Span<int>           SourceFileStepBufferSpan    = CollectionsMarshal.AsSpan(SourceFileStepBuffer);
 
 
-        var CF_resp = Evaluate.ContextFetcher(ref SourceFileContentBufferSpan[^1], ref SourceSubstringBufferSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
+        var CF_resp = Engine.ContextFetcher(RegexTokenizedSourceFileContentBuffer[^1].ToArray(), ref SourceSubstringBufferSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
 
         return 0;
     }

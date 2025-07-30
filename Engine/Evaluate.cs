@@ -5,7 +5,7 @@
 
 namespace Numinous {
     namespace Engine {
-        internal static partial class Evaluate {
+        internal static partial class Engine {
 
             internal enum OperationTypes : byte {
                 FAIL,
