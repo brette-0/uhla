@@ -49,7 +49,7 @@ namespace Numinous.Engine {
             if (OperationType == default) return default;                                                       // error pass back
             if (OperationType.oper == OperationTypes.DIRECTIVE) return default;
 
-            for (i = 0, StringIndex = 0; DefineResolveBuffer.Count > 0 && i < BasicRegexTokens.Length; step(true)) {
+            for (; DefineResolveBuffer.Count > 0 && i < BasicRegexTokens.Length; step(true)) {
 
                 if (ActiveToken[0] == ' ' || ActiveToken[0] == '\t') continue;                          // do not tokenize whitespace
 
@@ -241,14 +241,14 @@ namespace Numinous.Engine {
             #region Context Fetcher Functions
             (List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, (OperationTypes Type, object Context) Operation, int Finish, bool Success, bool Continue) Success() => (Tokens, MaxHierarchy, OperationType, Finish, true, false);
             
-            void step(bool CollectContext = false) {
+            void step(bool CollectContext = false, bool RegexParse = true) {
                 
                 if (DefineResolveBuffer.Count == 0) {                                                   // si to be mutated ONLY by typed tokens
                     if (CollectContext) CollectiveContext += BasicRegexTokens.Span[0];
                     StringIndex += BasicRegexTokens.Span[0].Length;                     
                 }
 
-                for (; DefineResolveBuffer.Count == 0; step()) {                                        // process passed token through regex tokenizing
+                for (; RegexParse && DefineResolveBuffer.Count == 0; step()) {                          // process passed token through regex tokenizing
                     DefineResolveBuffer = PartialResolveDefine(BasicRegexTokens.Span[++i]);
                 }
 
@@ -1101,9 +1101,48 @@ namespace Numinous.Engine {
             //}
 
             bool CaptureCSTRING(Func<char, bool> HaltCapturePredicate) {
+                int csi = StringIndex;
 
-// FEATURE ROLLED BACK UNTIL REST OF CF IS WORKING
+                // TODO: Empty out Define Resolved Buffer first, then any captured tokens DO NOT UNDERGO DEFINE EVALUATION
 
+                for (; DefineResolveBuffer.Count > 0 && !HaltCapturePredicate(ActiveToken[0]); step(true)) {
+                    LITERAL_CSTRING += ActiveToken;
+                    StringIndex += ActiveToken.Length;
+                }
+
+
+                for (; i < BasicRegexTokens.Length && !HaltCapturePredicate(ActiveToken[0]); step(true, false)) {
+                    LITERAL_CSTRING += ActiveToken;
+                    StringIndex += ActiveToken.Length;
+                }
+
+                if (i == BasicRegexTokens.Length && ErrorContext.ErrorLevel == default) {
+                    // Unterminated String
+                    ErrorContext = new() {
+                        ErrorLevel = ErrorLevels.ERROR,
+                        ErrorType = ErrorTypes.SyntaxError,
+                        DecodingPhase = DecodingPhases.TOKEN,
+                        Message = "Unterminated String",
+                        LineNumber = LocalErrorReportLineNumber,
+                        StepNumber = LocalErrorReportStepNumber,
+                        Context = () => ApplyWiggle(CollectiveContext, csi + 1, StringIndex - csi)
+                    };
+                    return false;
+                }
+
+                if (csi != StringIndex) {
+                    DeltaTermTokens.Add((
+                        csi,
+                        csi - StringIndex,
+                        new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
+                    {"self",    (LITERAL_CSTRING,           AssembleTimeTypes.CSTRING,  AccessLevels.PRIVATE) },
+                    {"length",  (LITERAL_CSTRING.Length,    AssembleTimeTypes.CINT,     AccessLevels.PUBLIC) },
+                        },
+                        false
+                    ));
+
+                    LITERAL_CSTRING = "";   // wipe string for next capture
+                }
                 return true;
             }
 
