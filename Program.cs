@@ -40,9 +40,10 @@ internal static class Program {
         }
         SourceFileNameBuffer.Add(InputPath!);
         RegexTokenizedSourceFileContentBuffer.Add(RegexTokenize(InputFile));
-        SourceFileIndexBuffer.Add(0);           // begin from "main.s" (CONTENTS) : (0)
-        SourceSubstringBuffer.Add(0);           // begin from char 0
-        SourceFileLineBuffer.Add(0);            // begin from char 0
+        SourceFileIndexBuffer.Add(0);       // begin from "main.s" (CONTENTS) : (0)
+        SourceTokenIndexBuffer.Add(0);      // begin from char 0
+        SourceFileLineBuffer.Add(0);        // debug line, naturally 0
+        SourceFileStepBuffer.Add(0);        // debug step, naturally 0
 
 
         // rs "Root Scope" has itself as key, value and parent - sitting in the root pointing to itself.
@@ -89,19 +90,19 @@ internal static class Program {
         ObjectSearchBuffer = [LabelDataBase];   // by default, contains nothing more than this. For each search AS[^1] is added
 
         Span<string>        SourceFileNameBufferSpan    = CollectionsMarshal.AsSpan(SourceFileNameBuffer);
-        Span<int>           SourceSubstringBufferSpan   = CollectionsMarshal.AsSpan(SourceSubstringBuffer);
+        Span<int>           SourceTokenIndexSpan        = CollectionsMarshal.AsSpan(SourceTokenIndexBuffer);
         Span<int>           SourceFileLineBufferSpan    = CollectionsMarshal.AsSpan(SourceFileLineBuffer);
         Span<int>           SourceFileStepBufferSpan    = CollectionsMarshal.AsSpan(SourceFileStepBuffer);
 
 
-        var CF_resp = Engine.ContextFetcher(RegexTokenizedSourceFileContentBuffer[^1].ToArray(), ref SourceSubstringBufferSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
+        var CF_resp = ContextFetcher(RegexTokenizedSourceFileContentBuffer[^1].ToArray(), ref SourceTokenIndexSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
 
         return 0;
     }
 
     internal static List<List<string>>  RegexTokenizedSourceFileContentBuffer = [];
     internal static List<int>           SourceFileIndexBuffer = [];
-    internal static List<int>           SourceSubstringBuffer = [];
+    internal static List<int>           SourceTokenIndexBuffer = [];
     internal static List<string>        SourceFileNameBuffer  = [];
     internal static List<int>           SourceFileLineBuffer  = [];  // Used for ERROR REPORT ONLY
     internal static List<int>           SourceFileStepBuffer  = [];  // Used for ERROR REPORT ONLY

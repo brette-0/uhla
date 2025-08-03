@@ -422,7 +422,7 @@ namespace Numinous {
 
                 Span<List<string>>  SourceFileContentBufferSpan = CollectionsMarshal.AsSpan(Program.RegexTokenizedSourceFileContentBuffer);
                 Span<string>        SourceFileNameBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileNameBuffer);
-                Span<int>           SourceSubstringBufferSpan   = CollectionsMarshal.AsSpan(Program.SourceSubstringBuffer);
+                Span<int>           SourceSubstringBufferSpan   = CollectionsMarshal.AsSpan(Program.SourceTokenIndexBuffer);
                 Span<int>           SourceFileLineBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
                 Span<int>           SourceFileStepBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
 
@@ -454,7 +454,7 @@ namespace Numinous {
             internal static void AddSourceContext(string FilePath) {
                 Program.SourceFileNameBuffer.Add(FilePath);
                 Program.RegexTokenizedSourceFileContentBuffer.Add(RegexTokenize(File.ReadAllText(FilePath)));
-                Program.SourceSubstringBuffer.Add(0);
+                Program.SourceTokenIndexBuffer.Add(0);
                 Program.SourceFileIndexBuffer.Add(0);
             }
 
@@ -548,17 +548,19 @@ namespace Numinous {
             /// </summary>
             /// <param name="token"></param>
             /// <returns></returns>
-            internal static List<string> PartialResolveDefine(string token) {
+            internal static (List<string> ctx, bool success) PartialResolveDefine(string token) {
                 
 
                 List<string> Resolved = [token];
                 (object data, AssembleTimeTypes type, AccessLevels access) ctx;
                 bool success;
+                bool had_success = false;
 
                 do {
                     (ctx, success) = Database.GetObjectFromAlias(Resolved[0], AccessLevels.PUBLIC);
 
                     if (success && ctx.type == AssembleTimeTypes.CEXP) {
+                        had_success = true;
                         Resolved.RemoveAt(0);
                         Resolved.InsertRange(0, RegexTokenize((string)((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)ctx.data)[""].data));
                     }
@@ -567,7 +569,7 @@ namespace Numinous {
 
 
 
-                return [.. Resolved.Where((t) => t.Length > 0)];
+                return ([.. Resolved.Where((t) => t.Length > 0)], had_success);
             }
 
             internal static class Terminal {

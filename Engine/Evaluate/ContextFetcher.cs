@@ -18,7 +18,7 @@ namespace Numinous.Engine {
 
             List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens = [];
             List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens = [];
-            List<(int StringOffset, int StringLength, object data, bool IsOperator)> DeltaTermTokens = [];
+            List<(int StringOffset, int StringLength, object data, bool IsOperator)> TermTokens = [];
             List<Operators> ContainerBuffer = [];
 
             List<string> DefineResolveBuffer = [];
@@ -38,18 +38,14 @@ namespace Numinous.Engine {
 
             int i = 0, StringIndex = 0; string ActiveToken;
 
-            for (; DefineResolveBuffer.Count == 0; step()) {                                                    // all terms taken from resolved buffer
-                DefineResolveBuffer = PartialResolveDefine(BasicRegexTokens.Span[++i]);
-            }
+            step();
 
-            ActiveToken = DefineResolveBuffer[0];
-            DefineResolveBuffer.RemoveAt(0);
             (OperationTypes oper, object ctx) OperationType = ExtractOperation();
 
             if (OperationType == default) return default;                                                       // error pass back
             if (OperationType.oper == OperationTypes.DIRECTIVE) return default;
 
-            for (; DefineResolveBuffer.Count > 0 && i < BasicRegexTokens.Length; step(true)) {
+            for (; DefineResolveBuffer.Count > 0 && i < BasicRegexTokens.Length; step()) {
 
                 if (ActiveToken[0] == ' ' || ActiveToken[0] == '\t') continue;                          // do not tokenize whitespace
 
@@ -209,7 +205,7 @@ namespace Numinous.Engine {
                         break;
 
                     default:
-                        DeltaTermTokens.Add((
+                        TermTokens.Add((
                             StringIndex,
                             ActiveToken.Length,
                             new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels)> {
@@ -218,18 +214,18 @@ namespace Numinous.Engine {
                             },
                             false
                         ));
-                        LastNonWhiteSpaceIndex = DeltaTermTokens.Count - 1;
+                        LastNonWhiteSpaceIndex = TermTokens.Count - 1;
                         break;
 
                 }
             }
 
-            IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : DeltaTermTokens.Count != 0 && DeltaTermTokens[LastNonWhiteSpaceIndex].IsOperator;
+            IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : TermTokens.Count != 0 && TermTokens[LastNonWhiteSpaceIndex].IsOperator;
             if (ContainerBuffer.Count == 0 && !IsLastOperator) {
                 // final steps
 
                 CopyDeltaTermTokens();
-                CopyDeltaTokens();                                                                  // process final DeltaTermTokens (valid) to StepTokens end
+                CopyDeltaTokens();                                                                  // process final TermTokens (valid) to StepTokens end
 
                 return Success();
             }
@@ -241,18 +237,25 @@ namespace Numinous.Engine {
             #region Context Fetcher Functions
             (List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, (OperationTypes Type, object Context) Operation, int Finish, bool Success, bool Continue) Success() => (Tokens, MaxHierarchy, OperationType, Finish, true, false);
             
-            void step(bool CollectContext = false, bool RegexParse = true) {
-                
+            void step(bool RegexParse = true) {
+                List<string> ctx;
+                bool success;
+
                 if (DefineResolveBuffer.Count == 0) {                                                   // si to be mutated ONLY by typed tokens
-                    if (CollectContext) CollectiveContext += BasicRegexTokens.Span[0];
+                    CollectiveContext += BasicRegexTokens.Span[0];
                     StringIndex += BasicRegexTokens.Span[0].Length;                     
                 }
 
-                for (; RegexParse && DefineResolveBuffer.Count == 0; step()) {                          // process passed token through regex tokenizing
-                    DefineResolveBuffer = PartialResolveDefine(BasicRegexTokens.Span[++i]);
+                if (RegexParse) {
+                    (ctx, success) = PartialResolveDefine(DefineResolveBuffer.Count == 0 ? BasicRegexTokens.Span[i++] : DefineResolveBuffer[0]);
+                    if (success) {
+                        DefineResolveBuffer.RemoveAt(0);
+                        DefineResolveBuffer.InsertRange(0, ctx);
+                        step();
+                    }
                 }
 
-                ActiveToken = DefineResolveBuffer[0];                                                   // tokenized from basic, queue system. Validated
+                ActiveToken = RegexParse ? DefineResolveBuffer[0] : BasicRegexTokens.Span[i++];         // tokenized from basic, queue system. Validated
                 DefineResolveBuffer.RemoveAt(0);
             }
 
@@ -1094,7 +1097,7 @@ namespace Numinous.Engine {
             //void PrepareNextStep(ref int ErrorReportLineNumber) {
             //    MaxHierarchy = 0;
             //    StepTokens.Clear();
-            //    DeltaTermTokens.Clear();
+            //    TermTokens.Clear();
             //    ContainerBuffer = [];
             //    LastNonWhiteSpaceIndex = -1;
             //    ExtractOperation(ref ErrorReportLineNumber);
@@ -1105,13 +1108,13 @@ namespace Numinous.Engine {
 
                 // TODO: Empty out Define Resolved Buffer first, then any captured tokens DO NOT UNDERGO DEFINE EVALUATION
 
-                for (; DefineResolveBuffer.Count > 0 && !HaltCapturePredicate(ActiveToken[0]); step(true)) {
+                for (; DefineResolveBuffer.Count > 0 && !HaltCapturePredicate(ActiveToken[0]); step()) {
                     LITERAL_CSTRING += ActiveToken;
                     StringIndex += ActiveToken.Length;
                 }
 
 
-                for (; i < BasicRegexTokens.Length && !HaltCapturePredicate(ActiveToken[0]); step(true, false)) {
+                for (; i < BasicRegexTokens.Length && !HaltCapturePredicate(ActiveToken[0]); step(false)) {
                     LITERAL_CSTRING += ActiveToken;
                     StringIndex += ActiveToken.Length;
                 }
@@ -1131,7 +1134,7 @@ namespace Numinous.Engine {
                 }
 
                 if (csi != StringIndex) {
-                    DeltaTermTokens.Add((
+                    TermTokens.Add((
                         csi,
                         csi - StringIndex,
                         new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
@@ -1147,7 +1150,7 @@ namespace Numinous.Engine {
             }
 
             void AddOperator(Operators Operator, int sl) {
-                DeltaTermTokens.Add((StringIndex, sl, Operator, true)); LastNonWhiteSpaceIndex = DeltaTermTokens.Count - 1; ;
+                TermTokens.Add((StringIndex, sl, Operator, true)); LastNonWhiteSpaceIndex = TermTokens.Count - 1; ;
             }
 
             void SimpleAddOperator(Operators Operator) => AddOperator(Operator, 1);
@@ -1223,7 +1226,7 @@ namespace Numinous.Engine {
                 if (LastNonWhiteSpaceIndex == -1) return;   // Do not copy whitespace
 
                 // Clone Delta Tokens thus far
-                var StepDeltaTokenShallowCopy = DeltaTermTokens
+                var StepDeltaTokenShallowCopy = TermTokens
                 .Select(t => (
                     t.StringOffset,
                     t.StringLength,
@@ -1233,7 +1236,7 @@ namespace Numinous.Engine {
                     t.IsOperator
                 )).ToList();
 
-                DeltaTermTokens = [];                       // wipe delta tokens for next operation
+                TermTokens = [];                       // wipe delta tokens for next operation
                 DeltaTokens.Add(StepDeltaTokenShallowCopy);
             }
             #endregion Context Fetcher Functions
