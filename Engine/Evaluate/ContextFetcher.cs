@@ -974,7 +974,7 @@ namespace Numinous.Engine {
                                         return default;
                                     }
 
-                                    Func<char, bool> isFlag = (char c) => c switch { 'c' or 'n' or 'v' or 'z' => default, _ => true };
+                                    Func<char, bool> isFlag = (char c) => c switch { 'c' or 'n' or 'v' or 'z' => true, _ => default };
 
                                     if (isFlag(opcode[1]) || isFlag(opcode[2])) {
                                         // error not an instruction
@@ -1035,11 +1035,11 @@ namespace Numinous.Engine {
                     bool CheckFormat(bool SupportsImplied) {
                         if (CheckLineTerminated())      return SupportsImplied;
                         step();
-                        if (BasicRegexTokens.Length + DefineResolveBuffer.Count == i)       return SupportsImplied;                         // implied may complete source (might be fail later)
+                        if (i == BasicRegexTokens.Length && DefineResolveBuffer.Count == 0)       
+                            return SupportsImplied;                                                     // implied may complete source (might be fail later)
                         if (CheckLineTerminated())      return SupportsImplied;                         // implied may complete line
                         if (ActiveToken[0] != ' ')      return false;                                   // if space does not follow opcode, fail
                         seek_no_whitespace();
-                        if (CheckLineTerminated())      return SupportsImplied;                         // implied may complete line
                         return true;                                                                    // otherwise its safe to interpret
                     }
 
