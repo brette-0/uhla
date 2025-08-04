@@ -242,8 +242,8 @@ namespace Numinous.Engine {
                 bool success;
 
                 if (DefineResolveBuffer.Count == 0) {                                                   // si to be mutated ONLY by typed tokens
-                    CollectiveContext += BasicRegexTokens.Span[0];
-                    StringIndex += BasicRegexTokens.Span[0].Length;                     
+                    CollectiveContext += BasicRegexTokens.Span[i];
+                    StringIndex += BasicRegexTokens.Span[i].Length;                     
                 }
 
                 if (RegexParse) {
@@ -257,10 +257,9 @@ namespace Numinous.Engine {
                     }
 
                     if (success) step();
-                }
-
-                ActiveToken = RegexParse ? DefineResolveBuffer[0] : BasicRegexTokens.Span[i++];         // tokenized from basic, queue system. Validated
-                DefineResolveBuffer.RemoveAt(0);
+                    ActiveToken = DefineResolveBuffer[0];
+                    DefineResolveBuffer.RemoveAt(0);
+                } else ActiveToken = BasicRegexTokens.Span[i++];
             }
 
             void steps(Func<bool> SeekPredicate, bool skip = false) {
@@ -545,7 +544,6 @@ namespace Numinous.Engine {
                     string opcode = ActiveToken.ToLower();
                     switch (opcode) {
                         #region     Explicit Instructions Supporting Immediate
-                        case "nop":
                         case "cpa": // cmp
                         case "cpx":
                         case "cpy":
@@ -662,10 +660,12 @@ namespace Numinous.Engine {
                         case "stp": // 
                         case "clc":
                         case "clv": // !
-                        case "sec": //      Implied or Implied Overruled
+                        case "sec": //      Implied or Implied Overruled\
                             if (CheckFormat(true)) {
-                                if (CheckLineTerminated()) return OperandDecorators.Found;
-                                else if (ActiveToken[0] == '!') {
+                                if (CheckLineTerminated()) {
+                                    if (ActiveToken[0] == '!') return OperandDecorators.Overruled;
+                                    else return OperandDecorators.Found;
+                                } else if (ActiveToken[0] == '!') {
                                     step();
                                     if (CheckLineTerminated()) return OperandDecorators.Overruled;
                                     seek_no_whitespace();
@@ -679,6 +679,10 @@ namespace Numinous.Engine {
                         #endregion  Explicit Implied Instructions Supporting Overrule
                         #region     Explicit Immediate Instructions
                         case "neg":
+                            if (CheckFormat(false)) goto CheckImmediate;
+                            // error malformed instruction
+                            return default;
+
                         case "ana":
                         case "asb":
                         case "anc":
@@ -691,7 +695,15 @@ namespace Numinous.Engine {
                         case "axm":
                         case "ane": // !#foo
                         case "xaa": // #foo
-                            if (CheckFormat(false)) goto CheckImmediate;
+                            if (CheckFormat(false)) {
+                                if (ActiveToken[0] == '!') {
+                                    if (CheckLineTerminated()) return default;
+                                    step();
+                                    if (ActiveToken[0] == '#') return OperandDecorators.Overruled | OperandDecorators.Immediate;
+                                    else return OperandDecorators.Immediate;
+                                }
+                                goto CheckImmediate;
+                            }
                             // error malformed instruction
                             return default;
                         #endregion  Explicit Immediate Instructions
@@ -735,25 +747,20 @@ namespace Numinous.Engine {
                             // error malformed instruction
                             return default;
                         #endregion  Explicit Implied Instructions Not Supporting Overrule
-                        
-                            // brk !
+
+
+                        case "nop":
+                            if (CheckFormat(true)) goto CheckMemoryAccessRulesWithImmediate;
+                            // error malformed instruction
+                            return default;
+                        // brk !
                         // brk #foo
                         case "brk": // brk  : Immediate OR Implied OR Implied (Overruled)
                             if (CheckFormat(true)) {
-                                if (CheckLineTerminated()) return OperandDecorators.Found;
-                                else if (ActiveToken[0] == '!') {
-                                    step();
-                                    if (CheckLineTerminated()) return OperandDecorators.Overruled;
-                                    seek_no_whitespace();
-                                    if (CheckLineTerminated()) return OperandDecorators.Overruled;
-                                    Terminal.Log(ErrorTypes.SyntaxError, DecodingPhases.TOKEN, "Malformed Instruction", LocalErrorReportLineNumber, LocalErrorReportStepNumber, CollectiveContext);
-                                    // malformed instruction
-                                    return default;
-                                }
-
-                                seek_no_whitespace(false);
-                                if (CheckLineTerminated()) return OperandDecorators.Found;
+                                if (ActiveToken[0] == '!') return OperandDecorators.Overruled;
                                 else if (ActiveToken[0] == '#') goto CheckImmediate;
+                                else if (CheckLineTerminated()) return OperandDecorators.Found;
+                                return default;
                             }
                             // error malformed instruction
                             return default;
@@ -767,7 +774,14 @@ namespace Numinous.Engine {
                         case "lax": // a:foo
                             // TODO: write some lax safety
 
-                            if (CheckFormat(false)) goto CheckMemoryAccessRulesWithImmediate;
+                            if (CheckFormat(false)) {
+                                if (ActiveToken[0] == '!') {
+                                    step();
+                                    if (ActiveToken[0] == '#') return OperandDecorators.Overruled | OperandDecorators.Immediate;
+                                    else return default;
+                                }
+                                goto CheckMemoryAccessRulesWithImmediate;
+                            }
                             // error malformed instruction
                             return default;
 
@@ -1019,12 +1033,12 @@ namespace Numinous.Engine {
                     #endregion  Implicit Instruction Checking
 
                     bool CheckFormat(bool SupportsImplied) {
+                        if (CheckLineTerminated())      return SupportsImplied;
                         step();
-                        if ((BasicRegexTokens.Length + DefineResolveBuffer.Count == i))     return SupportsImplied;                         // implied may complete source (might be fail later)
+                        if (BasicRegexTokens.Length + DefineResolveBuffer.Count == i)       return SupportsImplied;                         // implied may complete source (might be fail later)
                         if (CheckLineTerminated())      return SupportsImplied;                         // implied may complete line
-                        if (ActiveToken[0] != ' ')   return false;                                   // if space does not follow opcode, fail
+                        if (ActiveToken[0] != ' ')      return false;                                   // if space does not follow opcode, fail
                         seek_no_whitespace();
-                        if ((BasicRegexTokens.Length + DefineResolveBuffer.Count == i))     return SupportsImplied;                         // if only whitespace follows, safe if implied supported
                         if (CheckLineTerminated())      return SupportsImplied;                         // implied may complete line
                         return true;                                                                    // otherwise its safe to interpret
                     }
@@ -1090,7 +1104,7 @@ namespace Numinous.Engine {
                         return OperandDecorators.Found;
                     }
                 }
-                bool CheckLineTerminated() => (BasicRegexTokens.Length + DefineResolveBuffer.Count == i) || ActiveToken[0] == ';' || ActiveToken[0] == '\n' || ActiveToken == "//" || ActiveToken == "/*";
+                bool CheckLineTerminated() => (i == BasicRegexTokens.Length && DefineResolveBuffer.Count == 0) || ActiveToken[0] == ';' || ActiveToken[0] == '\n' || ActiveToken == "//" || ActiveToken == "/*";
 
                 // keep seeking beyond whitespace
                 void seek_no_whitespace(bool skip = false) => steps(() => !CheckLineTerminated() && (ActiveToken[0] == ' ' || ActiveToken[0] == '\t'), skip);
