@@ -247,12 +247,16 @@ namespace Numinous.Engine {
                 }
 
                 if (RegexParse) {
-                    (ctx, success) = PartialResolveDefine(DefineResolveBuffer.Count == 0 ? BasicRegexTokens.Span[i++] : DefineResolveBuffer[0]);
-                    if (success) {
+                    if (DefineResolveBuffer.Count == 0) {
+                        (ctx, success) = PartialResolveDefine(BasicRegexTokens.Span[i++]);
+                        DefineResolveBuffer = ctx;
+                    } else {
+                        (ctx, success) = PartialResolveDefine(DefineResolveBuffer[0]);
                         DefineResolveBuffer.RemoveAt(0);
                         DefineResolveBuffer.InsertRange(0, ctx);
-                        step();
                     }
+
+                    if (success) step();
                 }
 
                 ActiveToken = RegexParse ? DefineResolveBuffer[0] : BasicRegexTokens.Span[i++];         // tokenized from basic, queue system. Validated

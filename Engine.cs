@@ -567,9 +567,7 @@ namespace Numinous {
 
                 } while (success && ctx.type == AssembleTimeTypes.CEXP);
 
-
-
-                return ([.. Resolved.Where((t) => t.Length > 0)], had_success);
+                return (Resolved, had_success);
             }
 
             internal static class Terminal {
