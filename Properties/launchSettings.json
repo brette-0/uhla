@@ -1,9 +1,10 @@
-{
+﻿{
+  "$schema": "http://json.schemastore.org/launchsettings.json",
   "profiles": {
-    "Tataru": {
+    "Numinous": {
       "commandName": "Project",
-      "commandLineArgs": "-i \"Main.s\" -o \"Main.NES\"",
-      "workingDirectory": "C:\\Users\\Administrator\\Documents\\GitHub\\Tataru\\Tataru\\Test"
+      "commandLineArgs": "-i ./Test/main.s -o /Test/cart.nes",
+      "workingDirectory": "C:\\Users\\Administrator\\Documents\\GitHub\\Tataru\\Tataru"
     }
   }
 }

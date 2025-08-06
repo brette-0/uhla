@@ -7,6 +7,37 @@ namespace Numinous {
     namespace Engine {
         internal static partial class Engine {
 
+            [Flags]
+            internal enum Directives : byte {
+                PUSH_ILLEGAL,
+                POP_ILLEGAL,
+
+                PUSH_CPU,
+                POP_CPU,
+
+                PUSH_GPR,
+                POP_GPR,
+
+                PUSH_MEM,
+                POP_MEM,
+                
+                INCLUDE,
+                INCLUDEBIN,
+                
+                ASSERT,
+                
+                CART,
+                DISK,
+                
+                DEFINE,
+                UNDEFINE,
+                
+                ROM,
+                CPU,
+                
+                ERROR = byte.MaxValue
+            }
+
             internal enum OperationTypes : byte {
                 FAIL,
                 DIRECTIVE,          // eg.. #include

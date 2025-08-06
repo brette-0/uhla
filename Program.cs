@@ -9,8 +9,8 @@ internal static class Program {
     internal static int Main(string[] args) {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-        (string? InputPath, string? OutputPath, Terminal.Responses Response) = Terminal.Parse(args);
-        if (Response == Terminal.Responses.Terminate_Error) return (int)ErrorTypes.ParsingError;   // Exit if parsing returns error
+        var (InputPath, OutputPath, Response) = Terminal.Parse(args);
+        if (Response == Terminal.Responses.Terminate_Error)   return (int)ErrorTypes.ParsingError;   // Exit if parsing returns error
         if (Response == Terminal.Responses.Terminate_Success) return 0;
 
         //if (ActiveLanguage == Languages.Null) ActiveLanguage = Language.CaptureSystemLanguage();
@@ -21,21 +21,21 @@ internal static class Program {
         //            -1, default, null);
         //}
 
-        if (InputPath == null) {
+        if (InputPath == string.Empty) {
             Terminal.Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{Language.Connectives[(ActiveLanguage, "Input path must be provided")]}.",
-                -1, default, null);
+                -1, default, null, null);
             return (int)ErrorTypes.ParsingError;
         }
 
-        if (OutputPath == null) {
+        if (OutputPath == string.Empty) {
             Terminal.Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{Language.Connectives[(ActiveLanguage, "Output path must be provided")]}.",
-                    -1, default, null);
+                    -1, default, null, null);
             return (int)ErrorTypes.ParsingError;
         }
 
-        string InputFile = File.ReadAllText(InputPath!);
+        var InputFile = File.ReadAllText(InputPath);
         if (InputFile.Length == 0) {
-            Terminal.Error(ErrorTypes.NothingToDo, DecodingPhases.TOKEN, $"{Language.Connectives[(ActiveLanguage, "Source file")]} {InputPath} {Language.Connectives[(ActiveLanguage, "has no contents")]}", -1, 0, null);
+            Terminal.Error(ErrorTypes.NothingToDo, DecodingPhases.TOKEN, $"{Language.Connectives[(ActiveLanguage, "Source file")]} {InputPath} {Language.Connectives[(ActiveLanguage, "has no contents")]}", -1, 0, null, null);
             return (int)ErrorTypes.NothingToDo;
         }
         SourceFileNameBuffer.Add(InputPath!);
@@ -112,6 +112,12 @@ internal static class Program {
     internal static List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>> ObjectSearchBuffer = [];
 
     internal static List<string> SourceFileSearchPaths = [];
+
+    internal static List<bool>          PragmaIllegalBuffer     = [];
+    internal static List<bool>          PragmaCPUAwareBuffer    = [];
+    internal static List<bool>          PragmaGPRAwareBuffer    = [];
+    internal static List<bool>          PragmaRAMAwareBuffer    = [];
+
 
     internal static Languages ActiveLanguage;
     internal static WarningLevels WarningLevel;

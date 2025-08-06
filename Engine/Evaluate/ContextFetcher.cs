@@ -14,7 +14,7 @@ namespace Numinous.Engine {
         internal static (List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, (OperationTypes Type, object Context) Operation, int Finish, bool Success, bool Continue) ContextFetcher(Memory<string> BasicRegexTokens, ref int SourceTokenIndex, ref int ErrorReportLineNumber, ref int ErrorReportStepNumber, string SourceFilePath) {
             // use BasicRegexTokens => RegexTokens (ref, no cloning?) | Ensures we solve all new defines without mutating the original
             //List<string> RegexTokens = ResolveDefines(BasicRegexTokens);
-            string CollectiveContext = "";
+            var CollectiveContext = "";
 
             List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens = [];
             List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens = [];
@@ -25,27 +25,29 @@ namespace Numinous.Engine {
 
             int LocalSourceTokenIndex = SourceTokenIndex, LocalErrorReportLineNumber = ErrorReportLineNumber, LocalErrorReportStepNumber = ErrorReportStepNumber;
 
-            int Finish = -1;
-            int MaxHierarchy = 0;
-            int LastNonWhiteSpaceIndex = -1;
-            int LastOpenContainerOperatorStringIndex = -1;
+            var Finish = -1;
+            var MaxHierarchy = 0;
+            var LastNonWhiteSpaceIndex = -1;
+            var LastOpenContainerOperatorStringIndex = -1;
 
-            string LITERAL_CSTRING = "";
+            var literalCstring = "";
 
-            bool IsLastOperator = false;
+            var IsLastOperator = false;
 
             Terminal.ErrorContext ErrorContext = new();
 
             int i = 0, StringIndex = 0; string ActiveToken;
 
-            step();
+            Step();
 
-            (OperationTypes oper, object ctx) OperationType = ExtractOperation();
+            var OperationType = ExtractOperation();
 
-            if (OperationType == default) return default;                                                       // error pass back
-            if (OperationType.oper == OperationTypes.DIRECTIVE) return default;
+            
+            
+            if (OperationType == default) return default;                                               // error pass back
+            if (DoesNotRequireEvaluation((Directives)OperationType.ctx)) return Success();              // some directives do not use evaluation
 
-            for (; DefineResolveBuffer.Count > 0 && i < BasicRegexTokens.Length; step()) {
+            for (; DefineResolveBuffer.Count > 0 && i < BasicRegexTokens.Length; Step()) {
 
                 if (ActiveToken[0] == ' ' || ActiveToken[0] == '\t') continue;                          // do not tokenize whitespace
 
@@ -68,16 +70,16 @@ namespace Numinous.Engine {
 
                     case "//":
                         // marks the end of this tasks ctx
-                        steps(() => ActiveToken[0] != '\n');
+                        Steps(() => ActiveToken[0] != '\n');
                         break;
 
                     case "/*":
                         // marks the end of this tasks ctx
                         while (ActiveToken != "*/") {
-                            steps(() => ActiveToken[0] != '\n' || ActiveToken != "*/");
+                            Steps(() => ActiveToken[0] != '\n' || ActiveToken != "*/");
                             ErrorReportLineNumber++;
                         }
-                        step();
+                        Step();
                         break;
 
                     case ";":
@@ -231,13 +233,13 @@ namespace Numinous.Engine {
             }
 
             // this is permissible as context is full here - no need to involve ErrorContext
-            Terminal.Error(ErrorTypes.SyntaxError, DecodingPhases.TOKEN, "Not enough context to satisfy request", ErrorReportLineNumber - 1, Tokens.Count, ApplyWiggle(CollectiveContext, CollectiveContext.Length - 1, 1));
+            Terminal.Error(ErrorTypes.SyntaxError, DecodingPhases.TOKEN, "Not enough context to satisfy request", ErrorReportLineNumber - 1, Tokens.Count, ApplyWiggle(CollectiveContext, CollectiveContext.Length - 1, 1), SourceFilePath);
             return default;
 
             #region Context Fetcher Functions
             (List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, (OperationTypes Type, object Context) Operation, int Finish, bool Success, bool Continue) Success() => (Tokens, MaxHierarchy, OperationType, Finish, true, false);
             
-            void step(bool RegexParse = true) {
+            void Step(bool regexParse = true) {
                 List<string> ctx;
                 bool success;
 
@@ -246,7 +248,7 @@ namespace Numinous.Engine {
                     StringIndex += BasicRegexTokens.Span[i].Length;                     
                 }
 
-                if (RegexParse) {
+                if (regexParse) {
                     if (DefineResolveBuffer.Count == 0) {
                         (ctx, success) = PartialResolveDefine(BasicRegexTokens.Span[i++]);
                         DefineResolveBuffer = ctx;
@@ -256,42 +258,91 @@ namespace Numinous.Engine {
                         DefineResolveBuffer.InsertRange(0, ctx);
                     }
 
-                    if (success) step();
+                    if (success) Step();
                     ActiveToken = DefineResolveBuffer[0];
                     DefineResolveBuffer.RemoveAt(0);
                 } else ActiveToken = BasicRegexTokens.Span[i++];
             }
 
-            void steps(Func<bool> SeekPredicate, bool skip = false) {
+            void Steps(Func<bool> seekPredicate, bool skip = false) {
                 if (skip) {
                     do {
-                        step();
-                    } while (SeekPredicate());
+                        Step();
+                    } while (seekPredicate());
                     return;
                 }
 
-                while (SeekPredicate()) {
-                    step();
+                while (seekPredicate()) {
+                    Step();
                 }
+            }
+
+            bool DoesNotRequireEvaluation(Directives ctx) {
+                Directives[] WhiteList = [Directives.CART, Directives.DEFINE, Directives.DISK, Directives.INCLUDE, Directives.INCLUDEBIN];
+                return WhiteList.Contains(ctx);
             }
 
             (OperationTypes oper, object ctx) ExtractOperation() {
                 object ctx; bool success;
                 if (ActiveToken[0] == '#') {
-                    if (DeltaTokens.Count > 0 || LocalErrorReportStepNumber >= 0 || LastNonWhiteSpaceIndex != 0) {
+                    if (DeltaTokens.Count > 0 || LocalErrorReportStepNumber > 0 || LastNonWhiteSpaceIndex != -1) {
                         // error, assembler directives must own the entire line. (stylistic enforcement? I'm not sure)
                         return default;
                     }
+                    
+                    Step(); if (CheckDirectiveMalformed()) return default;
+                    
+                    var Directive = ActiveToken;
+                    switch (Directive) {
+                        case "pragma":
+                            Step(); if (CheckDirectiveMalformed()) return default;
+                            if (ActiveToken[0] != ' ') {
+                                // error, malformed pragma
+                                return default;
+                            }
 
-                    step();
+                            Step(); if (CheckDirectiveMalformed()) return default;
+                            var Modifier = ActiveToken switch { "push" => 0, "pop" => 1, _ => 0xff};
+                            if (Modifier == 0xff) {
+                                // error, erroneous action for pragma
+                                return default;
+                            }
+                            
+                            Step(); if (CheckDirectiveMalformed()) return default;
+                            if (ActiveToken[0] != ' ') {
+                                // error, malformed pragma
+                                return default;
+                            }
+                            
+                            Step(); if (CheckDirectiveMalformed()) return default;
+                            var Pragma = (Directives)(Modifier | (byte)(ActiveToken switch {
+                                "memory_aware"  => Directives.PUSH_MEM,
+                                "gpr_aware"     => Directives.PUSH_GPR,
+                                "cpu_aware"     => Directives.PUSH_CPU,
+                                "illegal"       => Directives.PUSH_ILLEGAL,
+                                
+                                _               => Directives.ERROR,          
+                            }));
 
-                    switch (ActiveToken) {
+                            if (Pragma == Directives.ERROR) {
+                                // error, bad pragma
+                                return default;
+                            }
+
+                            Step();
+                            if (ActiveToken[0] != ' ') {
+                                // error malformed pragma
+                                return default;
+                            }
+
+                            return (OperationTypes.DIRECTIVE, Pragma);
+
                         case "include":
                             // demands <> :: We can take over from here
 
-                            bool Binary = false;
+                            var Binary = false;
 
-                            for (step(); DefineResolveBuffer.Count > 0 && i < BasicRegexTokens.Length; step()) {
+                            for (Step(); DefineResolveBuffer.Count > 0 && i < BasicRegexTokens.Length; Step()) {
                                 switch (ActiveToken) {
                                     case " ":
                                     case "\t":
@@ -413,12 +464,12 @@ namespace Numinous.Engine {
 
 
                 if (ActiveToken == "-:") {
-                    step();
+                    Step();
 
                     // next branch back is here | when we need to "beq -" we now can
                     return (OperationTypes.ANON_REL_BRANCH, '-');
                 } else if (ActiveToken == "+:") {
-                    step();
+                    Step();
 
                     // for terms waiting on the next forward branch, we can now solve for "beq +"
                     return (OperationTypes.ANON_REL_BRANCH, '+');
@@ -439,6 +490,15 @@ namespace Numinous.Engine {
 
                 #region         OperationExtract Local Functions
 
+                bool CheckDirectiveMalformed() {
+                    if (CheckLineTerminated()) {
+                        // error malformed
+                        return true;
+                    }
+
+                    return false;
+                }
+                
                 (RunTimeVariableType ctx, bool succses) ParseAsVariable() {
                     string type = ActiveToken.ToLower();
                     if (type.Length < 2) return default;
@@ -666,7 +726,7 @@ namespace Numinous.Engine {
                                     if (ActiveToken[0] == '!') return OperandDecorators.Overruled;
                                     else return OperandDecorators.Found;
                                 } else if (ActiveToken[0] == '!') {
-                                    step();
+                                    Step();
                                     if (CheckLineTerminated()) return OperandDecorators.Overruled;
                                     seek_no_whitespace();
                                     if (CheckLineTerminated()) return OperandDecorators.Overruled;
@@ -698,7 +758,7 @@ namespace Numinous.Engine {
                             if (CheckFormat(false)) {
                                 if (ActiveToken[0] == '!') {
                                     if (CheckLineTerminated()) return default;
-                                    step();
+                                    Step();
                                     if (ActiveToken[0] == '#') return OperandDecorators.Overruled | OperandDecorators.Immediate;
                                     else return OperandDecorators.Immediate;
                                 }
@@ -776,7 +836,7 @@ namespace Numinous.Engine {
 
                             if (CheckFormat(false)) {
                                 if (ActiveToken[0] == '!') {
-                                    step();
+                                    Step();
                                     if (ActiveToken[0] == '#') return OperandDecorators.Overruled | OperandDecorators.Immediate;
                                     else return default;
                                 }
@@ -795,7 +855,7 @@ namespace Numinous.Engine {
                                     return default;
                                 }
 
-                                step();
+                                Step();
                                 return OperandDecorators.Immediate | OperandDecorators.Overruled;
                             }
 
@@ -804,7 +864,7 @@ namespace Numinous.Engine {
                                 return default;
                             }
 
-                            step();
+                            Step();
                             return OperandDecorators.Immediate;
 
                         CheckMemoryAccessRulesNotPermittingImmediate:
@@ -817,7 +877,7 @@ namespace Numinous.Engine {
 
                         CheckMemoryAccessRulesWithImmediate:
                             if (ActiveToken[0] == '#') {
-                                step();
+                                Step();
                                 return OperandDecorators.Immediate;
                             }
 
@@ -1020,7 +1080,7 @@ namespace Numinous.Engine {
 
                         CheckMemoryAccessRulesWithImmediate:
                             if (ActiveToken[0] == '#') {
-                                step();
+                                Step();
                                 return OperandDecorators.Immediate;
                             }
 
@@ -1034,7 +1094,7 @@ namespace Numinous.Engine {
 
                     bool CheckFormat(bool SupportsImplied) {
                         if (CheckLineTerminated())      return SupportsImplied;
-                        step();
+                        Step();
                         if (i == BasicRegexTokens.Length && DefineResolveBuffer.Count == 0)       
                             return SupportsImplied;                                                     // implied may complete source (might be fail later)
                         if (CheckLineTerminated())      return SupportsImplied;                         // implied may complete line
@@ -1046,53 +1106,53 @@ namespace Numinous.Engine {
                     OperandDecorators CheckMemoryAccessRules() {
                         if (ActiveToken == "a") {
                             if (CanUseA.Contains(opcode)) {
-                                step();
+                                Step();
                                 return OperandDecorators.Found;
                             }
 
-                            step();
+                            Step();
                             if (CheckLineTerminated()) {                                                // we've already established we can't use the syntax a here
                                 // error malformed
                                 return default;
                             }
                             
                             if (ActiveToken[0] == ':') {
-                                step();
+                                Step();
                                 return OperandDecorators.Enforced_ABS;
                             } else {
                                 // error, a is reserved
                                 return default;
                             }
                         } else if (ActiveToken == "z") {
-                            step();
+                            Step();
                             if (CheckLineTerminated()) return default;                                  // standalone z refers to zero flag, not implicit and unsuitable here
                             if (ActiveToken[0] == ':') {
-                                step();
+                                Step();
                                 return OperandDecorators.Enforced_ZP;
                             } else {
                                 // error, z is reserved
                                 return default;
                             }
                         } else if (ActiveToken[0] == '!') {
-                            step();
+                            Step();
                             if (CheckLineTerminated()) {                                                // must overrule something
                                 // error malformed
                                 return default;
                             }
 
                             if (ActiveToken == "a") {
-                                step();
+                                Step();
                                 if (ActiveToken[0] == ':') {
-                                    step();
+                                    Step();
                                     return OperandDecorators.Enforced_ABS | OperandDecorators.Overruled;
                                 } else {
                                     // error, a is reserved
                                     return default;
                                 }
                             } else if (ActiveToken == "z") {
-                                step();
+                                Step();
                                 if (ActiveToken[0] == ':') {
-                                    step();
+                                    Step();
                                     return OperandDecorators.Enforced_ZP | OperandDecorators.Overruled;
                                 } else {
                                     // error, z is reserved
@@ -1107,7 +1167,7 @@ namespace Numinous.Engine {
                 bool CheckLineTerminated() => (i == BasicRegexTokens.Length && DefineResolveBuffer.Count == 0) || ActiveToken[0] == ';' || ActiveToken[0] == '\n' || ActiveToken == "//" || ActiveToken == "/*";
 
                 // keep seeking beyond whitespace
-                void seek_no_whitespace(bool skip = false) => steps(() => !CheckLineTerminated() && (ActiveToken[0] == ' ' || ActiveToken[0] == '\t'), skip);
+                void seek_no_whitespace(bool skip = false) => Steps(() => !CheckLineTerminated() && (ActiveToken[0] == ' ' || ActiveToken[0] == '\t'), skip);
 
                 #endregion      OperationExtract Local Functions
             }
@@ -1126,14 +1186,14 @@ namespace Numinous.Engine {
 
                 // TODO: Empty out Define Resolved Buffer first, then any captured tokens DO NOT UNDERGO DEFINE EVALUATION
 
-                for (; DefineResolveBuffer.Count > 0 && !HaltCapturePredicate(ActiveToken[0]); step()) {
-                    LITERAL_CSTRING += ActiveToken;
+                for (; DefineResolveBuffer.Count > 0 && !HaltCapturePredicate(ActiveToken[0]); Step()) {
+                    literalCstring += ActiveToken;
                     StringIndex += ActiveToken.Length;
                 }
 
 
-                for (; i < BasicRegexTokens.Length && !HaltCapturePredicate(ActiveToken[0]); step(false)) {
-                    LITERAL_CSTRING += ActiveToken;
+                for (; i < BasicRegexTokens.Length && !HaltCapturePredicate(ActiveToken[0]); Step(false)) {
+                    literalCstring += ActiveToken;
                     StringIndex += ActiveToken.Length;
                 }
 
@@ -1156,13 +1216,13 @@ namespace Numinous.Engine {
                         csi,
                         csi - StringIndex,
                         new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
-                    {"self",    (LITERAL_CSTRING,           AssembleTimeTypes.CSTRING,  AccessLevels.PRIVATE) },
-                    {"length",  (LITERAL_CSTRING.Length,    AssembleTimeTypes.CINT,     AccessLevels.PUBLIC) },
+                    {"self",    (literalCstring,           AssembleTimeTypes.CSTRING,  AccessLevels.PRIVATE) },
+                    {"length",  (literalCstring.Length,    AssembleTimeTypes.CINT,     AccessLevels.PUBLIC) },
                         },
                         false
                     ));
 
-                    LITERAL_CSTRING = "";   // wipe string for next capture
+                    literalCstring = "";   // wipe string for next capture
                 }
                 return true;
             }

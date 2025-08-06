@@ -346,22 +346,23 @@ namespace Numinous {
             CONSTANT = 0x040,
 
             CINT = CONSTANT,    // Constant int
-            CSTRING,            // Constant string
-            TYPE,               // typeof result
+            CSTRING,    // Constant string
+            TYPE,       // typeof result
 
-            CSCOPE,             // Constant Scope reference
-            CRT,                // Constant runtime reference
-            CREG,               // Constant register reference
-            CFLAG,              // Constant flag reference
-            CPROC,              // Constant procedure reference
-            CINTER,             // Constant interrupt reference
-            CBANK,              // Constant bank reference
-            CEXP,               // Constant Expression
+            CSCOPE,     // Constant Scope reference
+            CRT,        // Constant runtime reference
+            CREG,       // Constant register reference
+            CFLAG,      // Constant flag reference
+            CPROC,      // Constant procedure reference
+            CINTER,     // Constant interrupt reference
+            CBANK,      // Constant bank reference
+            CEXP,       // Constant Expression
 
             IRWN,       // Indexing Register with N             foo[i + 2] situations
             ICRWN,      // Indexing Constant Register with N    foo[x + 2] situations
 
             FUNCTION,   // Macro Function
+            OPER,               // Operation
 
             MACRO = 0x80,
             // void macro
@@ -580,23 +581,23 @@ namespace Numinous {
                 
                 internal static (string InputPath, string OutputPath, Responses Response) Parse(string[] args) {
                     string InputPath = "", OutputPath = "";
-                    int StringIndex = 0;
-                    string Flattened = string.Join(" ", args);
+                    var StringIndex = 0;
+                    var Flattened = string.Join(" ", args);
 
-                    Responses Response = Responses.Proceed;
+                    var Response = Responses.Proceed;
                     Program.WarningLevel = WarningLevels.NONE;
 
-                    for (int i = 0; i < args.Length; i++) {
+                    for (var i = 0; i < args.Length; i++) {
                         StringIndex += args[i].Length;
 
                         switch (args[i]) {
                             case "-i":
                             case "--input":
                                 if (i == args.Length - 1) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Input Path Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Input Path Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                                     return default;
                                 } else if (InputPath.Length > 0) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Input Source File Path has already been specified")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Input Source File Path has already been specified")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                                     return default;
                                 } else {
                                     InputPath = args[++i];
@@ -606,10 +607,10 @@ namespace Numinous {
                             case "-o":
                             case "--output":
                                 if (i == args.Length - 1) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Output Path Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Output Path Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                                     return default;
                                 } else if (OutputPath.Length > 0) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Output Binary File Path has already been specified")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Output Binary File Path has already been specified")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                                     return default;
                                 }
                                 OutputPath = args[++i];
@@ -659,7 +660,7 @@ Numinous 2a03 - GPL V2 Brette Allen 2026
 -l | --language     | [lang]    | {(Language.Language.Connectives[(Program.ActiveLanguage, "Choose a language to use")])}
 -w | --warning      | [level]   | TODO: Write "SET WARNING LEVEL" HERE
        
-""", -1, default, null);
+""", -1, default, null, null);
                                 } else {
                                     switch (args[++i]) {
                                         default: --i; break;
@@ -690,7 +691,7 @@ Bahasa Indonesia  ""-l in""
 Svenska           ""-l sw""
 فارسی             ""-l pe""
 中文              ""-l ch""
-", -1, default, null);
+", -1, default, null, null);
                                             break;
 
                                         case "w":
@@ -708,7 +709,7 @@ verbose     : Will display much more warnings, recommended and intended for thos
 strict      : Acts as 'verbose' but warnings become errors, not recommended.
 controlled  : Acts as 'strict' but prevents overruling.
        
-""", -1, default, null);
+""", -1, default, null, null);
                                             break;
 
                                         case "i":
@@ -721,7 +722,7 @@ The input file argument (-i or --input) should be followed by a valid file path 
 If the file is empty you will receive an error, you may only pass one file here as the entry point file.
 This decides what the root of the "include path" is, includes from here must be relative to this path.
        
-""", -1, default, null);
+""", -1, default, null, null);
                                             break;
 
                                         case "o":
@@ -738,7 +739,7 @@ will not affect the kind of build produced.
 
 Numinous WILL overwrite a file existing with the same name at the output path if found.
        
-""", -1, default, null);
+""", -1, default, null, null);
                                             break;
                                     }
                                 }
@@ -749,7 +750,7 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                             case "-l":
                             case "--language":
                                 if (i == args.Length - 1) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Language Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Language Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                                     return default;
                                 }
 
@@ -780,13 +781,13 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                                 };
 
                                 if (Program.ActiveLanguage == Language.Languages.Null) {
-                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Invalid Language Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length));
+                                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Invalid Language Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                                     return default;
                                 }
                                 break;
 
                             default:
-                                Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Unrecognized Terminal Argument")])}.", -1, default, ApplyWiggle(Flattened, 1 + StringIndex, args[i].Length));
+                                Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Unrecognized Terminal Argument")])}.", -1, default, ApplyWiggle(Flattened, 1 + StringIndex, args[i].Length), null);
                                 return default;
                         }
                     }
@@ -836,7 +837,7 @@ Strict                  : Shows more warnings as errors, not recommended but doe
 Controlled              : Functions like Strict but prevents use of overrides. 
 
 Project Numinous will NOT continue until you fix this or manually specify your Warning Level!
-""", default, default, default);
+""", default, default, default, null);
                             return false;
                         }
                         #endregion Warning level from Config TOML
@@ -897,7 +898,7 @@ Persian
 Chinese
 
 Project Numinous will NOT continue until you fix this or manually specify your language!
-""", default, default, default);
+""", default, default, default, null);
                             return false;
                         }
                         #endregion Default Langauge from Config TOML
@@ -934,6 +935,7 @@ Project Numinous will NOT continue until you fix this or manually specify your l
                     internal string Message;
                     internal int LineNumber, StepNumber;
                     internal Func<string?> Context;
+                    internal string? ContextFileName;
                 }
 
                 // in event of left in message, don't show on release
@@ -944,14 +946,14 @@ Project Numinous will NOT continue until you fix this or manually specify your l
 #endif
 
 #if DEBUG
-                internal static void WriteInfo(ErrorLevels ErrorLevel, ErrorTypes ErrorType, DecodingPhases Phase, string Message, int LineNumber, int StepNumber, string? Context,
+                internal static void WriteInfo(ErrorLevels ErrorLevel, ErrorTypes ErrorType, DecodingPhases Phase, string Message, int LineNumber, int StepNumber, string? ContextFileName, string? Context,
                     int     lineNumber = 0, 
                     string  filePath = "", 
-                    string  memberName = "")
+                    string  memberName = "") {
 #else
-                internal static void WriteInfo(ErrorLevels ErrorLevel, ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context) 
+                internal static void WriteInfo(ErrorLevels ErrorLevel, ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context) {
 #endif
-                {
+                
                     Console.ForegroundColor = ErrorLevel switch {
                         ErrorLevels.LOG     => ConsoleColor.Cyan, 
                         ErrorLevels.WARN    => ConsoleColor.Yellow, 
@@ -972,13 +974,14 @@ Project Numinous will NOT continue until you fix this or manually specify your l
                     DecodePhaseString   = Language.Language.DecodePhaseMessages[(Program.ActiveLanguage, Phase)];
                     LocationString      = LineNumber == -1 ? "" : (StepNumber == 0 ? $"({LineNumber})" : $"({LineNumber}, {StepNumber})");
                     Context = Context == null ? "" : $": {Context}";
+                    ContextFileName ??= "";
 
                     // Something Error During Something Phase :: Could not do a thing (1, 2) : ah, the issue is here.
 #if DEBUG
-                    Console.WriteLine($"{ErrorTypeString} {ErrorTypeConnective} {DecodePhaseString} :: {Message} {Program.SourceFileNameBuffer[^1]} {LocationString}{Context}");
+                    Console.WriteLine($"{ErrorTypeString} {ErrorTypeConnective} {DecodePhaseString} :: {Message} {ContextFileName} {LocationString}{Context}");
                     Console.WriteLine($"[{filePath}:{lineNumber}] {memberName}");
 #else
-                    Console.WriteLine($"{ErrorTypeString} {ErrorTypeConnective} {DecodePhaseString} :: {Message} {LocationString}{Context}");
+                    Console.WriteLine($"{ErrorTypeString} {ErrorTypeConnective} {DecodePhaseString} :: {Message} {ContextFileName} {LocationString}{Context}");
 #endif
 
                 Exit:
@@ -994,7 +997,7 @@ Project Numinous will NOT continue until you fix this or manually specify your l
                         throw new InvalidOperationException($"Log() called with mismatched ErrorLevel: {ctx.ErrorLevel}");
 
                     WriteInfo(ErrorLevels.LOG, ctx.ErrorType, ctx.DecodingPhase, ctx.Message, ctx.LineNumber, ctx.StepNumber, ctx.Context(),
-                              lineNumber, filePath, memberName);
+                              ctx.ContextFileName, lineNumber, filePath, memberName);
                 }
 
                 internal static void Warn(ErrorContext ctx,
@@ -1006,7 +1009,7 @@ Project Numinous will NOT continue until you fix this or manually specify your l
                         throw new InvalidOperationException($"Warn() called with mismatched ErrorLevel: {ctx.ErrorLevel}, expected: {expectedLevel}");
 
                     WriteInfo(expectedLevel, ctx.ErrorType, ctx.DecodingPhase, ctx.Message, ctx.LineNumber, ctx.StepNumber, ctx.Context(),
-                              lineNumber, filePath, memberName);
+                            ctx.ContextFileName, lineNumber, filePath, memberName);
                 }
 
                 internal static void Error(ErrorContext ctx,
@@ -1017,26 +1020,26 @@ Project Numinous will NOT continue until you fix this or manually specify your l
                         throw new InvalidOperationException($"Error() called with mismatched ErrorLevel: {ctx.ErrorLevel}");
 
                     WriteInfo(ErrorLevels.ERROR, ctx.ErrorType, ctx.DecodingPhase, ctx.Message, ctx.LineNumber, ctx.StepNumber, ctx.Context(),
-                              lineNumber, filePath, memberName);
+                            ctx.ContextFileName, lineNumber, filePath, memberName);
                 }
 
 
-                internal static void   Log(ErrorTypes ErrorType, DecodingPhases Phase, string Message, int LineNumber, int StepNumber, string? Context,
+                internal static void   Log(ErrorTypes ErrorType, DecodingPhases Phase, string Message, int LineNumber, int StepNumber, string? Context, string? ContextFileName,
                     [CallerLineNumber] int lineNumber = 0,
                     [CallerFilePath] string filePath = "",
-                    [CallerMemberName] string memberName = "") => WriteInfo(ErrorLevels.LOG,   ErrorType, Phase, Message, LineNumber, StepNumber, Context, lineNumber, filePath, memberName);
+                    [CallerMemberName] string memberName = "") => WriteInfo(ErrorLevels.LOG,   ErrorType, Phase, Message, LineNumber, StepNumber, Context, ContextFileName, lineNumber, filePath, memberName);
                 
 
-                internal static void  Warn(ErrorTypes ErrorType, DecodingPhases Phase, string Message, int LineNumber, int StepNumber, string? Context,
+                internal static void  Warn(ErrorTypes ErrorType, DecodingPhases Phase, string Message, int LineNumber, int StepNumber, string? Context, string? ContextFileName,
                     [CallerLineNumber] int lineNumber = 0,
                     [CallerFilePath] string filePath = "",
-                    [CallerMemberName] string memberName = "") => WriteInfo(Program.WarningLevel.HasFlag(WarningLevels.ERROR) ? ErrorLevels.ERROR : ErrorLevels.WARN,  ErrorType, Phase, Message, LineNumber, StepNumber, Context, lineNumber, filePath, memberName);
+                    [CallerMemberName] string memberName = "") => WriteInfo(Program.WarningLevel.HasFlag(WarningLevels.ERROR) ? ErrorLevels.ERROR : ErrorLevels.WARN,  ErrorType, Phase, Message, LineNumber, StepNumber, Context, ContextFileName, lineNumber, filePath, memberName);
 
 
-                internal static void Error(ErrorTypes ErrorType, DecodingPhases Phase, string Message, int LineNumber, int StepNumber, string? Context,
+                internal static void Error(ErrorTypes ErrorType, DecodingPhases Phase, string Message, int LineNumber, int StepNumber, string? Context, string? ContextFileName,
                     [CallerLineNumber] int lineNumber = 0,
                     [CallerFilePath] string filePath = "",
-                    [CallerMemberName] string memberName = "") => WriteInfo(ErrorLevels.ERROR, ErrorType, Phase, Message, LineNumber, StepNumber, Context, lineNumber, filePath, memberName);
+                    [CallerMemberName] string memberName = "") => WriteInfo(ErrorLevels.ERROR, ErrorType, Phase, Message, LineNumber, StepNumber, Context, ContextFileName, lineNumber, filePath, memberName);
 
 #else
                 internal static void   Log(ErrorTypes ErrorType, DecodingPhase Phase, string Message, int? LineNumber, int? StepNumber, string? Context) {
