@@ -338,66 +338,78 @@ namespace Numinous.Engine {
                             return (OperationTypes.DIRECTIVE, Pragma);
 
                         case "include":
+                            var fp = string.Empty;
                             // demands <> :: We can take over from here
+                            if (CheckDirectiveMalformed()) return default;
+                            Step();
 
-                            var Binary = false;
-
-                            for (Step(); DefineResolveBuffer.Count > 0 && i < BasicRegexTokens.Length; Step()) {
-                                switch (ActiveToken) {
-                                    case " ":
-                                    case "\t":
-                                        continue;
-
-                                    case "<":
-                                        string library_request = CollectiveContext[(StringIndex + 1)..CollectiveContext.LastIndexOf('>')];
-                                        (library_request, success) = CheckInclude(library_request);
-                                        if (!success) {
-                                            // error, no lib to include
-                                            return default;
-                                        }
-
-                                        if (Binary) {
-                                            // include as RODATA (call write task)
-                                            return (OperationTypes.DIRECTIVE, Directives.INCLUDEBIN);
-                                        }
-
-                                        // Add the source to the read target, begin on that
-
-                                        (object _, AssembleTimeTypes _, bool Success) = Assemble([]);   // arg-less no-return-type call to assemble
-                                        if (!Success) return default;
-                                        else return (OperationTypes.DIRECTIVE, Directives.INCLUDE);
-
-                                    case "\"":
-                                        library_request = CollectiveContext[(StringIndex + 1)..CollectiveContext.LastIndexOf('"')];
-                                        if (File.Exists($"{Path.GetDirectoryName(SourceFilePath)}/{library_request}")) {
-                                            if (Binary) {
-                                                // include as RODATA (call write task)
-                                                return (OperationTypes.DIRECTIVE, Directives.INCLUDEBIN);
-                                            }
-                                            // add the source to the read target
-                                            // recurse to Assemble()
-                                        } else {
-                                            // error
-                                            return default;
-                                        }
-                                        break;
-
-                                    case "bin":
-                                        if (Binary) {
-                                            // error set twice
-                                            return default;
-                                        }
-
-                                        Binary = true;
-                                        continue;
-
-                                    default:
-                                        // error, erroneous token
-                                        return default;
-                                }
+                            if (ActiveToken[0] != ' ') {
+                                // error: directive malformed
+                                return default;
                             }
 
+                            Step();
+                            if (ActiveToken[0] == '<') {        // local func: get from lib
+                                fp = LibGetPathFromContext();
+                                if (fp == string.Empty) {
+                                    // error malformed path
+                                    return default;
+                                }
+                                
+                                // recurse now.
+                            } else if (ActiveToken[0] == '\"') { // local func: get from src
+                                fp = LocalGetPathFromContext();
+                                if (fp == string.Empty) {
+                                    // error malformed path
+                                    return default;
+                                }
+                                
+                                // recurse now.
+                            } else if (ActiveToken == "bin") {
+                                if (CheckLineTerminated()) {
+                                    // error, malformed directive
+                                    return default;
+                                }
 
+                                Step();
+                                if (CheckLineTerminated() || ActiveToken[0] != ' ') {
+                                    // error, malformed directive
+                                    return default;
+                                }
+
+                                Step();
+                                if (ActiveToken[0] == '<') { // local func: get from lib as bin
+                                    fp = LibGetPathFromContext();
+                                    if (fp == string.Empty) {
+                                        // error malformed path
+                                        return default;
+                                    }
+    
+                                    // write contents to ROM immediately
+                                    
+                                    return (OperationTypes.DIRECTIVE, Directives.INCLUDEBIN);
+                                } else if (ActiveToken[0] == '\"') { // local func: get from src as bin
+                                    fp = LocalGetPathFromContext();
+                                    if (fp == string.Empty) {
+                                        // error malformed path
+                                        return default;
+                                    }
+    
+                                    // write contents to ROM immediately
+                                    
+                                    return (OperationTypes.DIRECTIVE, Directives.INCLUDEBIN);
+                                } else {
+                                    // error: malformed include path
+                                    return default;
+                                }
+                            } else {
+                              // error: malformed include path
+                              return default;
+                            }
+                            var Binary = false;
+                            
+                            
+                            
                             return default;
                         case "assert":
                         // requires a boolean, we'll depend on Eval
@@ -500,17 +512,52 @@ namespace Numinous.Engine {
                 //if (success) return (OperationTypes.KEYWORD, ctx);
 
 
-                string opcode = ActiveToken;
+                var opcode = ActiveToken;
 
                 // Gather Instruction Information
-                OperandDecorators FIS_ctx = VerifyInstruction();
+                var FIS_ctx = VerifyInstruction();
 
                 if (FIS_ctx == default) return default;                 // error pass back
-                if (FIS_ctx == OperandDecorators.Missing)          return (OperationTypes.EVALUATE, default(int));
+                if (FIS_ctx == OperandDecorators.Missing)          return (OperationTypes.EVALUATE, 0);
                 else return (OperationTypes.INSTRUCTION, (opcode, FIS_ctx));
 
                 #region         OperationExtract Local Functions
 
+                string LibGetPathFromContext() {
+                    var fp = string.Empty;
+                    var InitialCharacterCount = 1u;
+
+                    for (; !CheckLineTerminated(); Step()) {
+                        fp += ActiveToken;
+                        switch (ActiveToken[0]) {
+                            case '<':
+                                InitialCharacterCount++;
+                                continue;
+                            
+                            case '>':
+                                if (--InitialCharacterCount == 0) break;
+                                continue;
+                            
+                            default: continue;
+                        }
+                        
+                        break;
+                    } fp += ActiveToken;
+
+                    return InitialCharacterCount == 0 ? fp : "";
+                }
+                
+                // TODO: Support String Escapes so linux can have '"' in its file names.
+                string LocalGetPathFromContext() {
+                    var fp = string.Empty;
+
+                    for (; !CheckLineTerminated(); Step(), fp += ActiveToken) {
+                        if (ActiveToken[0] == '\"')  return fp + ActiveToken;
+                    }
+
+                    return "";
+                }
+                
                 bool CheckDirectiveMalformed() {
                     if (CheckLineTerminated()) {
                         // error malformed
@@ -521,7 +568,7 @@ namespace Numinous.Engine {
                 }
                 
                 (RunTimeVariableType ctx, bool succses) ParseAsVariable() {
-                    string type = ActiveToken.ToLower();
+                    var type = ActiveToken.ToLower();
                     if (type.Length < 2) return default;
                     RunTimeVariableType ctx = default;
 
@@ -529,7 +576,7 @@ namespace Numinous.Engine {
                     if (!ctx.signed && type[0] != 'u') return default;
                     
 
-                    int substring = 2;
+                    var substring = 2;
                     if      (type[1] == 'b') ctx.endian = true;
                     else if (type[1] != 'l') substring = 1;
 
@@ -546,7 +593,7 @@ namespace Numinous.Engine {
                 }
 
                 (RunTimeVariableFilterType ctx, bool succses) ParseAsFilter() {
-                    string type = ActiveToken;
+                    var type = ActiveToken;
                     if (type.Length < 2) return default;
                     RunTimeVariableFilterType ctx = default;
 
@@ -622,7 +669,7 @@ namespace Numinous.Engine {
                      *          
                      */
 
-                    string opcode = ActiveToken.ToLower();
+                    var opcode = ActiveToken.ToLower();
                     switch (opcode) {
                         #region     Explicit Instructions Supporting Immediate
                         case "cpa": // cmp
@@ -1237,8 +1284,8 @@ namespace Numinous.Engine {
                         csi,
                         csi - StringIndex,
                         new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
-                    {"self",    (literalCstring,           AssembleTimeTypes.CSTRING,  AccessLevels.PRIVATE) },
-                    {"length",  (literalCstring.Length,    AssembleTimeTypes.CINT,     AccessLevels.PUBLIC) },
+                            {"self",    (literalCstring,           AssembleTimeTypes.CSTRING,  AccessLevels.PRIVATE) },
+                            {"length",  (literalCstring.Length,    AssembleTimeTypes.CINT,     AccessLevels.PUBLIC) },
                         },
                         false
                     ));
