@@ -358,21 +358,21 @@ namespace Numinous.Engine {
 
                                         if (Binary) {
                                             // include as RODATA (call write task)
-                                            return (OperationTypes.DIRECTIVE, default(int));
+                                            return (OperationTypes.DIRECTIVE, Directives.INCLUDEBIN);
                                         }
 
-                                        // Add the source to the read target
+                                        // Add the source to the read target, begin on that
 
                                         (object _, AssembleTimeTypes _, bool Success) = Assemble([]);   // arg-less no-return-type call to assemble
                                         if (!Success) return default;
-                                        else return (OperationTypes.DIRECTIVE, default(int));
+                                        else return (OperationTypes.DIRECTIVE, Directives.INCLUDE);
 
                                     case "\"":
                                         library_request = CollectiveContext[(StringIndex + 1)..CollectiveContext.LastIndexOf('"')];
                                         if (File.Exists($"{Path.GetDirectoryName(SourceFilePath)}/{library_request}")) {
                                             if (Binary) {
                                                 // include as RODATA (call write task)
-                                                return (OperationTypes.DIRECTIVE, default(int));
+                                                return (OperationTypes.DIRECTIVE, Directives.INCLUDEBIN);
                                             }
                                             // add the source to the read target
                                             // recurse to Assemble()
@@ -405,7 +405,7 @@ namespace Numinous.Engine {
                         case "cart":
                             if (Program.Mode == Modes.None) {
                                 Program.Mode = Modes.Cartridge;
-                                return (OperationTypes.DIRECTIVE, default(int));
+                                return (OperationTypes.DIRECTIVE, Directives.CART);
                             } else {
                                 // error already set
                                 return default;
@@ -415,7 +415,7 @@ namespace Numinous.Engine {
                         case "disk":
                             if (Program.Mode == Modes.None) {
                                 Program.Mode = Modes.Disk;
-                                return (OperationTypes.DIRECTIVE, default(int));
+                                return (OperationTypes.DIRECTIVE, Directives.DISK);
                             } else {
                                 // error already set
                                 return default;
@@ -425,14 +425,35 @@ namespace Numinous.Engine {
                         // well take over here
                         // define exp ctx
                         // define exp(arg, arg) ctx-arg-arg
+                        
                         case "undefine":
-                        // undefine ctx (we already replace this, so this will require some restructuring
+                            if (CheckDirectiveMalformed()) return default;
+                            Step();
+
+                            if (ActiveToken[0] != ' ') {
+                                // error malformed
+                                return default;
+                            }
+
+                            if (CheckDirectiveMalformed()) return default;
+                            Step();
+
+                            (_, success) = GetObjectFromAlias(ActiveToken, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
+                            if (success) {
+                                Program.LabelDataBase.Remove(ActiveToken);
+                                return (OperationTypes.DIRECTIVE, Directives.UNDEFINE);
+                            } else {
+                                // error - no define to undefine
+                                return default;
+                            }
 
                         case "rom":
-                        // #rom <CINT>/<INT>
+                            // #rom <CINT>/<INT>
+                            return (OperationTypes.DIRECTIVE, Directives.ROM);
+                        
                         case "cpu":
                             // #cpu <CINT>/<INT>
-                            return (OperationTypes.DIRECTIVE, default(int));
+                            return (OperationTypes.DIRECTIVE,  Directives.CPU);
                     }
                 }
 
