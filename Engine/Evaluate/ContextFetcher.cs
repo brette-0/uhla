@@ -1,4 +1,5 @@
-﻿using Microsoft.CodeAnalysis;
+﻿using System.Security.AccessControl;
+using Microsoft.CodeAnalysis;
 
 // immediate illegal overruling might not work
 
@@ -338,7 +339,7 @@ namespace Numinous.Engine {
                             return (OperationTypes.DIRECTIVE, Pragma);
 
                         case "include":
-                            var fp = string.Empty;
+                            string fp;
                             // demands <> :: We can take over from here
                             if (CheckDirectiveMalformed()) return default;
                             Step();
@@ -357,14 +358,12 @@ namespace Numinous.Engine {
                                 }
                                 
                                 // recurse now.
+                                Assemble([]);
+                                return (OperationTypes.DIRECTIVE, Directives.INCLUDE);
                             } else if (ActiveToken[0] == '\"') { // local func: get from src
-                                fp = LocalGetPathFromContext();
-                                if (fp == string.Empty) {
-                                    // error malformed path
-                                    return default;
-                                }
                                 
-                                // recurse now.
+                                // recurse once path has been evaluated.
+                                return (OperationTypes.DIRECTIVE, Directives.LOCAL_INCLUDE);
                             } else if (ActiveToken == "bin") {
                                 if (CheckLineTerminated()) {
                                     // error, malformed directive
@@ -389,15 +388,9 @@ namespace Numinous.Engine {
                                     
                                     return (OperationTypes.DIRECTIVE, Directives.INCLUDEBIN);
                                 } else if (ActiveToken[0] == '\"') { // local func: get from src as bin
-                                    fp = LocalGetPathFromContext();
-                                    if (fp == string.Empty) {
-                                        // error malformed path
-                                        return default;
-                                    }
-    
-                                    // write contents to ROM immediately
+                                    // write contents to ROM once string resolved (fstring support)
                                     
-                                    return (OperationTypes.DIRECTIVE, Directives.INCLUDEBIN);
+                                    return (OperationTypes.DIRECTIVE, Directives.LOCAL_INCLUDEBIN);
                                 } else {
                                     // error: malformed include path
                                     return default;
@@ -545,17 +538,6 @@ namespace Numinous.Engine {
                     } fp += ActiveToken;
 
                     return InitialCharacterCount == 0 ? fp : "";
-                }
-                
-                // TODO: Support String Escapes so linux can have '"' in its file names.
-                string LocalGetPathFromContext() {
-                    var fp = string.Empty;
-
-                    for (; !CheckLineTerminated(); Step(), fp += ActiveToken) {
-                        if (ActiveToken[0] == '\"')  return fp + ActiveToken;
-                    }
-
-                    return "";
                 }
                 
                 bool CheckDirectiveMalformed() {

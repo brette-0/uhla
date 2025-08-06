@@ -8,7 +8,8 @@ namespace Numinous {
         internal static partial class Engine {
 
             [Flags]
-            internal enum Directives : byte {
+            internal enum 
+                Directives : byte {
                 PUSH_ILLEGAL,
                 POP_ILLEGAL,
 
@@ -22,7 +23,9 @@ namespace Numinous {
                 POP_MEM,
                 
                 INCLUDE,
+                LOCAL_INCLUDE,
                 INCLUDEBIN,
+                LOCAL_INCLUDEBIN,
                 
                 ASSERT,
                 
