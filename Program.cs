@@ -50,13 +50,11 @@ internal static class Program {
         // this is the only way via asm to directly refer to rs. Useful for when you use a 'as' level keyword but desires rs resolve.
         LabelDataBase["rs"] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
             {"",        (LabelDataBase, default, AccessLevels.PRIVATE)},
-            {"parent",  (LabelDataBase, AssembleTimeTypes.CSCOPE, AccessLevels.PRIVATE)}
         }, AssembleTimeTypes.CSCOPE, AccessLevels.PUBLIC);
 
         // make language a compiler variable
         LabelDataBase["lang"]   = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
             {"",        ($"\"{ActiveLanguage}\"", default, AccessLevels.PRIVATE)},
-            {"parent",  (LabelDataBase, AssembleTimeTypes.CSCOPE, AccessLevels.PRIVATE)}
         }, AssembleTimeTypes.CSTRING, AccessLevels.PUBLIC);
 
         LabelDataBase["a"] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {

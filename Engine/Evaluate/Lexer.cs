@@ -1,4 +1,5 @@
 ﻿using System.Security.AccessControl;
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 
 // immediate illegal overruling might not work
@@ -265,16 +266,16 @@ namespace Numinous.Engine {
                 } else ActiveToken = BasicRegexTokens.Span[i++];
             }
 
-            void Steps(Func<bool> seekPredicate, bool skip = false) {
+            void Steps(Func<bool> seekPredicate, bool skip = false, bool regexParse = true) {
                 if (skip) {
                     do {
-                        Step();
+                        Step(regexParse);
                     } while (seekPredicate());
                     return;
                 }
 
                 while (seekPredicate()) {
-                    Step();
+                    Step(regexParse);
                 }
             }
 
@@ -463,9 +464,134 @@ namespace Numinous.Engine {
                             }
 
                         case "define":
-                        // well take over here
-                        // define exp ctx
-                        // define exp(arg, arg) ctx-arg-arg
+                            if (CheckDirectiveMalformed()) return default;
+                            Step();
+                            if (CheckDirectiveMalformed() || ActiveToken[0] != ' ') return default;
+                            Step();
+                            var define_id = ActiveToken;
+                            
+                            // check if reserved, operator, multiple tokens or an existing identity : fail if so
+                            if (CheckLineTerminated()) {
+                                // ctx of define will be literally nothingness. This is ok.
+                                // add to db
+
+                                return (OperationTypes.DIRECTIVE, Directives.DEFINE);
+                            }
+
+                            seek_no_whitespace();
+                            if (CheckLineTerminated()) {
+                                // ctx of define will be literally nothingness. This is ok.
+                                // add to db
+
+                                return (OperationTypes.DIRECTIVE, Directives.DEFINE);
+                            }
+                            
+                            
+                            // if it's a foo(x, y) y, x situation we will mark as it as a FUNCDEFINE
+                            // that just means gather operands to use for an fstring, instead of a string for CEXP result 
+                            // recurse lexer???
+                            if (ActiveToken[0] == '(') {
+                                // gather and match param names to ids
+                                List<string> ParameterMapping = [];
+                                List<string> DefineContext = [];
+
+                                do {
+                                    seek_no_whitespace(regexParse: false);
+                                    if (CheckLineTerminated()) {
+                                        // error, malformed define
+                                        return default;
+                                    }
+
+                                    if (ParameterMapping.Contains(ActiveToken)) {
+                                        // error, duplicate declared parameter
+                                        return default;
+                                    }
+
+                                    // if ActiveToken is operator, keyword, identity ... fail
+                                    if (Reserved.Contains(ActiveToken)) {
+                                        // error, token is reserved
+                                        return default;
+                                    }
+                                   
+                                    (_, success) = GetObjectFromAlias(ActiveToken, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
+                                    if (success) {
+                                        // parameter already has a definition : cannot be used
+                                        return default;
+                                    }
+
+                                    ParameterMapping.Add(ActiveToken);
+                                    seek_no_whitespace(regexParse: false);
+                                    if (ActiveToken[0] == ',') continue;
+                                    if (ActiveToken[0] == ')') break;
+                                    
+                                    // error malformed: no comma or close bracket
+                                    return default;
+                                } while(true);
+                                
+                                seek_no_whitespace();
+                                for (; !CheckLineTerminated(); Step(false)) {
+                                    DefineContext.Add(ActiveToken);
+                                }
+                                
+                                if (ActiveToken != "//" || ActiveToken != "/*") DefineContext.Add(ActiveToken);
+                                
+                                // create fexp header with param count
+                                Program.ActiveScopeBuffer[^1][define_id] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
+                                    {"args", (ParameterMapping.Count - 1, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)}
+                                }, AssembleTimeTypes.FEXP, AccessLevels.PUBLIC);
+                                
+                                #region     GENERATED_SEGMENT
+                                var expr = string.Join(" ", DefineContext);
+
+                                // Replace tokens matching parameters with {param} placeholders
+                                foreach (var param in ParameterMapping)
+                                    expr = Regex.Replace(expr, $@"\b{Regex.Escape(param)}\b", $"{{{param}}}");
+
+                                var define_obj = (Dictionary<string, (object Database, AssembleTimeTypes type, AccessControlSections access)>)Program.ActiveScopeBuffer[^1][define_id].data;
+                                define_obj[""] =  ((object)new Func<List<string>, string>(args => {
+                                    var map = ParameterMapping
+                                        .Zip<string, string, (string k, string v)>(args, (k, v) => (k, v))
+                                        .ToDictionary(p => p.k, p => p.v);
+                                    return Interpolate(expr, map);
+                                }), default, default);
+                                
+                                #endregion  GENERATED_SEGMENT
+                                // generate fstring lambda.
+                                // return FUNCDEFINE
+
+                                return (OperationTypes.DIRECTIVE, Directives.FUNCDEFINE);
+                                
+                                // GENERATED FUNCTION
+                                static string Interpolate(string format, Dictionary<string, string> map) {
+                                    foreach (var (key, val) in map)
+                                        format = format.Replace($"{{{key}}}", val);
+                                    return format;
+                                }
+                            }
+
+                            
+                            var define_ctx = string.Empty;
+                            
+                            /*while (DefineResolveBuffer.Count > 0) {
+                                Step();
+                                define_ctx += ActiveToken[0];
+                            }*/
+
+                            // gather until ctx exhausted, that's our define. Add as DEFINE and return as DEFINE
+                            while (DefineResolveBuffer.Count > 0 || CheckLineTerminated()) {
+                                Step(false);
+                                define_ctx += ActiveToken[0];
+                            }
+                            
+                            // this will allow comments are defines, not being included in them!
+                            if (ActiveToken != "//" || ActiveToken != "/*") define_ctx += ActiveToken;
+
+                            Program.ActiveScopeBuffer[^1][define_id] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
+                                {"", (define_ctx, default, default)}
+                            }, AssembleTimeTypes.CEXP, AccessLevels.PUBLIC);
+                            
+                            
+                            return default;
                         
                         case "undefine":
                             if (CheckDirectiveMalformed()) return default;
@@ -1243,7 +1369,7 @@ namespace Numinous.Engine {
                 bool CheckLineTerminated() => (i == BasicRegexTokens.Length && DefineResolveBuffer.Count == 0) || ActiveToken[0] == ';' || ActiveToken[0] == '\n' || ActiveToken == "//" || ActiveToken == "/*";
 
                 // keep seeking beyond whitespace
-                void seek_no_whitespace(bool skip = false) => Steps(() => !CheckLineTerminated() && (ActiveToken[0] == ' ' || ActiveToken[0] == '\t'), skip);
+                void seek_no_whitespace(bool skip = false, bool regexParse = true) => Steps(() => !CheckLineTerminated() && (ActiveToken[0] == ' ' || ActiveToken[0] == '\t'), skip, regexParse);
 
                 #endregion      OperationExtract Local Functions
             }

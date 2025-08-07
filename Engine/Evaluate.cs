@@ -33,6 +33,7 @@ namespace Numinous {
                 DISK,
                 
                 DEFINE,
+                FUNCDEFINE,
                 UNDEFINE,
                 
                 ROM,

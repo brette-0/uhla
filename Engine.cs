@@ -357,6 +357,7 @@ namespace Numinous {
             CINTER,     // Constant interrupt reference
             CBANK,      // Constant bank reference
             CEXP,       // Constant Expression
+            FEXP,       // Functional Expression
 
             IRWN,       // Indexing Register with N             foo[i + 2] situations
             ICRWN,      // Indexing Constant Register with N    foo[x + 2] situations
@@ -439,6 +440,8 @@ namespace Numinous {
 
                     // Split into segments to check each component
                     string[] parts = path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    if (string.IsNullOrWhiteSpace(parts[0])) return false;
+                    
                     foreach (var part in parts)
                     {
                         if (string.IsNullOrWhiteSpace(part)) continue;
