@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
-
+using Numinous.Language;
 using Tomlyn;
 
 namespace Numinous {
@@ -439,8 +439,13 @@ namespace Numinous {
 
 
             internal static (string filepath, bool success) CheckInclude(string target) {
-                foreach (string search in Program.SourceFileSearchPaths) {
-                    string fullPath = Path.Combine(AppContext.BaseDirectory, search, target);
+                foreach (var search in Program.SourceFileSearchPaths) {
+                    #if DEBUG
+                        var fullPath = Path.Combine(Environment.CurrentDirectory, search, target);
+                    #else
+                        var fullPath = Path.Combine(AppContext.BaseDirectory, search, target);
+                    #endif
+                    
                     if (File.Exists(fullPath)) {
                         return (fullPath, true);
                     }
@@ -587,6 +592,9 @@ namespace Numinous {
                     var Response = Responses.Proceed;
                     Program.WarningLevel = WarningLevels.NONE;
 
+                    var LoadedConfig = false;
+                    var CWDSet = false;
+
                     for (var i = 0; i < args.Length; i++) {
                         StringIndex += args[i].Length;
 
@@ -594,34 +602,75 @@ namespace Numinous {
                             case "-i":
                             case "--input":
                                 if (i == args.Length - 1) {
+                                    if (!LoadedConfig) LoadConfig();
                                     Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Input Path Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                                     return default;
-                                } else if (InputPath.Length > 0) {
+                                }  
+                                
+                                if (InputPath.Length > 0) {
+                                    if (!LoadedConfig) LoadConfig();
                                     Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Input Source File Path has already been specified")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                                     return default;
-                                } else {
-                                    InputPath = args[++i];
                                 }
+                                
+                                InputPath = args[++i];
                                 break;
 
                             case "-o":
                             case "--output":
                                 if (i == args.Length - 1) {
+                                    if (!LoadedConfig) LoadConfig();
                                     Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Output Path Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                                     return default;
-                                } else if (OutputPath.Length > 0) {
+                                }  
+                                
+                                if (OutputPath.Length > 0) {
+                                    if (!LoadedConfig) LoadConfig();
                                     Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Output Binary File Path has already been specified")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                                     return default;
                                 }
                                 OutputPath = args[++i];
                                 break;
 
+                            case "-d":
+                            case "--directory":
+                                if (i == args.Length - 1) {
+                                    if (!LoadedConfig) LoadConfig();
+                                    // error: no cwd provided
+                                    return default;
+                                }
+
+                                if (CWDSet) {
+                                    if (!LoadedConfig) LoadConfig();
+                                    // error: cwd already set
+                                    return default;
+                                }
+                                
+                                Environment.CurrentDirectory = args[++i];
+                                break;
+                            
+                            case "-c":
+                            case "--config":
+                                if (i == args.Length - 1) {
+                                    // error: no path for config
+                                    return default;
+                                }
+                                
+                                LoadedConfig = LoadConfig(args[++i]);
+                                if (!LoadedConfig) {
+                                    // error passback
+                                    return default;
+                                }
+                                break;
+                            
                             case "-w":
                             case "--warning":
                                 if (i == args.Length - 1) {
+                                    if (!LoadedConfig) LoadConfig();
                                     // error, no warning description detected
                                     return default;
                                 } else if (Program.WarningLevel != WarningLevels.NONE) {
+                                    if (!LoadedConfig) LoadConfig();
                                     // error, already described warning level
                                     return default;
                                 }
@@ -638,6 +687,7 @@ namespace Numinous {
                                 };
 
                                 if (Program.WarningLevel == WarningLevels.NONE) {
+                                    if (!LoadedConfig) LoadConfig();
                                     // error : unrecognized warning level 
                                     return default;
                                 }
@@ -645,6 +695,7 @@ namespace Numinous {
 
                             case "-h":
                             case "--help":
+                                if (!LoadedConfig) LoadConfig();
                                 Response = Responses.Terminate_Success;
 
                                 if (i == args.Length - 1) {
@@ -659,6 +710,8 @@ Numinous 2a03 - GPL V2 Brette Allen 2026
 -h | --help         | [arg]     | TODO: WRITE "GET INFO ON SPECIFIC ARGUMENT FUNCTION" HERE
 -l | --language     | [lang]    | {(Language.Language.Connectives[(Program.ActiveLanguage, "Choose a language to use")])}
 -w | --warning      | [level]   | TODO: Write "SET WARNING LEVEL" HERE
+-d | --directory    | [path]    | TODO: Write "SET CWD" HERE
+-c | --config       | [path]    | TODO: Write "CONFIG FETCH" HERE
        
 """, -1, default, null, null);
                                 } else {
@@ -750,6 +803,7 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                             case "-l":
                             case "--language":
                                 if (i == args.Length - 1) {
+                                    if (!LoadedConfig) LoadConfig();
                                     Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Language Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                                     return default;
                                 }
@@ -781,28 +835,36 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                                 };
 
                                 if (Program.ActiveLanguage == Language.Languages.Null) {
+                                    if (!LoadedConfig) LoadConfig();
                                     Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Invalid Language Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                                     return default;
                                 }
                                 break;
 
                             default:
+                                if (!LoadedConfig) LoadConfig();
                                 Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Unrecognized Terminal Argument")])}.", -1, default, ApplyWiggle(Flattened, 1 + StringIndex, args[i].Length), null);
                                 return default;
                         }
                     }
 
-                    return LoadConfig() ? (InputPath, OutputPath, Response) : default;
+                    if (!LoadedConfig) LoadConfig();
+                    return LoadedConfig ? (InputPath, OutputPath, Response) : default;
 
-                    static bool LoadConfig() {
-                        if (!File.Exists($"{AppContext.BaseDirectory}/Numinous.toml")) {
-                            File.WriteAllText($"{AppContext.BaseDirectory}/Numinous.toml", """
+                    static bool LoadConfig(string? path = null) {
+                        #if DEBUG
+                        path ??= Environment.CurrentDirectory;
+                        #else
+                        path ??= AppContext.BaseDirectory;
+                        #endif
+                        if (!File.Exists($"{path}/Numinous.toml")) {
+                            File.WriteAllText($"{path}/Numinous.toml", """
 [Defaults]
 DefaultLanguage             = "System"
 DefaultWarningLevel         = "Default"
 
 [Paths]
-LibraryIncludePaths         = ["./libs"]
+LibraryIncludePaths         = ["./lib"]
 """);
                         }
 

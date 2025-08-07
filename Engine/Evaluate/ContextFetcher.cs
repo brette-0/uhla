@@ -351,14 +351,28 @@ namespace Numinous.Engine {
 
                             Step();
                             if (ActiveToken[0] == '<') {        // local func: get from lib
+                                if (CheckLineTerminated()) {
+                                    // error: malformed
+                                    return default;
+                                }
+
+                                Step();
                                 fp = LibGetPathFromContext();
                                 if (fp == string.Empty) {
                                     // error malformed path
                                     return default;
                                 }
-                                
+
+                                (fp, success) = CheckInclude(fp);
+                                if (!success) {
+                                    // error: library not found
+                                    return default;
+                                }
+
                                 // recurse now.
+                                AddSourceContext(fp);
                                 Assemble([]);
+                                
                                 return (OperationTypes.DIRECTIVE, Directives.INCLUDE);
                             } else if (ActiveToken[0] == '\"') { // local func: get from src
                                 
@@ -378,6 +392,12 @@ namespace Numinous.Engine {
 
                                 Step();
                                 if (ActiveToken[0] == '<') { // local func: get from lib as bin
+                                    if (CheckLineTerminated()) {
+                                        // error: malformed
+                                        return default;
+                                    }
+
+                                    Step();
                                     fp = LibGetPathFromContext();
                                     if (fp == string.Empty) {
                                         // error malformed path
@@ -518,7 +538,7 @@ namespace Numinous.Engine {
 
                 string LibGetPathFromContext() {
                     var fp = string.Empty;
-                    var InitialCharacterCount = 1u;
+                    var InitialCharacterCount = 0u;
 
                     for (; !CheckLineTerminated(); Step()) {
                         fp += ActiveToken;
@@ -535,9 +555,13 @@ namespace Numinous.Engine {
                         }
                         
                         break;
-                    } fp += ActiveToken;
+                    }
 
-                    return InitialCharacterCount == 0 ? fp : "";
+                    if (ActiveToken[0] != '>') {
+                        return string.Empty;
+                    } else {
+                        return InitialCharacterCount == 0 ? fp : string.Empty;   
+                    }
                 }
                 
                 bool CheckDirectiveMalformed() {

@@ -3,7 +3,7 @@
   "profiles": {
     "Numinous": {
       "commandName": "Project",
-      "commandLineArgs": "-i ./Test/main.s -o /Test/cart.nes",
+      "commandLineArgs": "-i ./Test/main.s -o /Test/cart.nes -d C:\\Users\\Administrator\\Documents\\GitHub\\Tataru\\Tataru",
       "workingDirectory": "C:\\Users\\Administrator\\Documents\\GitHub\\Tataru\\Tataru"
     }
   }
