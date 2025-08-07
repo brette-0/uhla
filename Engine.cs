@@ -715,8 +715,11 @@ Numinous 2a03 - GPL V2 Brette Allen 2026
        
 """, -1, default, null, null);
                                 } else {
+                                    // TODO: Add support for all new arguments
                                     switch (args[++i]) {
-                                        default: --i; break;
+                                        default: 
+                                            // error: cannot help with this : unrecognized context
+                                            return default;
 
                                         case "l":
                                         case "lang":
