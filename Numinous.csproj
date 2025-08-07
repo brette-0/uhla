@@ -23,4 +23,31 @@
     <Folder Include="Test\" />
   </ItemGroup>
 
+<!-- Windows -->
+<PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-x86'">
+  <DefineConstants>WINDOWS;ARCH_X86</DefineConstants>
+</PropertyGroup>
+<PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+  <DefineConstants>WINDOWS;ARCH_X64</DefineConstants>
+</PropertyGroup>
+<PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-arm64'">
+  <DefineConstants>WINDOWS;ARCH_ARM64</DefineConstants>
+</PropertyGroup>
+
+<!-- Linux -->
+<PropertyGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
+  <DefineConstants>LINUX;ARCH_X64</DefineConstants>
+</PropertyGroup>
+<PropertyGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm64'">
+  <DefineConstants>LINUX;ARCH_ARM64</DefineConstants>
+</PropertyGroup>
+
+<!-- macOS -->
+<PropertyGroup Condition="'$(RuntimeIdentifier)' == 'osx-x64'">
+  <DefineConstants>OSX;ARCH_X64</DefineConstants>
+</PropertyGroup>
+<PropertyGroup Condition="'$(RuntimeIdentifier)' == 'osx-arm64'">
+  <DefineConstants>OSX;ARCH_ARM64</DefineConstants>
+</PropertyGroup>
+
 </Project>

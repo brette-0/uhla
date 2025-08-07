@@ -362,7 +362,13 @@ namespace Numinous.Engine {
                                     // error malformed path
                                     return default;
                                 }
-
+                                
+                                success = TryNormalizeSafePath($"{fp}.s", out fp);
+                                if (!success) {
+                                    // error: malformed path    :: Must be mac/linux/windows compatible
+                                    return default;
+                                }
+                                
                                 (fp, success) = CheckInclude(fp);
                                 if (!success) {
                                     // error: library not found
@@ -401,6 +407,19 @@ namespace Numinous.Engine {
                                     fp = LibGetPathFromContext();
                                     if (fp == string.Empty) {
                                         // error malformed path
+                                        return default;
+                                    }
+                                    
+                                    // stdlib graphics do not use a filetype
+                                    success = Numinous.Engine.Engine.TryNormalizeSafePath(fp, out fp);
+                                    if (!success) {
+                                        // error: malformed path    :: Must be mac/linux/windows compatible
+                                        return default;
+                                    }
+                                
+                                    (fp, success) = CheckInclude(fp);
+                                    if (!success) {
+                                        // error: library not found
                                         return default;
                                     }
     
@@ -1047,19 +1066,6 @@ namespace Numinous.Engine {
                             }
 
                         case "in":
-                            switch (opcode[2]) {
-                                case 'n':
-                                case 'v':
-                                case 'z':
-                                    // error not an instruction
-                                    // tac   : cmp #$01 ?
-                                    return default;
-
-                                default:
-                                    if (CheckFormat(true)) return OperandDecorators.Found;
-                                    // error malformed instruction
-                                    return default;
-                            }
                         case "de":
                             switch (opcode[2]) {
                                 case 'n':
@@ -1068,7 +1074,6 @@ namespace Numinous.Engine {
                                     // error not an instruction
                                     // tac   : cmp #$01 ?
                                     return default;
-
 
                                 default:
                                     if (CheckFormat(true)) return OperandDecorators.Found;
@@ -1101,11 +1106,11 @@ namespace Numinous.Engine {
 
                                 case 't':
                                     if (opcode[1] == opcode[2]) {
-                                        // error error nothing to do not an instruction
+                                        // error nothing to do not an instruction
                                         return default;
                                     }
 
-                                    Func<char, bool> isFlag = (char c) => c switch { 'c' or 'n' or 'v' or 'z' => true, _ => default };
+                                    var isFlag = (char c) => c switch { 'c' or 'n' or 'v' or 'z' => true, _ => default };
 
                                     if (isFlag(opcode[1]) || isFlag(opcode[2])) {
                                         // error not an instruction

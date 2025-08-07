@@ -420,6 +420,53 @@ namespace Numinous {
 
         internal static partial class Engine {
             /// <summary>
+            /// GENERATED CODE : Attempts to normalize and validate a path as safe across Windows, macOS, and Linux.
+            /// Returns true if the path is valid and portable; false otherwise.
+            /// </summary>
+            internal static bool TryNormalizeSafePath(string input, out string normalized)
+            {
+                normalized = string.Empty;
+                if (string.IsNullOrWhiteSpace(input)) return false;
+
+                try
+                {
+                    string path = Path.GetFullPath(input.Trim());
+
+                    if (path.Length >= 240) return false;
+
+                    // Reject invalid path characters
+                    if (path.IndexOfAny(Path.GetInvalidPathChars()) != -1) return false;
+
+                    // Split into segments to check each component
+                    string[] parts = path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    foreach (var part in parts)
+                    {
+                        if (string.IsNullOrWhiteSpace(part)) continue;
+
+                        // Trim + reject bad chars
+                        string name = part.Trim();
+                        if (name.Length == 0) return false;
+                        if (name.IndexOfAny(Path.GetInvalidFileNameChars()) != -1) return false;
+
+                        // Disallow reserved Windows device names
+                        string upper = name.ToUpperInvariant();
+                        if (Regex.IsMatch(upper, @"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$"))
+                            return false;
+
+                        // No trailing dot or space
+                        if (name.EndsWith(" ") || name.EndsWith(".")) return false;
+                    }
+
+                    normalized = path;
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+            
+            /// <summary>
             /// GENERATED CODE : C# function to interpret a C-style escape sequence, removing IsHexDigit helper and relying on TryParse
             /// Processes a single C-style escape sequence starting at index 0 in the input string.
             /// Returns the interpreted result as a string and a success flag indicating whether the escape produced a different result.
@@ -515,14 +562,13 @@ namespace Numinous {
             internal static (string filepath, bool success) CheckInclude(string target) {
                 foreach (var search in Program.SourceFileSearchPaths) {
                     #if DEBUG
-                        var fullPath = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, search, $"{target}.s"));
+                        var fullPath = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, search, target));
                     #else
                         var fullPath = Path.Combine(AppContext.BaseDirectory, search, target);
                     #endif
                     
-                    if (File.Exists(fullPath)) {
-                        return (fullPath, true);
-                    }
+                    if (File.Exists(fullPath)) return (fullPath, true);
+                    
                 }
                 return default;
             }
