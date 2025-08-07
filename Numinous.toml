@@ -1,0 +1,6 @@
+[Defaults]
+DefaultLanguage             = "System"
+DefaultWarningLevel         = "Default"
+
+[Paths]
+LibraryIncludePaths         = ["./lib"]

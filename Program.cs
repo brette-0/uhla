@@ -95,7 +95,7 @@ internal static class Program {
         Span<int>           SourceFileStepBufferSpan    = CollectionsMarshal.AsSpan(SourceFileStepBuffer);
 
 
-        var CF_resp = ContextFetcher(RegexTokenizedSourceFileContentBuffer[^1].ToArray(), ref SourceTokenIndexSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
+        var CF_resp = Lexer(RegexTokenizedSourceFileContentBuffer[^1].ToArray(), ref SourceTokenIndexSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
 
         return 0;
     }

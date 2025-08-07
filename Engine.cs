@@ -419,6 +419,80 @@ namespace Numinous {
 
 
         internal static partial class Engine {
+            /// <summary>
+            /// GENERATED CODE : C# function to interpret a C-style escape sequence, removing IsHexDigit helper and relying on TryParse
+            /// Processes a single C-style escape sequence starting at index 0 in the input string.
+            /// Returns the interpreted result as a string and a success flag indicating whether the escape produced a different result.
+            /// </summary>
+            internal static (string ctx, bool success) InterpretEscape(string input) {
+                if (string.IsNullOrEmpty(input) || input[0] != '\\')
+                    return (input, false);
+
+                int i = 1;
+                if (i >= input.Length)
+                    return (input, false);
+
+                char c = input[i];
+                switch (c) {
+                    case 'n':  return ("\n", true);
+                    case 'r':  return ("\r", true);
+                    case 't':  return ("\t", true);
+                    case 'b':  return ("\b", true);
+                    case 'f':  return ("\f", true);
+                    case 'a':  return ("\a", true);
+                    case 'v':  return ("\v", true);
+                    case '\\': return ("\\", true);
+                    case '\'': return ("'", true);
+                    case '\"': return ("\"", true);
+                    case '?':  return ("?", true);
+
+                    case 'x': {
+                        int start = i + 1;
+                        int j = start;
+
+                        while (j < input.Length) {
+                            char ch = input[j];
+                            bool isHexChar = (ch >= '0' && ch <= '9') ||
+                                             (ch >= 'a' && ch <= 'f') ||
+                                             (ch >= 'A' && ch <= 'F');
+
+                            if (!isHexChar)
+                                break;
+                            j++;
+                        }
+
+                        if (j == start) return (input, false);
+
+                        string hex = input.Substring(start, j - start);
+                        if (int.TryParse(hex, global::System.Globalization.NumberStyles.HexNumber, null, out int value))
+                            return (((char)value).ToString(), true);
+
+                        return (input, false);
+                    }
+
+                    case >= '0' and <= '7': {
+                        int value = ParseOctal(input.AsSpan(i));
+                        return (((char)value).ToString(), true);
+                    }
+
+                    default:
+                        return (input, false);
+                }
+
+                static int ParseOctal(ReadOnlySpan<char> span)
+                {
+                    int value = 0, count = 0;
+                    while (count < 3 && count < span.Length)
+                    {
+                        char digit = span[count];
+                        if (digit < '0' || digit > '7') break;
+                        value = value * 8 + (digit - '0');
+                        count++;
+                    }
+                    return value;
+                }
+            }
+            
             internal static (object Return, AssembleTimeTypes Type, bool Success) Assemble(List<(object data, AssembleTimeTypes type)> args) {
 
                 Span<List<string>>  SourceFileContentBufferSpan = CollectionsMarshal.AsSpan(Program.RegexTokenizedSourceFileContentBuffer);
@@ -428,7 +502,7 @@ namespace Numinous {
                 Span<int>           SourceFileStepBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
 
 
-                var CF_resp = ContextFetcher(Program.RegexTokenizedSourceFileContentBuffer[^1].ToArray(), ref SourceSubstringBufferSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
+                var CF_resp = Lexer(Program.RegexTokenizedSourceFileContentBuffer[^1].ToArray(), ref SourceSubstringBufferSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
                 if (!CF_resp.Success) return default;
 
                 // if its to write to ROM, ... figure that out
@@ -441,7 +515,7 @@ namespace Numinous {
             internal static (string filepath, bool success) CheckInclude(string target) {
                 foreach (var search in Program.SourceFileSearchPaths) {
                     #if DEBUG
-                        var fullPath = Path.Combine(Environment.CurrentDirectory, search, target);
+                        var fullPath = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, search, $"{target}.s"));
                     #else
                         var fullPath = Path.Combine(AppContext.BaseDirectory, search, target);
                     #endif
@@ -647,6 +721,7 @@ namespace Numinous {
                                 }
                                 
                                 Environment.CurrentDirectory = args[++i];
+                                CWDSet = true;
                                 break;
                             
                             case "-c":
@@ -851,7 +926,7 @@ Numinous WILL overwrite a file existing with the same name at the output path if
                         }
                     }
 
-                    if (!LoadedConfig) LoadConfig();
+                    if (!LoadedConfig) LoadedConfig = LoadConfig();
                     return LoadedConfig ? (InputPath, OutputPath, Response) : default;
 
                     static bool LoadConfig(string? path = null) {
