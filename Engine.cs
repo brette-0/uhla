@@ -420,6 +420,55 @@ namespace Numinous {
 
 
         internal static partial class Engine {
+
+            // Generated Function
+            internal static object GenerateFunctionalDefine(string Context, List<string> ParameterMapping) {
+                foreach (var param in ParameterMapping)
+                    Context = Regex.Replace(Context, $@"\b{Regex.Escape(param)}\b", $"{{{param}}}");
+
+                
+                return new Func<List<string>, string>(args =>
+                {
+                    var map = ParameterMapping
+                        .Zip(args, (k, v) => (k, v))
+                        .ToDictionary(p => p.k, p => p.v);
+
+                    return ProcessDefineOperators(Interpolate(Context, map), map);
+                });
+                
+                // GENERATED FUNCTION
+                static string ProcessDefineOperators(string input, Dictionary<string, string> map) {
+                    // Step 1: Handle token-pasting (##)
+                    input = Regex.Replace(input, @"\b([A-Za-z_][A-Za-z0-9_]*)\s*##\s*([A-Za-z_][A-Za-z0-9_]*)", match =>
+                    {
+                        var left = match.Groups[1].Value;
+                        var right = match.Groups[2].Value;
+
+                        var leftVal = map.GetValueOrDefault(left, left);
+                        var rightVal = map.GetValueOrDefault(right, right);
+
+                        return leftVal + rightVal;
+                    });
+
+                    // Step 2: Handle stringification (#)
+                    input = Regex.Replace(input, @"#([A-Za-z_][A-Za-z0-9_]*)", match =>
+                    {
+                        var macro = match.Groups[1].Value;
+                        var val = map.GetValueOrDefault(macro, macro);
+                        return $"\"{val}\"";
+                    });
+
+                    return input;
+                }
+                                
+                // GENERATED FUNCTION
+                static string Interpolate(string format, Dictionary<string, string> map) {
+                    foreach (var (key, val) in map)
+                        format = format.Replace($"{{{key}}}", val);
+                    return format;
+                }
+            }
+            
             /// <summary>
             /// GENERATED CODE : Attempts to normalize and validate a path as safe across Windows, macOS, and Linux.
             /// Returns true if the path is valid and portable; false otherwise.

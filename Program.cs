@@ -72,6 +72,12 @@ internal static class Program {
             {"indexing", (0, AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
         }, AssembleTimeTypes.CREG, AccessLevels.PUBLIC);
 
+        LabelDataBase["ToString"] = (
+            new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
+                {"args", (1, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
+                {"", (GenerateFunctionalDefine("# args", ["args"]), default, default)}
+            }, AssembleTimeTypes.FEXP , AccessLevels.PUBLIC);
+        
         // Functions are just lambdas, 0 refers to arg 0, and so on. They are of type Function  returns type of type type
         // The 'self' containing the lambda's type is the return type
         LabelDataBase["typeof"] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {

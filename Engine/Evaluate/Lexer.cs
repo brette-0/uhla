@@ -1,8 +1,5 @@
 ﻿using System.Security.AccessControl;
 using System.Text.RegularExpressions;
-using Microsoft.CodeAnalysis;
-
-// immediate illegal overruling might not work
 
 namespace Numinous.Engine {
     internal static partial class Engine {
@@ -412,7 +409,7 @@ namespace Numinous.Engine {
                                     }
                                     
                                     // stdlib graphics do not use a filetype
-                                    success = Numinous.Engine.Engine.TryNormalizeSafePath(fp, out fp);
+                                    success = TryNormalizeSafePath(fp, out fp);
                                     if (!success) {
                                         // error: malformed path    :: Must be mac/linux/windows compatible
                                         return default;
@@ -469,6 +466,7 @@ namespace Numinous.Engine {
                             if (CheckDirectiveMalformed() || ActiveToken[0] != ' ') return default;
                             Step();
                             var define_id = ActiveToken;
+                            var define_ctx = string.Empty;
                             
                             // check if reserved, operator, multiple tokens or an existing identity : fail if so
                             if (CheckLineTerminated()) {
@@ -493,7 +491,6 @@ namespace Numinous.Engine {
                             if (ActiveToken[0] == '(') {
                                 // gather and match param names to ids
                                 List<string> ParameterMapping = [];
-                                List<string> DefineContext = [];
 
                                 do {
                                     seek_no_whitespace(regexParse: false);
@@ -530,47 +527,24 @@ namespace Numinous.Engine {
                                 
                                 seek_no_whitespace();
                                 for (; !CheckLineTerminated(); Step(false)) {
-                                    DefineContext.Add(ActiveToken);
+                                    if (ActiveToken == define_id) {
+                                        // error, define is explicitly recursive
+                                        return default;
+                                    }
+                                    define_ctx  += ActiveToken;
                                 }
                                 
-                                if (ActiveToken != "//" || ActiveToken != "/*") DefineContext.Add(ActiveToken);
+                                if (ActiveToken != "//" || ActiveToken != "/*") define_ctx  += ActiveToken;
                                 
                                 // create fexp header with param count
                                 Program.ActiveScopeBuffer[^1][define_id] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
-                                    {"args", (ParameterMapping.Count - 1, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)}
+                                    {"args", (ParameterMapping.Count, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
+                                    {"", (GenerateFunctionalDefine(define_ctx, ParameterMapping), default, default)}
                                 }, AssembleTimeTypes.FEXP, AccessLevels.PUBLIC);
-                                
-                                #region     GENERATED_SEGMENT
-                                var expr = string.Join(" ", DefineContext);
-
-                                // Replace tokens matching parameters with {param} placeholders
-                                foreach (var param in ParameterMapping)
-                                    expr = Regex.Replace(expr, $@"\b{Regex.Escape(param)}\b", $"{{{param}}}");
-
-                                var define_obj = (Dictionary<string, (object Database, AssembleTimeTypes type, AccessControlSections access)>)Program.ActiveScopeBuffer[^1][define_id].data;
-                                define_obj[""] =  ((object)new Func<List<string>, string>(args => {
-                                    var map = ParameterMapping
-                                        .Zip<string, string, (string k, string v)>(args, (k, v) => (k, v))
-                                        .ToDictionary(p => p.k, p => p.v);
-                                    return Interpolate(expr, map);
-                                }), default, default);
-                                
-                                #endregion  GENERATED_SEGMENT
-                                // generate fstring lambda.
-                                // return FUNCDEFINE
 
                                 return (OperationTypes.DIRECTIVE, Directives.FUNCDEFINE);
-                                
-                                // GENERATED FUNCTION
-                                static string Interpolate(string format, Dictionary<string, string> map) {
-                                    foreach (var (key, val) in map)
-                                        format = format.Replace($"{{{key}}}", val);
-                                    return format;
-                                }
                             }
 
-                            
-                            var define_ctx = string.Empty;
                             
                             /*while (DefineResolveBuffer.Count > 0) {
                                 Step();
