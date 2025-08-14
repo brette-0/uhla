@@ -420,53 +420,102 @@ namespace Numinous {
 
 
         internal static partial class Engine {
-
             // Generated Function
             internal static object GenerateFunctionalDefine(string Context, List<string> ParameterMapping) {
                 foreach (var param in ParameterMapping)
                     Context = Regex.Replace(Context, $@"\b{Regex.Escape(param)}\b", $"{{{param}}}");
 
                 
-                return new Func<List<string>, string>(args =>
-                {
-                    var map = ParameterMapping
-                        .Zip(args, (k, v) => (k, v))
-                        .ToDictionary(p => p.k, p => p.v);
+                return new Func<
+                    List<(string token, int StringIndex, int StringLength)>, 
+                    int, 
+                    int, 
+                    List<(string token, int StringIndex, int StringLength)>
+                >(
+                  (args, fallbackIndex, fallbackLength) => {
+                      // Map param name → tuple
+                      var map = ParameterMapping
+                         .Zip(args, (k, v) => (k, v))
+                         .ToDictionary(p => p.k, p => p.v);
 
-                    return ProcessDefineOperators(Interpolate(Context, map), map);
-                });
+                      // Interpolate into tuple list (no flattening to string)
+                      var tokens = Interpolate(Context, map);
+
+                      // Apply macro operators on tuple list
+                      return ProcessDefineOperators(tokens, map, fallbackIndex, fallbackLength);
+                  }
+                 );
                 
-                // GENERATED FUNCTION
-                static string ProcessDefineOperators(string input, Dictionary<string, string> map) {
-                    // Step 1: Handle token-pasting (##)
-                    input = Regex.Replace(input, @"\b([A-Za-z_][A-Za-z0-9_]*)\s*##\s*([A-Za-z_][A-Za-z0-9_]*)", match =>
-                    {
-                        var left = match.Groups[1].Value;
-                        var right = match.Groups[2].Value;
+                static List<(string token, int StringIndex, int StringLength)> Interpolate(string format, Dictionary<string, (string token, int StringIndex, int StringLength)> map)  {
+                    var result = new List<(string, int, int)>();
+                    var regex = new Regex(@"\{([A-Za-z_][A-Za-z0-9_]*)\}");
 
-                        var leftVal = map.GetValueOrDefault(left, left);
-                        var rightVal = map.GetValueOrDefault(right, right);
+                    int lastPos = 0;
+                    foreach (Match match in regex.Matches(format)) {
+                        // Add literal text before placeholder (treated as its own token with fallback index)
+                        if (match.Index > lastPos) {
+                            string literal = format.Substring(lastPos, match.Index - lastPos);
+                            result.Add((literal, -1, literal.Length)); // literal with no source index
+                        }
 
-                        return leftVal + rightVal;
-                    });
+                        // Add parameter replacement
+                        var key = match.Groups[1].Value;
+                        if (map.TryGetValue(key, out var tuple))
+                            result.Add(tuple);
+                        else
+                            result.Add(($"{{{key}}}", -1, key.Length + 2)); // missing param
 
-                    // Step 2: Handle stringification (#)
-                    input = Regex.Replace(input, @"#([A-Za-z_][A-Za-z0-9_]*)", match =>
-                    {
-                        var macro = match.Groups[1].Value;
-                        var val = map.GetValueOrDefault(macro, macro);
-                        return $"\"{val}\"";
-                    });
+                        lastPos = match.Index + match.Length;
+                    }
 
-                    return input;
+                    // Add any trailing literal text
+                    if (lastPos < format.Length) {
+                        string literal = format.Substring(lastPos);
+                        result.Add((literal, -1, literal.Length));
+                    }
+
+                    return result;
                 }
-                                
-                // GENERATED FUNCTION
-                static string Interpolate(string format, Dictionary<string, string> map) {
-                    foreach (var (key, val) in map)
-                        format = format.Replace($"{{{key}}}", val);
-                    return format;
+
+                static List<(string token, int StringIndex, int StringLength)> ProcessDefineOperators(
+                    List<(string token, int StringIndex, int StringLength)> tokens,
+                    Dictionary<string, (string token, int StringIndex, int StringLength)> map,
+                    int fallbackIndex,
+                    int fallbackLength) {
+                    // Token-pasting (##)
+                    for (int i = 0; i < tokens.Count - 2; i++) {
+                        if (tokens[i + 1].token == "##") {
+                            var left = tokens[i];
+                            var right = tokens[i + 2];
+
+                            int idx = left.StringIndex >= 0 ? left.StringIndex :
+                                      right.StringIndex >= 0 ? right.StringIndex : fallbackIndex;
+                            int len = left.StringLength + right.StringLength;
+                            if (idx == fallbackIndex) len = fallbackLength;
+
+                            var merged = (left.token + right.token, idx, len);
+
+                            // Replace [left, ##, right] with merged
+                            tokens.RemoveAt(i);     // remove left
+                            tokens.RemoveAt(i);     // remove ##
+                            tokens[i] = merged;     // replace right with merged
+                            i--; // re-check in case of multiple pastes
+                        }
+                    }
+
+                    // Stringification (#)
+                    for (int i = 0; i < tokens.Count - 1; i++) {
+                        if (tokens[i].token == "#") {
+                            var param = tokens[i + 1];
+                            var quoted = ($"\"{param.token}\"", param.StringIndex, param.StringLength);
+                            tokens.RemoveAt(i); // remove #
+                            tokens[i] = quoted; // replace param with quoted version
+                        }
+                    }
+
+                    return tokens;
                 }
+
             }
             
             /// <summary>
@@ -719,34 +768,6 @@ namespace Numinous {
                 // Control
                 ";", ":", "#", "\\", "\"", "{", "}", "?", ">", "<", "!", ".", ","
             ];
-
-            /// <summary>
-            /// Should iteratively resolve defines for the token being handled, the return is not FULL resolution
-            /// it is fully resolved for the first term, following terms will need to be recomputed
-            /// </summary>
-            /// <param name="token"></param>
-            /// <returns></returns>
-            internal static (List<string> ctx, bool success) PartialResolveDefine(string token) {
-                
-
-                List<string> Resolved = [token];
-                (object data, AssembleTimeTypes type, AccessLevels access) ctx;
-                bool success;
-                bool had_success = false;
-
-                do {
-                    (ctx, success) = Database.GetObjectFromAlias(Resolved[0], AccessLevels.PUBLIC);
-
-                    if (success && ctx.type == AssembleTimeTypes.CEXP) {
-                        had_success = true;
-                        Resolved.RemoveAt(0);
-                        Resolved.InsertRange(0, RegexTokenize((string)((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)ctx.data)[""].data));
-                    }
-
-                } while (success && ctx.type == AssembleTimeTypes.CEXP);
-
-                return (Resolved, had_success);
-            }
 
             internal static class Terminal {
                 internal enum Responses : byte {

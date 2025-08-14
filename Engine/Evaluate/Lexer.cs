@@ -1,6 +1,17 @@
 ﻿using System.Security.AccessControl;
 using System.Text.RegularExpressions;
 
+/*  TODO: change lexer define processing to return if define was succesful, determines if tokenising yields a new si/sl
+         its imperative that a line such as '1 + lang' does not become reported as '1 + English_UK'
+         furthermore FEXP (functional defines) must report on their parameters not on the results -> garbelling possible
+          
+         it seems that any define may contain a semicolon and that is the extent that ctx will be reported?
+         So '#define foo(bar) bar;' may truncate something like 'foo(2) + 3' into a RODATA write and that's not a syntax error.
+
+    TODO: RegexTokenizedBuffer to store (ctx, index, length)
+          On error report, refer to RegexParsed[0].ctx, index, length etc...
+*/
+
 namespace Numinous.Engine {
     internal static partial class Engine {
         /// <summary>
@@ -20,7 +31,7 @@ namespace Numinous.Engine {
             List<(int StringOffset, int StringLength, object data, bool IsOperator)> TermTokens = [];
             List<Operators> ContainerBuffer = [];
 
-            List<string> DefineResolveBuffer = [];
+            List<(string token, int StringIndex, int StringLength)> DefineResolveBuffer = [];
 
             int LocalSourceTokenIndex = SourceTokenIndex, LocalErrorReportLineNumber = ErrorReportLineNumber, LocalErrorReportStepNumber = ErrorReportStepNumber;
 
@@ -35,25 +46,23 @@ namespace Numinous.Engine {
 
             Terminal.ErrorContext ErrorContext = new();
 
-            int i = 0, StringIndex = 0; string ActiveToken;
+            int i = 0, StringIndex = 0, StringLength = 0; (string ctx, int StringIndex, int StringLength) ActiveToken;
 
             Step();
 
             var OperationType = ExtractOperation();
 
-            
-            
             if (OperationType == default) return default;                                               // error pass back
             if (DoesNotRequireEvaluation((Directives)OperationType.ctx)) return Success();              // some directives do not use evaluation
 
             for (; DefineResolveBuffer.Count > 0 && i < BasicRegexTokens.Length; Step()) {
 
-                if (ActiveToken[0] == ' ' || ActiveToken[0] == '\t') continue;                          // do not tokenize whitespace
+                if (ActiveToken.ctx[0] == ' ' || ActiveToken.ctx[0] == '\t') continue;                          // do not tokenize whitespace
 
                 if (ContainerBuffer.Count != 0 && ContainerBuffer[^1] == Operators.FSTRING) {
                     CaptureCSTRING(c => c == '"' || c == '{');
-                    if (ActiveToken[0] != '{') {
-                        if (ActiveToken[0] == '"') {
+                    if (ActiveToken.ctx[0] != '{') {
+                        if (ActiveToken.ctx[0] == '"') {
                             if (CloseContainer(Operators.STRING, Operators.FSTRING)) continue;
                             else return default;
                         }
@@ -61,7 +70,7 @@ namespace Numinous.Engine {
                 }
 
                 // handle tokens
-                switch (ActiveToken) {
+                switch (ActiveToken.ctx) {
                     //case "\n":
                     //    // marks the end of this tasks ctx
                     //    //ErrorReportLineNumber++;
@@ -69,13 +78,13 @@ namespace Numinous.Engine {
 
                     case "//":
                         // marks the end of this tasks ctx
-                        Steps(() => ActiveToken[0] != '\n');
+                        Steps(() => ActiveToken.ctx[0] != '\n');
                         break;
 
                     case "/*":
                         // marks the end of this tasks ctx
-                        while (ActiveToken != "*/") {
-                            Steps(() => ActiveToken[0] != '\n' || ActiveToken != "*/");
+                        while (ActiveToken.ctx != "*/") {
+                            Steps(() => ActiveToken.ctx[0] != '\n' || ActiveToken.ctx != "*/");
                             ErrorReportLineNumber++;
                         }
                         Step();
@@ -97,7 +106,7 @@ namespace Numinous.Engine {
                                 Message         = "Unexpected end of command.",
                                 LineNumber      = ErrorReportLineNumber,
                                 StepNumber      = ErrorReportStepNumber,
-                                Context         = () => ApplyWiggle(CollectiveContext, StringIndex + 1, 1)
+                                Context         = () => ApplyWiggle(CollectiveContext, ActiveToken.StringIndex + 1, 1)
                             };
                         }
 
@@ -114,16 +123,16 @@ namespace Numinous.Engine {
                         //if (i == RegexTokens.Count - 1) {
                         //    if (Program.WarningLevel.HasFlag(WarningLevels.VERBOSE))
                         //        Terminal.Warn(ErrorTypes.SyntaxError, DecodingPhases.TOKEN,
-                        //            "Lines should not end with a semi-colon", ErrorReportLineNumber, Tokens.Count, ApplyWiggle(CollectiveContext, StringIndex + 1, 1)
+                        //            "Lines should not end with a semi-colon", ErrorReportLineNumber, Tokens.Count, ApplyWiggle(CollectiveContext, ActiveToken.StringIndex + 1, 1)
                         //        );
                         //    return Program.WarningLevel.HasFlag(WarningLevels.ERROR) ? default : Success();
                         //}
 
                         // modify regex tokens to remove used and stored
                         //RegexTokens = [.. RegexTokens.TakeLast(RegexTokens.Count - i - 1)]; // trim last step from pattern
-                        i = 0;
-                        CollectiveContext = CollectiveContext[(StringIndex + ActiveToken.Length)..];
-                        StringIndex = 0;
+                        i                 = 0;
+                        CollectiveContext = CollectiveContext[(ActiveToken.StringIndex + ActiveToken.StringLength)..];
+                        ActiveToken.StringIndex       = 0;
                         break;
 
                     case "+":   SimpleAddOperator(Operators.ADD);           break;
@@ -180,7 +189,7 @@ namespace Numinous.Engine {
                             return default;
                         } else {
                             // Early return, this is a code block. Do not context fetch this
-                            Finish = StringIndex;
+                            Finish = ActiveToken.StringIndex;
                             CopyDeltaTermTokens();
                             CopyDeltaTokens();
                             return Success();
@@ -207,8 +216,8 @@ namespace Numinous.Engine {
 
                     default:
                         TermTokens.Add((
-                            StringIndex,
-                            ActiveToken.Length,
+                            ActiveToken.StringIndex,
+                            ActiveToken.StringLength,
                             new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels)> {
                                     // private for now, but once its determined to be something then it will change accordingly
                                     { "self", (ActiveToken, AssembleTimeTypes.CEXP, AccessLevels.PRIVATE) },
@@ -235,24 +244,94 @@ namespace Numinous.Engine {
             Terminal.Error(ErrorTypes.SyntaxError, DecodingPhases.TOKEN, "Not enough context to satisfy request", ErrorReportLineNumber - 1, Tokens.Count, ApplyWiggle(CollectiveContext, CollectiveContext.Length - 1, 1), SourceFilePath);
             return default;
 
-            #region Context Fetcher Functions
+            #region Lexer Functions
+
+            /*
+             * Evalutes a token without context, returns an incomplete ErrorContext
+             */
+            Terminal.ErrorContext ComputeToken() {
+                return default;
+            }
+
+            void CheckProcessFunctionalDefines() {
+                // very object in DB
+                var FEXP_Queery = GetObjectFromAlias(ActiveToken.ctx, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
+                if (!FEXP_Queery.success || FEXP_Queery.ctx.type != AssembleTimeTypes.FEXP) return;
+
+                // fetch object from DB and capture arguments to invoke it
+                var FEXP_Obj = (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels accessLevel)>)FEXP_Queery.ctx.data;
+                var args_capture = CaptureFEXP((int)FEXP_Obj["args"].data);
+
+                // if capturing was unsuccessful, exit.
+                if (!args_capture.success) return;
+
+                // execute define
+                var FEXP_Lambda = (Func<List<(string token, int StringIndex, int StringLength)>, List<(string token, int StringIndex, int StringLength)>>)FEXP_Obj[""].data;
+                
+                // store processed result in Lexer buffer
+                DefineResolveBuffer.InsertRange(0, FEXP_Lambda(args_capture.args));
+            }
+            
+            (List<(string token, int StringIndex, int StringLength)> args, bool success) CaptureFEXP(int nArgs) {
+                // capture tokens 
+
+                var args = new List<(string ctx, int StringIndex, int StringLength)>();
+
+                if (nArgs == 0) {
+                    seek_no_whitespace();
+                    if (ActiveToken.ctx[0] == ')') return ([], true);
+                    // error : did not expect arguments
+                    return default;
+                }
+                
+                while (!CheckLineTerminated() && ActiveToken.ctx[0] != ')') {
+                    var token = string.Empty;
+
+                    for (; ActiveToken.ctx[0] != ',' || ActiveToken.ctx[0] == ')'; Step()) {
+                        token += ActiveToken;
+                    }
+
+                    args.Add((token, ActiveToken.StringIndex, token.Length));
+                    nArgs--;
+                }
+
+                if (nArgs > 0) {
+                    // error, unsatisfied arguments
+                    return default;
+                }
+
+                if (nArgs < 0) {
+                    // error, too many arguments
+                    return default;
+                }
+
+                if (CheckLineTerminated()) {
+                    // malformed FEXP call
+                    return default;
+                }
+
+                return (args, true);
+            }
+            
             (List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, (OperationTypes Type, object Context) Operation, int Finish, bool Success, bool Continue) Success() => (Tokens, MaxHierarchy, OperationType, Finish, true, false);
             
             void Step(bool regexParse = true) {
-                List<string> ctx;
+                List<(string token, int StringIndex, int StringLength)> ctx;
                 bool success;
 
                 if (DefineResolveBuffer.Count == 0) {                                                   // si to be mutated ONLY by typed tokens
                     CollectiveContext += BasicRegexTokens.Span[i];
-                    StringIndex += BasicRegexTokens.Span[i].Length;                     
+                    StringIndex += BasicRegexTokens.Span[i].Length;      
+                    StringLength = BasicRegexTokens.Span[i].Length;
                 }
 
                 if (regexParse) {
                     if (DefineResolveBuffer.Count == 0) {
-                        (ctx, success) = PartialResolveDefine(BasicRegexTokens.Span[i++]);
+                        (ctx, success)      = PartialResolveDefine(BasicRegexTokens.Span[i++]);
                         DefineResolveBuffer = ctx;
-                    } else {
-                        (ctx, success) = PartialResolveDefine(DefineResolveBuffer[0]);
+                    }
+                    else {
+                        (ctx, success) = PartialResolveDefine(DefineResolveBuffer[0].token);
                         DefineResolveBuffer.RemoveAt(0);
                         DefineResolveBuffer.InsertRange(0, ctx);
                     }
@@ -260,7 +339,8 @@ namespace Numinous.Engine {
                     if (success) Step();
                     ActiveToken = DefineResolveBuffer[0];
                     DefineResolveBuffer.RemoveAt(0);
-                } else ActiveToken = BasicRegexTokens.Span[i++];
+                }
+                else ActiveToken = (BasicRegexTokens.Span[i++], StringIndex, BasicRegexTokens.Span[i - 1].Length);
             }
 
             void Steps(Func<bool> seekPredicate, bool skip = false, bool regexParse = true) {
@@ -283,7 +363,7 @@ namespace Numinous.Engine {
 
             (OperationTypes oper, object ctx) ExtractOperation() {
                 object ctx; bool success;
-                if (ActiveToken[0] == '#') {
+                if (ActiveToken.ctx[0] == '#') {
                     if (DeltaTokens.Count > 0 || LocalErrorReportStepNumber > 0 || LastNonWhiteSpaceIndex != -1) {
                         // error, assembler directives must own the entire line. (stylistic enforcement? I'm not sure)
                         return default;
@@ -292,29 +372,29 @@ namespace Numinous.Engine {
                     Step(); if (CheckDirectiveMalformed()) return default;
                     
                     var Directive = ActiveToken;
-                    switch (Directive) {
+                    switch (Directive.ctx) {
                         case "pragma":
                             Step(); if (CheckDirectiveMalformed()) return default;
-                            if (ActiveToken[0] != ' ') {
+                            if (ActiveToken.ctx[0] != ' ') {
                                 // error, malformed pragma
                                 return default;
                             }
 
                             Step(); if (CheckDirectiveMalformed()) return default;
-                            var Modifier = ActiveToken switch { "push" => 0, "pop" => 1, _ => 0xff};
+                            var Modifier = ActiveToken.ctx switch { "push" => 0, "pop" => 1, _ => 0xff};
                             if (Modifier == 0xff) {
                                 // error, erroneous action for pragma
                                 return default;
                             }
                             
                             Step(); if (CheckDirectiveMalformed()) return default;
-                            if (ActiveToken[0] != ' ') {
+                            if (ActiveToken.ctx[0] != ' ') {
                                 // error, malformed pragma
                                 return default;
                             }
                             
                             Step(); if (CheckDirectiveMalformed()) return default;
-                            var Pragma = (Directives)(Modifier | (byte)(ActiveToken switch {
+                            var Pragma = (Directives)(Modifier | (byte)(ActiveToken.ctx switch {
                                 "memory_aware"  => Directives.PUSH_MEM,
                                 "gpr_aware"     => Directives.PUSH_GPR,
                                 "cpu_aware"     => Directives.PUSH_CPU,
@@ -329,7 +409,7 @@ namespace Numinous.Engine {
                             }
 
                             Step();
-                            if (ActiveToken[0] != ' ') {
+                            if (ActiveToken.ctx[0] != ' ') {
                                 // error malformed pragma
                                 return default;
                             }
@@ -342,13 +422,13 @@ namespace Numinous.Engine {
                             if (CheckDirectiveMalformed()) return default;
                             Step();
 
-                            if (ActiveToken[0] != ' ') {
+                            if (ActiveToken.ctx[0] != ' ') {
                                 // error: directive malformed
                                 return default;
                             }
 
                             Step();
-                            if (ActiveToken[0] == '<') {        // local func: get from lib
+                            if (ActiveToken.ctx[0] == '<') {        // local func: get from lib
                                 if (CheckLineTerminated()) {
                                     // error: malformed
                                     return default;
@@ -378,24 +458,24 @@ namespace Numinous.Engine {
                                 Assemble([]);
                                 
                                 return (OperationTypes.DIRECTIVE, Directives.INCLUDE);
-                            } else if (ActiveToken[0] == '\"') { // local func: get from src
+                            } else if (ActiveToken.ctx[0] == '\"') { // local func: get from src
                                 
                                 // recurse once path has been evaluated.
                                 return (OperationTypes.DIRECTIVE, Directives.LOCAL_INCLUDE);
-                            } else if (ActiveToken == "bin") {
+                            } else if (ActiveToken.ctx == "bin") {
                                 if (CheckLineTerminated()) {
                                     // error, malformed directive
                                     return default;
                                 }
 
                                 Step();
-                                if (CheckLineTerminated() || ActiveToken[0] != ' ') {
+                                if (CheckLineTerminated() || ActiveToken.ctx[0] != ' ') {
                                     // error, malformed directive
                                     return default;
                                 }
 
                                 Step();
-                                if (ActiveToken[0] == '<') { // local func: get from lib as bin
+                                if (ActiveToken.ctx[0] == '<') { // local func: get from lib as bin
                                     if (CheckLineTerminated()) {
                                         // error: malformed
                                         return default;
@@ -424,7 +504,7 @@ namespace Numinous.Engine {
                                     // write contents to ROM immediately
                                     
                                     return (OperationTypes.DIRECTIVE, Directives.INCLUDEBIN);
-                                } else if (ActiveToken[0] == '\"') { // local func: get from src as bin
+                                } else if (ActiveToken.ctx[0] == '\"') { // local func: get from src as bin
                                     // write contents to ROM once string resolved (fstring support)
                                     
                                     return (OperationTypes.DIRECTIVE, Directives.LOCAL_INCLUDEBIN);
@@ -463,7 +543,7 @@ namespace Numinous.Engine {
                         case "define":
                             if (CheckDirectiveMalformed()) return default;
                             Step();
-                            if (CheckDirectiveMalformed() || ActiveToken[0] != ' ') return default;
+                            if (CheckDirectiveMalformed() || ActiveToken.ctx[0] != ' ') return default;
                             Step();
                             var define_id = ActiveToken;
                             var define_ctx = string.Empty;
@@ -488,7 +568,7 @@ namespace Numinous.Engine {
                             // if it's a foo(x, y) y, x situation we will mark as it as a FUNCDEFINE
                             // that just means gather operands to use for an fstring, instead of a string for CEXP result 
                             // recurse lexer???
-                            if (ActiveToken[0] == '(') {
+                            if (ActiveToken.ctx[0] == '(') {
                                 // gather and match param names to ids
                                 List<string> ParameterMapping = [];
 
@@ -499,27 +579,27 @@ namespace Numinous.Engine {
                                         return default;
                                     }
 
-                                    if (ParameterMapping.Contains(ActiveToken)) {
+                                    if (ParameterMapping.Contains(ActiveToken.ctx)) {
                                         // error, duplicate declared parameter
                                         return default;
                                     }
 
                                     // if ActiveToken is operator, keyword, identity ... fail
-                                    if (Reserved.Contains(ActiveToken)) {
+                                    if (Reserved.Contains(ActiveToken.ctx)) {
                                         // error, token is reserved
                                         return default;
                                     }
                                    
-                                    (_, success) = GetObjectFromAlias(ActiveToken, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
+                                    (_, success) = GetObjectFromAlias(ActiveToken.ctx, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
                                     if (success) {
                                         // parameter already has a definition : cannot be used
                                         return default;
                                     }
 
-                                    ParameterMapping.Add(ActiveToken);
+                                    ParameterMapping.Add(ActiveToken.ctx);
                                     seek_no_whitespace(regexParse: false);
-                                    if (ActiveToken[0] == ',') continue;
-                                    if (ActiveToken[0] == ')') break;
+                                    if (ActiveToken.ctx[0] == ',') continue;
+                                    if (ActiveToken.ctx[0] == ')') break;
                                     
                                     // error malformed: no comma or close bracket
                                     return default;
@@ -534,10 +614,10 @@ namespace Numinous.Engine {
                                     define_ctx  += ActiveToken;
                                 }
                                 
-                                if (ActiveToken != "//" || ActiveToken != "/*") define_ctx  += ActiveToken;
+                                if (ActiveToken.ctx != "//" || ActiveToken.ctx != "/*") define_ctx  += ActiveToken;
                                 
                                 // create fexp header with param count
-                                Program.ActiveScopeBuffer[^1][define_id] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
+                                Program.ActiveScopeBuffer[^1][define_id.ctx] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
                                     {"args", (ParameterMapping.Count, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
                                     {"", (GenerateFunctionalDefine(define_ctx, ParameterMapping), default, default)}
                                 }, AssembleTimeTypes.FEXP, AccessLevels.PUBLIC);
@@ -554,13 +634,13 @@ namespace Numinous.Engine {
                             // gather until ctx exhausted, that's our define. Add as DEFINE and return as DEFINE
                             while (DefineResolveBuffer.Count > 0 || CheckLineTerminated()) {
                                 Step(false);
-                                define_ctx += ActiveToken[0];
+                                define_ctx += ActiveToken.ctx[0];
                             }
                             
                             // this will allow comments are defines, not being included in them!
-                            if (ActiveToken != "//" || ActiveToken != "/*") define_ctx += ActiveToken;
+                            if (ActiveToken.ctx != "//" || ActiveToken.ctx != "/*") define_ctx += ActiveToken;
 
-                            Program.ActiveScopeBuffer[^1][define_id] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
+                            Program.ActiveScopeBuffer[^1][define_id.ctx] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
                                 {"", (define_ctx, default, default)}
                             }, AssembleTimeTypes.CEXP, AccessLevels.PUBLIC);
                             
@@ -571,7 +651,7 @@ namespace Numinous.Engine {
                             if (CheckDirectiveMalformed()) return default;
                             Step();
 
-                            if (ActiveToken[0] != ' ') {
+                            if (ActiveToken.ctx[0] != ' ') {
                                 // error malformed
                                 return default;
                             }
@@ -579,9 +659,9 @@ namespace Numinous.Engine {
                             if (CheckDirectiveMalformed()) return default;
                             Step();
 
-                            (_, success) = GetObjectFromAlias(ActiveToken, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
+                            (_, success) = GetObjectFromAlias(ActiveToken.ctx, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
                             if (success) {
-                                Program.LabelDataBase.Remove(ActiveToken);
+                                Program.LabelDataBase.Remove(ActiveToken.ctx);
                                 return (OperationTypes.DIRECTIVE, Directives.UNDEFINE);
                             } else {
                                 // error - no define to undefine
@@ -599,7 +679,7 @@ namespace Numinous.Engine {
                 }
 
                 // keywords
-                switch (ActiveToken) {
+                switch (ActiveToken.ctx) {
                     // functions ... typeof()
                     case "if":                  // (bool) code  OR  (bool) {code block}
                     case "else":                // else if (bool code) or (bool) {code block}
@@ -625,12 +705,12 @@ namespace Numinous.Engine {
                 if (success) return (OperationTypes.KEYWORD, ctx);
 
 
-                if (ActiveToken == "-:") {
+                if (ActiveToken.ctx == "-:") {
                     Step();
 
                     // next branch back is here | when we need to "beq -" we now can
                     return (OperationTypes.ANON_REL_BRANCH, '-');
-                } else if (ActiveToken == "+:") {
+                } else if (ActiveToken.ctx == "+:") {
                     Step();
 
                     // for terms waiting on the next forward branch, we can now solve for "beq +"
@@ -658,7 +738,7 @@ namespace Numinous.Engine {
 
                     for (; !CheckLineTerminated(); Step()) {
                         fp += ActiveToken;
-                        switch (ActiveToken[0]) {
+                        switch (ActiveToken.ctx[0]) {
                             case '<':
                                 InitialCharacterCount++;
                                 continue;
@@ -673,7 +753,7 @@ namespace Numinous.Engine {
                         break;
                     }
 
-                    if (ActiveToken[0] != '>') {
+                    if (ActiveToken.ctx[0] != '>') {
                         return string.Empty;
                     } else {
                         return InitialCharacterCount == 0 ? fp : string.Empty;   
@@ -690,7 +770,7 @@ namespace Numinous.Engine {
                 }
                 
                 (RunTimeVariableType ctx, bool succses) ParseAsVariable() {
-                    var type = ActiveToken.ToLower();
+                    var type = ActiveToken.ctx.ToLower();
                     if (type.Length < 2) return default;
                     RunTimeVariableType ctx = default;
 
@@ -716,42 +796,42 @@ namespace Numinous.Engine {
 
                 (RunTimeVariableFilterType ctx, bool succses) ParseAsFilter() {
                     var type = ActiveToken;
-                    if (type.Length < 2) return default;
+                    if (type.StringLength < 2) return default;
                     RunTimeVariableFilterType ctx = default;
 
-                    if (type == "num") return (default, true);
+                    if (type.ctx == "num") return (default, true);
 
                     uint size = 0;
 
-                    if      (type[0] == 'i') ctx.signed = true;                         // ix, ilx, ibx
-                    else if (type[0] == 'u') ctx.signed = false;                        // ux, ulx, ubx
-                    else if (type[0] == 'l') ctx.endian = false;                        // lx, l16, l32, l64..
-                    else if (type[0] == 'b') ctx.endian = true;                         // bx, b16, b32, b64
-                    else if (type[0] == 'x') {
-                        if (!uint.TryParse(type[1..], out size))    return default;
+                    if      (type.ctx[0] == 'i') ctx.signed = true;  // ix, ilx, ibx
+                    else if (type.ctx[0] == 'u') ctx.signed = false; // ux, ulx, ubx
+                    else if (type.ctx[0] == 'l') ctx.endian = false; // lx, l16, l32, l64..
+                    else if (type.ctx[0] == 'b') ctx.endian = true;  // bx, b16, b32, b64
+                    else if (type.ctx[0] == 'x') {
+                        if (!uint.TryParse(type.ctx[1..], out size))return default;
                         if ((size & 0b111) > 0)                     return default;     // impossible size
                         if (size == 0u)                             return default;     // impossible size
                     } else                                          return default;
 
-                    if      (type[1] == 'l') {                                          // ilx, ulx
+                    if      (type.ctx[1] == 'l') {                                      // ilx, ulx
                         if (ctx.endian != null)                     return default;
                         else ctx.endian = false;
                     }
-                    else if (type[1] == 'b') {                                          // ibx, ubx
+                    else if (type.ctx[1] == 'b') {                                      // ibx, ubx
                         if (ctx.endian != null)                     return default;
                         else ctx.endian = true;
-                    } else if (type[1] == 'x') {                                        // ix, ux, bx, lx
-                        if (!uint.TryParse(type[2..], out size))    return default;
+                    } else if (type.ctx[1] == 'x') {                                    // ix, ux, bx, lx
+                        if (!uint.TryParse(type.ctx[2..], out size))return default;
                         if ((size & 0b111) > 0)                     return default;     // impossible size
                         if (size == 0u)                             return default;     // impossible size
                         ctx.size = size >> 3;                       return (ctx, true); // specified size (one type allowed, exclusive filter)
                     } else                                          return default;
 
-                    if (type.Length < 3)                            return default;     // il, bl, ul and ub are not valid
-                    if (type[2] == 'x')                             return (ctx, true); // null size
+                    if (type.StringLength < 3)                        return default;     // il, bl, ul and ub are not valid
+                    if (type.ctx[2] == 'x')                         return (ctx, true); // null size
 
-                    if (type.Length == 3)                           return default;
-                    if (!uint.TryParse(type[2..], out size))        return default;
+                    if (type.StringLength == 3)                       return default;
+                    if (!uint.TryParse(type.ctx[2..], out size))    return default;
                     if ((size & 0b111) > 0)                         return default;     // impossible size
                     if (size == 0u)                                 return default;     // impossible size
                     ctx.size = size >> 3;                           return (ctx, true); // specified size (one type allowed, exclusive filter)
@@ -791,7 +871,7 @@ namespace Numinous.Engine {
                      *          
                      */
 
-                    var opcode = ActiveToken.ToLower();
+                    var opcode = ActiveToken.ctx.ToLower();
                     switch (opcode) {
                         #region     Explicit Instructions Supporting Immediate
                         case "cpa": // cmp
@@ -913,9 +993,9 @@ namespace Numinous.Engine {
                         case "sec": //      Implied or Implied Overruled\
                             if (CheckFormat(true)) {
                                 if (CheckLineTerminated()) {
-                                    if (ActiveToken[0] == '!') return OperandDecorators.Overruled;
+                                    if (ActiveToken.ctx[0] == '!') return OperandDecorators.Overruled;
                                     else return OperandDecorators.Found;
-                                } else if (ActiveToken[0] == '!') {
+                                } else if (ActiveToken.ctx[0] == '!') {
                                     Step();
                                     if (CheckLineTerminated()) return OperandDecorators.Overruled;
                                     seek_no_whitespace();
@@ -946,10 +1026,10 @@ namespace Numinous.Engine {
                         case "ane": // !#foo
                         case "xaa": // #foo
                             if (CheckFormat(false)) {
-                                if (ActiveToken[0] == '!') {
+                                if (ActiveToken.ctx[0] == '!') {
                                     if (CheckLineTerminated()) return default;
                                     Step();
-                                    if (ActiveToken[0] == '#') return OperandDecorators.Overruled | OperandDecorators.Immediate;
+                                    if (ActiveToken.ctx[0] == '#') return OperandDecorators.Overruled | OperandDecorators.Immediate;
                                     else return OperandDecorators.Immediate;
                                 }
                                 goto CheckImmediate;
@@ -1007,8 +1087,8 @@ namespace Numinous.Engine {
                         // brk #foo
                         case "brk": // brk  : Immediate OR Implied OR Implied (Overruled)
                             if (CheckFormat(true)) {
-                                if (ActiveToken[0] == '!') return OperandDecorators.Overruled;
-                                else if (ActiveToken[0] == '#') goto CheckImmediate;
+                                if (ActiveToken.ctx[0]      == '!') return OperandDecorators.Overruled;
+                                else if (ActiveToken.ctx[0] == '#') goto CheckImmediate;
                                 else if (CheckLineTerminated()) return OperandDecorators.Found;
                                 return default;
                             }
@@ -1025,9 +1105,9 @@ namespace Numinous.Engine {
                             // TODO: write some lax safety
 
                             if (CheckFormat(false)) {
-                                if (ActiveToken[0] == '!') {
+                                if (ActiveToken.ctx[0] == '!') {
                                     Step();
-                                    if (ActiveToken[0] == '#') return OperandDecorators.Overruled | OperandDecorators.Immediate;
+                                    if (ActiveToken.ctx[0] == '#') return OperandDecorators.Overruled | OperandDecorators.Immediate;
                                     else return default;
                                 }
                                 goto CheckMemoryAccessRulesWithImmediate;
@@ -1036,11 +1116,11 @@ namespace Numinous.Engine {
                             return default;
 
                         CheckImmediate:
-                            if (ActiveToken[0] == '!') {
+                            if (ActiveToken.ctx[0] == '!') {
                                 seek_no_whitespace();
                                 if (CheckLineTerminated()) return default;
 
-                                if (ActiveToken[0] != '#') {
+                                if (ActiveToken.ctx[0] != '#') {
                                     // error, instruction is immediate only
                                     return default;
                                 }
@@ -1049,7 +1129,7 @@ namespace Numinous.Engine {
                                 return OperandDecorators.Immediate | OperandDecorators.Overruled;
                             }
 
-                            if (ActiveToken[0] != '#') {
+                            if (ActiveToken.ctx[0] != '#') {
                                 // error, instruction is immediate only
                                 return default;
                             }
@@ -1058,7 +1138,7 @@ namespace Numinous.Engine {
                             return OperandDecorators.Immediate;
 
                         CheckMemoryAccessRulesNotPermittingImmediate:
-                            if (ActiveToken[0] == '#') {
+                            if (ActiveToken.ctx[0] == '#') {
                                 // error, does not permit immediate
                                 return default;
                             }
@@ -1066,7 +1146,7 @@ namespace Numinous.Engine {
                             goto CheckMemoryAccessRules;
 
                         CheckMemoryAccessRulesWithImmediate:
-                            if (ActiveToken[0] == '#') {
+                            if (ActiveToken.ctx[0] == '#') {
                                 Step();
                                 return OperandDecorators.Immediate;
                             }
@@ -1247,7 +1327,7 @@ namespace Numinous.Engine {
                             return OperandDecorators.Missing; ;
 
                         CheckMemoryAccessRulesNotPermittingImmediate:
-                            if (ActiveToken[0] == '#') {
+                            if (ActiveToken.ctx[0] == '#') {
                                 // error, does not permit immediate
                                 return default;
                             }
@@ -1255,7 +1335,7 @@ namespace Numinous.Engine {
                             goto CheckMemoryAccessRules;
 
                         CheckMemoryAccessRulesWithImmediate:
-                            if (ActiveToken[0] == '#') {
+                            if (ActiveToken.ctx[0] == '#') {
                                 Step();
                                 return OperandDecorators.Immediate;
                             }
@@ -1274,13 +1354,13 @@ namespace Numinous.Engine {
                         if (i == BasicRegexTokens.Length && DefineResolveBuffer.Count == 0)       
                             return SupportsImplied;                                                     // implied may complete source (might be fail later)
                         if (CheckLineTerminated())      return SupportsImplied;                         // implied may complete line
-                        if (ActiveToken[0] != ' ')      return false;                                   // if space does not follow opcode, fail
+                        if (ActiveToken.ctx[0] != ' ')      return false;                                   // if space does not follow opcode, fail
                         seek_no_whitespace();
                         return true;                                                                    // otherwise its safe to interpret
                     }
 
                     OperandDecorators CheckMemoryAccessRules() {
-                        if (ActiveToken == "a") {
+                        if (ActiveToken.ctx == "a") {
                             if (CanUseA.Contains(opcode)) {
                                 Step();
                                 return OperandDecorators.Found;
@@ -1292,42 +1372,42 @@ namespace Numinous.Engine {
                                 return default;
                             }
                             
-                            if (ActiveToken[0] == ':') {
+                            if (ActiveToken.ctx[0] == ':') {
                                 Step();
                                 return OperandDecorators.Enforced_ABS;
                             } else {
                                 // error, a is reserved
                                 return default;
                             }
-                        } else if (ActiveToken == "z") {
+                        } else if (ActiveToken.ctx == "z") {
                             Step();
                             if (CheckLineTerminated()) return default;                                  // standalone z refers to zero flag, not implicit and unsuitable here
-                            if (ActiveToken[0] == ':') {
+                            if (ActiveToken.ctx[0] == ':') {
                                 Step();
                                 return OperandDecorators.Enforced_ZP;
                             } else {
                                 // error, z is reserved
                                 return default;
                             }
-                        } else if (ActiveToken[0] == '!') {
+                        } else if (ActiveToken.ctx[0] == '!') {
                             Step();
                             if (CheckLineTerminated()) {                                                // must overrule something
                                 // error malformed
                                 return default;
                             }
 
-                            if (ActiveToken == "a") {
+                            if (ActiveToken.ctx == "a") {
                                 Step();
-                                if (ActiveToken[0] == ':') {
+                                if (ActiveToken.ctx[0] == ':') {
                                     Step();
                                     return OperandDecorators.Enforced_ABS | OperandDecorators.Overruled;
                                 } else {
                                     // error, a is reserved
                                     return default;
                                 }
-                            } else if (ActiveToken == "z") {
+                            } else if (ActiveToken.ctx == "z") {
                                 Step();
-                                if (ActiveToken[0] == ':') {
+                                if (ActiveToken.ctx[0] == ':') {
                                     Step();
                                     return OperandDecorators.Enforced_ZP | OperandDecorators.Overruled;
                                 } else {
@@ -1340,13 +1420,15 @@ namespace Numinous.Engine {
                         return OperandDecorators.Found;
                     }
                 }
-                bool CheckLineTerminated() => (i == BasicRegexTokens.Length && DefineResolveBuffer.Count == 0) || ActiveToken[0] == ';' || ActiveToken[0] == '\n' || ActiveToken == "//" || ActiveToken == "/*";
 
-                // keep seeking beyond whitespace
-                void seek_no_whitespace(bool skip = false, bool regexParse = true) => Steps(() => !CheckLineTerminated() && (ActiveToken[0] == ' ' || ActiveToken[0] == '\t'), skip, regexParse);
 
                 #endregion      OperationExtract Local Functions
             }
+            
+            bool CheckLineTerminated() => (i == BasicRegexTokens.Length && DefineResolveBuffer.Count == 0) || ActiveToken.ctx[0] == ';' || ActiveToken.ctx[0] == '\n' || ActiveToken.ctx == "//" || ActiveToken.ctx == "/*";
+
+            // keep seeking beyond whitespace
+            void seek_no_whitespace(bool skip = false, bool regexParse = true) => Steps(() => !CheckLineTerminated() && (ActiveToken.ctx[0] == ' ' || ActiveToken.ctx[0] == '\t'), skip, regexParse);
 
             //void PrepareNextStep(ref int ErrorReportLineNumber) {
             //    MaxHierarchy = 0;
@@ -1358,19 +1440,12 @@ namespace Numinous.Engine {
             //}
 
             bool CaptureCSTRING(Func<char, bool> HaltCapturePredicate) {
-                int csi = StringIndex;
+                int csi = ActiveToken.StringIndex;
 
                 // TODO: Empty out Define Resolved Buffer first, then any captured tokens DO NOT UNDERGO DEFINE EVALUATION
 
-                for (; DefineResolveBuffer.Count > 0 && !HaltCapturePredicate(ActiveToken[0]); Step()) {
+                for (; i < BasicRegexTokens.Length && !HaltCapturePredicate(ActiveToken.ctx[0]); Step(false)) {
                     literalCstring += ActiveToken;
-                    StringIndex += ActiveToken.Length;
-                }
-
-
-                for (; i < BasicRegexTokens.Length && !HaltCapturePredicate(ActiveToken[0]); Step(false)) {
-                    literalCstring += ActiveToken;
-                    StringIndex += ActiveToken.Length;
                 }
 
                 if (i == BasicRegexTokens.Length && ErrorContext.ErrorLevel == default) {
@@ -1382,15 +1457,15 @@ namespace Numinous.Engine {
                         Message = "Unterminated String",
                         LineNumber = LocalErrorReportLineNumber,
                         StepNumber = LocalErrorReportStepNumber,
-                        Context = () => ApplyWiggle(CollectiveContext, csi + 1, StringIndex - csi)
+                        Context = () => ApplyWiggle(CollectiveContext, csi + 1, ActiveToken.StringIndex - csi)
                     };
                     return false;
                 }
 
-                if (csi != StringIndex) {
+                if (csi != ActiveToken.StringIndex) {
                     TermTokens.Add((
                         csi,
-                        csi - StringIndex,
+                        csi - ActiveToken.StringIndex,
                         new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
                             {"self",    (literalCstring,           AssembleTimeTypes.CSTRING,  AccessLevels.PRIVATE) },
                             {"length",  (literalCstring.Length,    AssembleTimeTypes.CINT,     AccessLevels.PUBLIC) },
@@ -1404,7 +1479,7 @@ namespace Numinous.Engine {
             }
 
             void AddOperator(Operators Operator, int sl) {
-                TermTokens.Add((StringIndex, sl, Operator, true)); LastNonWhiteSpaceIndex = TermTokens.Count - 1; ;
+                TermTokens.Add((ActiveToken.StringIndex, sl, Operator, true)); LastNonWhiteSpaceIndex = TermTokens.Count - 1; ;
             }
 
             void SimpleAddOperator(Operators Operator) => AddOperator(Operator, 1);
@@ -1414,7 +1489,7 @@ namespace Numinous.Engine {
                 ContainerBuffer.Add(Operator);                                  // register container type
 
                 AddOperator(Operator, sl);
-                LastOpenContainerOperatorStringIndex = StringIndex;
+                LastOpenContainerOperatorStringIndex = ActiveToken.StringIndex;
                 MaxHierarchy = Math.Max(ContainerBuffer.Count, MaxHierarchy);
             }
 
@@ -1442,10 +1517,10 @@ namespace Numinous.Engine {
                         ErrorLevel = ErrorLevels.ERROR,
                         ErrorType = ErrorTypes.SyntaxError,
                         DecodingPhase = DecodingPhases.TOKEN,
-                        Message = $"Invalid Container Closer '{CollectiveContext[StringIndex]}' for Opening container '{CollectiveContext[LastOpenContainerOperatorStringIndex]}'.",
+                        Message = $"Invalid Container Closer '{CollectiveContext[ActiveToken.StringIndex]}' for Opening container '{CollectiveContext[LastOpenContainerOperatorStringIndex]}'.",
                         LineNumber = LocalErrorReportLineNumber,
                         StepNumber = LocalErrorReportStepNumber,
-                        Context = () => ApplyWiggle(CollectiveContext, LastOpenContainerOperatorStringIndex + 1, StringIndex - LastOpenContainerOperatorStringIndex + 1)
+                        Context = () => ApplyWiggle(CollectiveContext, LastOpenContainerOperatorStringIndex + 1, ActiveToken.StringIndex - LastOpenContainerOperatorStringIndex + 1)
                     };
 
                     return false;
@@ -1493,7 +1568,33 @@ namespace Numinous.Engine {
                 TermTokens = [];                       // wipe delta tokens for next operation
                 DeltaTokens.Add(StepDeltaTokenShallowCopy);
             }
-            #endregion Context Fetcher Functions
+          
+            (List<(string token, int StringIndex, int StringLength)> ctx, bool success) PartialResolveDefine(string Token) {
+                
+
+                List<(string token, int StringIndex, int StringLength)>    Resolved = [(Token, ActiveToken.StringIndex, Token.Length)];
+                (object data, AssembleTimeTypes type, AccessLevels access) ctx;
+                bool                                                       success;
+                bool                                                       HadSuccess = false;
+
+                do {
+                    (ctx, success) = Database.GetObjectFromAlias(Resolved[0].token, AccessLevels.PUBLIC);
+
+                    if (success && ctx.type == AssembleTimeTypes.CEXP) {
+                        HadSuccess = true;
+                        Resolved.RemoveAt(0);
+                        
+                        Resolved.InsertRange(0, RegexTokenize((string)((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)ctx.data)[""].data)
+                                                .Select(token => (token, ActiveToken.StringIndex, token.Length))
+                                                .ToList());
+                    }
+
+                } while (success && ctx.type == AssembleTimeTypes.CEXP);
+
+                return (Resolved, HadSuccess);
+            }
+            
+            #endregion Lexer Functions
         }
     }
 }
