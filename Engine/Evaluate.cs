@@ -47,7 +47,8 @@ namespace Numinous {
                 DIRECTIVE,          // eg.. #include
                 INSTRUCTION,        // eg.. lda foo
                 EVALUATE,           // function, macros, RODATA writes
-                KEYWORD,            // int foo = bar
+                KEYWORD,            // int foo = bar, return
+                RUNTIME,            // u8 foo       : is a keyword BUT returns different ctx
 
                 ANON_REL_BRANCH,    // +: and -:
             }

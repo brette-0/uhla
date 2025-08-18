@@ -1,5 +1,5 @@
 ﻿using System.Runtime.InteropServices;
-
+using Numinous;
 using Numinous.Engine;
 using Numinous.Language;
 
@@ -113,6 +113,7 @@ internal static class Program {
 
     internal static Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> LabelDataBase = [];
     internal static List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>> ActiveScopeBuffer = [];
+    internal static List<ScopeTypes>                                                                     ActiveScopeTypeBuffer =[];
     internal static List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>> ObjectSearchBuffer = [];
 
     internal static List<string> SourceFileSearchPaths = [];
@@ -122,9 +123,12 @@ internal static class Program {
     internal static List<bool>          PragmaGPRAwareBuffer    = [];
     internal static List<bool>          PragmaRAMAwareBuffer    = [];
 
+    internal static Func<int, bool>     ReadPermitted;
+    internal static Func<int, bool>     WritePermitted;
+    internal static Func<int, bool>     CallPermitted;
 
     internal static Languages ActiveLanguage;
     internal static WarningLevels WarningLevel;
-
+    
     internal static Numinous.Modes Mode; 
 }

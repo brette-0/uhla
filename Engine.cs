@@ -7,6 +7,15 @@ using Numinous.Language;
 using Tomlyn;
 
 namespace Numinous {
+    internal enum ScopeTypes {
+        Root = 0,
+        Namespace = 1,
+        Macro = 2,
+        Bank = 3,
+        Procedure = 4,
+        Interrupt = 5
+    }
+    
     internal enum Modes {
         None,
         Cartridge,
@@ -421,6 +430,7 @@ namespace Numinous {
 
         internal static partial class Engine {
             // Generated Function
+            // TODO: Rewrite this code looks terrible - GPT has been underperfoming
             internal static object GenerateFunctionalDefine(string Context, List<string> ParameterMapping) {
                 foreach (var param in ParameterMapping)
                     Context = Regex.Replace(Context, $@"\b{Regex.Escape(param)}\b", $"{{{param}}}");
@@ -641,7 +651,7 @@ namespace Numinous {
                 }
             }
             
-            internal static (object Return, AssembleTimeTypes Type, bool Success) Assemble(List<(object data, AssembleTimeTypes type)> args) {
+            internal static (object Return, AssembleTimeTypes Type, bool Success) Assemble(Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> args) {
 
                 Span<List<string>>  SourceFileContentBufferSpan = CollectionsMarshal.AsSpan(Program.RegexTokenizedSourceFileContentBuffer);
                 Span<string>        SourceFileNameBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileNameBuffer);
@@ -652,6 +662,122 @@ namespace Numinous {
 
                 var CF_resp = Lexer(Program.RegexTokenizedSourceFileContentBuffer[^1].ToArray(), ref SourceSubstringBufferSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
                 if (!CF_resp.Success) return default;
+
+                switch (CF_resp.Operation.Type) {
+                    case OperationTypes.DIRECTIVE:
+                        switch ((Directives)CF_resp.Operation.Context) {
+                            case Directives.ASSERT:
+                                // request INT from Evaluate
+                                // throw AssertationFailureException if results to 0
+                                break;
+
+                            case Directives.PUSH_ILLEGAL:
+                                // request INT from Evaluate
+                                break;
+                            
+                            case Directives.PUSH_CPU:
+                                // request INT from Evaluate
+                                break;
+                            
+                            case Directives.PUSH_GPR:
+                                // request INT from Evaluate
+                                break;
+                            
+                            case Directives.PUSH_MEM:
+                                // request INT from Evaluate
+                                break;
+                            
+                            case Directives.LOCAL_INCLUDE:
+                                // request STRING from Evaluate
+                                break;
+                            
+                            case Directives.LOCAL_INCLUDEBIN:
+                                // request STRING from Evaluate
+                                break;
+                            case Directives.CART:
+                            case Directives.DISK:
+                            case Directives.FUNCDEFINE:
+                            case Directives.DEFINE:
+                            case Directives.UNDEFINE:
+                            case Directives.POP_MEM:
+                            case Directives.INCLUDE:
+                            case Directives.INCLUDEBIN:
+                            case Directives.POP_CPU:
+                            case Directives.POP_GPR:
+                            case Directives.POP_ILLEGAL:
+                                // handled already has no evaluate demand
+                                break;
+                            
+                            case Directives.ROM:
+                                break;
+                            case Directives.CPU:
+                                break;
+                            case Directives.ERROR:
+                                // we shouldnt be able to get here, should fail sooner
+                                break;
+                            default:
+                                throw new ArgumentOutOfRangeException();
+                        }
+                        break;
+                    case OperationTypes.INSTRUCTION:
+                        // take Operand Decorators, take Operand, deduce instruction, use runtime module
+                        break;
+                    case OperationTypes.ANON_REL_BRANCH:
+                        // if ctx == '-', branch back to known location
+                        // if ctx == '+', subscribe links to branch ahead
+                        break;
+
+
+                    case OperationTypes.FAIL:
+                        // should not be able to reach here
+                        break;
+                    case OperationTypes.EVALUATE:
+                        // RODATA, evaluate and straight to ROM
+                        break;
+                    case OperationTypes.KEYWORD:
+                        switch ((string)CF_resp.Operation.Context) {
+                            case "if":
+                                // positive case selection codeblock
+                            case "else":
+                                // negative case selection codeblock
+                            case "loop" :
+                                // at loop codeblock declare
+                            case "break":
+                                // break from loop, must be contained in loop
+                            case "return": 
+                                // return, exclusive to macro (if macro, must live within top level or namespace)
+                            case "int":
+                                // declare int, int macro (if macro, must live within top level or namespace)
+                            case "string":
+                                // declare string, string macro (if macro, must live within top level or namespace)
+                            case "void":
+                                // declare void macro, must live within top level or namespace
+                            case "del":
+                                // should be handled before reaching here
+                            case "bank": 
+                                // top level domain bank(cpu = 0x0000, rom = 0x8000) lalala
+                            case "proc": 
+                                // rt code (no rti => rts, unless rti !)
+                            case "interrupt":
+                                // rt code (no rts => rti, unless rts !)
+                            case "register": 
+                                // wants to evaluate rightside
+                            case "flag":
+                                // wants to evaluate rightside
+                            case "const":    
+                                
+                                break;    
+                        }
+                        break;
+                        
+                        case OperationTypes.RUNTIME:
+                            // runtime variable delcaration, reserve space
+                            break;
+                            
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
 
                 // if its to write to ROM, ... figure that out
                 // otherwise delta evaluate each step

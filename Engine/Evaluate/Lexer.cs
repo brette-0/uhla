@@ -12,6 +12,8 @@ using System.Text.RegularExpressions;
           On error report, refer to RegexParsed[0].ctx, index, length etc...
 */
 
+using static Numinous.Memory;
+
 namespace Numinous.Engine {
     internal static partial class Engine {
         /// <summary>
@@ -679,6 +681,18 @@ namespace Numinous.Engine {
                 }
 
                 // keywords
+                
+                // some do NOT require evaluation
+                // memory reservation simply wants to capture a label, check it and check line formatting.
+                var MemoryMode = Program.ActiveScopeTypeBuffer[^1] switch {
+                    ScopeTypes.Macro => MemoryModes.FAST,
+                    ScopeTypes.Root  => MemoryModes.SYSTEM,
+                    ScopeTypes.Bank  => MemoryModes.SYSTEM,
+                    
+                    _                => MemoryModes.SLOW
+                };
+                string      Alias;
+                
                 switch (ActiveToken.ctx) {
                     // functions ... typeof()
                     case "if":                  // (bool) code  OR  (bool) {code block}
@@ -699,6 +713,38 @@ namespace Numinous.Engine {
                     case "const":
                         // const int, const string ... etc  (macro return type OR constant declaration)
                         break;
+                    
+                    case "system":
+                    case "direct":
+                    case "program":
+                    case "mapper":
+                    case "fast":
+                    case "slow":    
+                        MemoryMode = ActiveToken.ctx switch {
+                            "direct"  => MemoryModes.DIRECT, 
+                            "system"  => MemoryModes.SYSTEM, 
+                            "mapper"  => MemoryModes.MAPPER, 
+                            "program" => MemoryModes.PROGRAM, 
+                            "fast"    => MemoryModes.FAST, 
+                            "slow"    => MemoryModes.SLOW, 
+                            _         => throw new NotSupportedException()
+                        };
+                        seek_no_whitespace();
+                        (ctx, success) = ParseAsVariable(); // ctx is boxed anonymous RunTimeVariable type
+                        if (!success) {
+                            // error : invalid variable type
+                            return default;
+                        }
+                        seek_no_whitespace();
+                        Alias = ActiveToken.ctx;
+                        seek_no_whitespace();
+                        if (!CheckLineTerminated()) {
+                            // error : malformed
+                            return default;
+                        }
+
+                        if (!TryReserve(MemoryMode, (int)((RunTimeVariableType)ctx).size)) return default;  // error pass back
+                        return (OperationTypes.RUNTIME, (MemoryMode, ctx, Alias));
                 }
 
                 (ctx, success) = ParseAsVariable();
