@@ -39,7 +39,7 @@ internal static class Program {
             return (int)ErrorTypes.NothingToDo;
         }
         SourceFileNameBuffer.Add(InputPath!);
-        RegexTokenizedSourceFileContentBuffer.Add(RegexTokenize(InputFile));
+        SourceFileContentBuffer.Add(RegexTokenize(InputFile));
         SourceFileIndexBuffer.Add(0);       // begin from "main.s" (CONTENTS) : (0)
         SourceTokenIndexBuffer.Add(0);      // begin from char 0
         SourceFileLineBuffer.Add(0);        // debug line, naturally 0
@@ -99,12 +99,12 @@ internal static class Program {
         Span<int>           SourceFileStepBufferSpan    = CollectionsMarshal.AsSpan(SourceFileStepBuffer);
 
 
-        var CF_resp = Lexer(RegexTokenizedSourceFileContentBuffer[^1].ToArray(), ref SourceTokenIndexSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
+        var CF_resp = Lexer(SourceFileContentBuffer[^1].ToArray(), ref SourceTokenIndexSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
 
         return 0;
     }
 
-    internal static List<List<string>>  RegexTokenizedSourceFileContentBuffer = [];
+    internal static List<List<string>>  SourceFileContentBuffer = [];
     internal static List<int>           SourceFileIndexBuffer = [];
     internal static List<int>           SourceTokenIndexBuffer = [];
     internal static List<string>        SourceFileNameBuffer  = [];

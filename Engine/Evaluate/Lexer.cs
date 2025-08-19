@@ -738,13 +738,18 @@ namespace Numinous.Engine {
                         seek_no_whitespace();
                         Alias = ActiveToken.ctx;
                         seek_no_whitespace();
-                        if (!CheckLineTerminated()) {
-                            // error : malformed
+                        if (CheckLineTerminated()) {
+                            if (!TryReserve(MemoryMode, (int)((RunTimeVariableType)ctx).size)) return default;  // error pass back
+                            return (OperationTypes.RUNTIME, (MemoryMode, ctx, Alias));
+                        } else if (ActiveToken.ctx[0] != '=') {
+                            // error malformed instruction
                             return default;
+                        } else {
+                            Step();
+                            seek_no_whitespace();
+                            // evaluate rightside
+                            break;
                         }
-
-                        if (!TryReserve(MemoryMode, (int)((RunTimeVariableType)ctx).size)) return default;  // error pass back
-                        return (OperationTypes.RUNTIME, (MemoryMode, ctx, Alias));
                 }
 
                 (ctx, success) = ParseAsVariable();

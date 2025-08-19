@@ -235,7 +235,7 @@ public static class Header {
     static internal uint    nMiscRoms             = 0u;
     static internal uint    DefaultExpansionDevice = 0u;
 
-    static internal Func<int, string> MemoryLocationSequence;
+    static internal Func<int, int, string> MemoryLocationSequence;
     static internal bool    BankableProgramRAM {get; private set; } // refers to the 0x6000 space, if ROM went in here we'd still use this name.   
                                                                     // to know if TRULY RAM is bankable then we ensure that sProgarmRAM > 1.
                                                                     // purely a mapper property : does not reflect mapped contents

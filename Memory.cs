@@ -28,9 +28,8 @@ internal static class Memory {
         PROGRAM
     }
 
-    internal static bool TryReserve(MemoryModes MemoryMode, int bytes) {
-        int    offset = -1;
-        string TargetLocation;
+    internal static bool TryReserve(MemoryModes MemoryMode, int bytes, int offset = -1) {
+        var TargetLocation = string.Empty;
             
         switch (MemoryMode) {
             case MemoryModes.DIRECT:
@@ -54,7 +53,7 @@ internal static class Memory {
                     break;
                 }
 
-                TargetLocation = Header.MemoryLocationSequence(bytes);
+                TargetLocation = Header.MemoryLocationSequence(bytes, offset);
                 if (TargetLocation == string.Empty) return false;
 
                 Reserve(TargetLocation);
@@ -66,7 +65,7 @@ internal static class Memory {
                     break;
                 }
                 
-                TargetLocation = Header.MemoryLocationSequence(bytes);
+                TargetLocation = Header.MemoryLocationSequence(bytes, offset);
                 if (TargetLocation != string.Empty) {
                     Reserve(TargetLocation);
                     break;
@@ -107,10 +106,27 @@ internal static class Memory {
         return false;
 
         bool GetReserveIndex(string region) {
-            if (LastReserveIndex[region] + bytes > MemoryMapping[region].field.Length) {
-                var Reserved = 0;
-                var i        = 0;
+            var Reserved = 0;
+            var i        = 0;
+            
+            if (offset > -1) {
+                for (; i < bytes; i++) {
+                    if (MemoryMapping[region].field[i]) {
+                        Reserved++;
+                    } else {
+                        Reserved = 0;
+                    }
+                }
 
+                if (Reserved != bytes) {
+                    // could not reserve at specific location
+                    return false;
+                }
+
+                if (offset > 0 && !MemoryMapping[region].field[i - 1]) {
+                    // warn fragmentation
+                }
+            } else if (LastReserveIndex[region] + bytes > MemoryMapping[region].field.Length) {
                 for (; i < MemoryMapping[region].field.Length; i++) {
                     if (MemoryMapping[region].field[i]) {
                         Reserved++;

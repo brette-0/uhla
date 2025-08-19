@@ -653,14 +653,23 @@ namespace Numinous {
             
             internal static (object Return, AssembleTimeTypes Type, bool Success) Assemble(Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> args) {
 
-                Span<List<string>>  SourceFileContentBufferSpan = CollectionsMarshal.AsSpan(Program.RegexTokenizedSourceFileContentBuffer);
+                Span<List<string>>  SourceFileContentBufferSpan = CollectionsMarshal.AsSpan(Program.SourceFileContentBuffer);
                 Span<string>        SourceFileNameBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileNameBuffer);
                 Span<int>           SourceSubstringBufferSpan   = CollectionsMarshal.AsSpan(Program.SourceTokenIndexBuffer);
                 Span<int>           SourceFileLineBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
                 Span<int>           SourceFileStepBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
+                
+                var                                                     CollectiveContext = "";
+                (string ctx, int StringIndex, int StringLength)         ActiveToken;
+                List<(string token, int StringIndex, int StringLength)> DefineResolveBuffer = [];
+
+                var BasicRegexTokens = new global::System.Memory<string>(Program.SourceFileContentBuffer[^1].ToArray());
+
+                var StringIndex = 0; var StringLength = 0;
+                var TokenIndex           = 0;
 
 
-                var CF_resp = Lexer(Program.RegexTokenizedSourceFileContentBuffer[^1].ToArray(), ref SourceSubstringBufferSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
+                var CF_resp = Lexer(Program.SourceFileContentBuffer[^1].ToArray(), ref SourceSubstringBufferSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
                 if (!CF_resp.Success) return default;
 
                 switch (CF_resp.Operation.Type) {
@@ -771,7 +780,7 @@ namespace Numinous {
                         break;
                         
                         case OperationTypes.RUNTIME:
-                            // runtime variable delcaration, reserve space
+                            // runtime variables are handled inside the lexer. Nothing to do here
                             break;
                             
                         break;
@@ -783,6 +792,74 @@ namespace Numinous {
                 // otherwise delta evaluate each step
 
                 return default;
+                
+                // TODO: Function to capture requested task
+                
+                void Step(bool regexParse = true) {
+                    List<(string token, int StringIndex, int StringLength)> ctx;
+                    bool                                                    success;
+
+                    if (DefineResolveBuffer.Count == 0) {                                                   // si to be mutated ONLY by typed tokens
+                        CollectiveContext += BasicRegexTokens.Span[TokenIndex];
+                        StringIndex       += BasicRegexTokens.Span[TokenIndex].Length;      
+                        StringLength      =  BasicRegexTokens.Span[TokenIndex].Length;
+                    }
+
+                    if (regexParse) {
+                        if (DefineResolveBuffer.Count == 0) {
+                            (ctx, success)      = PartialResolveDefine(BasicRegexTokens.Span[TokenIndex++]);
+                            DefineResolveBuffer = ctx;
+                        }
+                        else {
+                            (ctx, success) = PartialResolveDefine(DefineResolveBuffer[0].token);
+                            DefineResolveBuffer.RemoveAt(0);
+                            DefineResolveBuffer.InsertRange(0, ctx);
+                        }
+
+                        if (success) Step();
+                        ActiveToken = DefineResolveBuffer[0];
+                        DefineResolveBuffer.RemoveAt(0);
+                    }
+                    else ActiveToken = (BasicRegexTokens.Span[TokenIndex++], StringIndex, BasicRegexTokens.Span[TokenIndex - 1].Length);
+                }
+
+                void Steps(Func<bool> seekPredicate, bool skip = false, bool regexParse = true) {
+                    if (skip) {
+                        do {
+                            Step(regexParse);
+                        } while (seekPredicate());
+                        return;
+                    }
+
+                    while (seekPredicate()) {
+                        Step(regexParse);
+                    }
+                }
+                
+                (List<(string token, int StringIndex, int StringLength)> ctx, bool success) PartialResolveDefine(string Token) {
+                
+
+                    List<(string token, int StringIndex, int StringLength)>    Resolved = [(Token, ActiveToken.StringIndex, Token.Length)];
+                    (object data, AssembleTimeTypes type, AccessLevels access) ctx;
+                    bool                                                       success;
+                    bool                                                       HadSuccess = false;
+
+                    do {
+                        (ctx, success) = Database.GetObjectFromAlias(Resolved[0].token, AccessLevels.PUBLIC);
+
+                        if (success && ctx.type == AssembleTimeTypes.CEXP) {
+                            HadSuccess = true;
+                            Resolved.RemoveAt(0);
+                        
+                            Resolved.InsertRange(0, RegexTokenize((string)((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)ctx.data)[""].data)
+                                                   .Select(token => (token, ActiveToken.StringIndex, token.Length))
+                                                   .ToList());
+                        }
+
+                    } while (success && ctx.type == AssembleTimeTypes.CEXP);
+
+                    return (Resolved, HadSuccess);
+                }
             }
 
 
@@ -806,7 +883,7 @@ namespace Numinous {
             /// <param name="FilePath"></param>
             internal static void AddSourceContext(string FilePath) {
                 Program.SourceFileNameBuffer.Add(FilePath);
-                Program.RegexTokenizedSourceFileContentBuffer.Add(RegexTokenize(File.ReadAllText(FilePath)));
+                Program.SourceFileContentBuffer.Add(RegexTokenize(File.ReadAllText(FilePath)));
                 Program.SourceTokenIndexBuffer.Add(0);
                 Program.SourceFileIndexBuffer.Add(0);
             }
