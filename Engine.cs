@@ -672,7 +672,7 @@ namespace Numinous {
                 var CF_resp = Lexer(Program.SourceFileContentBuffer[^1].ToArray(), ref SourceSubstringBufferSpan[^1], ref SourceFileLineBufferSpan[^1], ref SourceFileStepBufferSpan[^1], SourceFileNameBufferSpan[^1]);
                 if (!CF_resp.Success) return default;
 
-                switch (CF_resp.Operation.Type) {
+                /*switch (CF_resp.Operation.Type) {
                     case OperationTypes.DIRECTIVE:
                         switch ((Directives)CF_resp.Operation.Context) {
                             case Directives.ASSERT:
@@ -786,7 +786,7 @@ namespace Numinous {
                         break;
                     default:
                         throw new ArgumentOutOfRangeException();
-                }
+                }*/
 
                 // if its to write to ROM, ... figure that out
                 // otherwise delta evaluate each step
@@ -860,6 +860,1120 @@ namespace Numinous {
 
                     return (Resolved, HadSuccess);
                 }
+                
+                (OperationTypes oper, object ctx) ExtractOperation() {
+                object ctx; bool success;
+                if (ActiveToken.ctx[0] == '#') {
+                    Step(); if (CheckDirectiveMalformed()) return default;
+                    
+                    var Directive = ActiveToken;
+                    switch (Directive.ctx) {
+                        case "pragma":
+                            Step(); if (CheckDirectiveMalformed()) return default;
+                            if (ActiveToken.ctx[0] != ' ') {
+                                // error, malformed pragma
+                                return default;
+                            }
+
+                            Step(); if (CheckDirectiveMalformed()) return default;
+                            var Modifier = ActiveToken.ctx switch { "push" => 0, "pop" => 1, _ => 0xff};
+                            if (Modifier == 0xff) {
+                                // error, erroneous action for pragma
+                                return default;
+                            }
+                            
+                            Step(); if (CheckDirectiveMalformed()) return default;
+                            if (ActiveToken.ctx[0] != ' ') {
+                                // error, malformed pragma
+                                return default;
+                            }
+                            
+                            Step(); if (CheckDirectiveMalformed()) return default;
+                            var Pragma = (Directives)(Modifier | (byte)(ActiveToken.ctx switch {
+                                "memory_aware"  => Directives.PUSH_MEM,
+                                "gpr_aware"     => Directives.PUSH_GPR,
+                                "cpu_aware"     => Directives.PUSH_CPU,
+                                "illegal"       => Directives.PUSH_ILLEGAL,
+                                
+                                _               => Directives.ERROR,          
+                            }));
+
+                            if (Pragma == Directives.ERROR) {
+                                // error, bad pragma
+                                return default;
+                            }
+
+                            Step();
+                            if (ActiveToken.ctx[0] != ' ') {
+                                // error malformed pragma
+                                return default;
+                            }
+
+                            return (OperationTypes.DIRECTIVE, Pragma);
+
+                        case "include":
+                            string fp;
+                            // demands <> :: We can take over from here
+                            if (CheckDirectiveMalformed()) return default;
+                            Step();
+
+                            if (ActiveToken.ctx[0] != ' ') {
+                                // error: directive malformed
+                                return default;
+                            }
+
+                            Step();
+                            if (ActiveToken.ctx[0] == '<') {        // local func: get from lib
+                                if (CheckLineTerminated()) {
+                                    // error: malformed
+                                    return default;
+                                }
+
+                                Step();
+                                fp = LibGetPathFromContext();
+                                if (fp == string.Empty) {
+                                    // error malformed path
+                                    return default;
+                                }
+                                
+                                success = TryNormalizeSafePath($"{fp}.s", out fp);
+                                if (!success) {
+                                    // error: malformed path    :: Must be mac/linux/windows compatible
+                                    return default;
+                                }
+                                
+                                (fp, success) = CheckInclude(fp);
+                                if (!success) {
+                                    // error: library not found
+                                    return default;
+                                }
+
+                                // recurse now.
+                                AddSourceContext(fp);
+                                Assemble([]);
+                                
+                                return (OperationTypes.DIRECTIVE, Directives.INCLUDE);
+                            } else if (ActiveToken.ctx[0] == '\"') { // local func: get from src
+                                
+                                // recurse once path has been evaluated.
+                                return (OperationTypes.DIRECTIVE, Directives.LOCAL_INCLUDE);
+                            } else if (ActiveToken.ctx == "bin") {
+                                if (CheckLineTerminated()) {
+                                    // error, malformed directive
+                                    return default;
+                                }
+
+                                Step();
+                                if (CheckLineTerminated() || ActiveToken.ctx[0] != ' ') {
+                                    // error, malformed directive
+                                    return default;
+                                }
+
+                                Step();
+                                if (ActiveToken.ctx[0] == '<') { // local func: get from lib as bin
+                                    if (CheckLineTerminated()) {
+                                        // error: malformed
+                                        return default;
+                                    }
+
+                                    Step();
+                                    fp = LibGetPathFromContext();
+                                    if (fp == string.Empty) {
+                                        // error malformed path
+                                        return default;
+                                    }
+                                    
+                                    // stdlib graphics do not use a filetype
+                                    success = TryNormalizeSafePath(fp, out fp);
+                                    if (!success) {
+                                        // error: malformed path    :: Must be mac/linux/windows compatible
+                                        return default;
+                                    }
+                                
+                                    (fp, success) = CheckInclude(fp);
+                                    if (!success) {
+                                        // error: library not found
+                                        return default;
+                                    }
+    
+                                    // write contents to ROM immediately
+                                    
+                                    return (OperationTypes.DIRECTIVE, Directives.INCLUDEBIN);
+                                } else if (ActiveToken.ctx[0] == '\"') { // local func: get from src as bin
+                                    // write contents to ROM once string resolved (fstring support)
+                                    
+                                    return (OperationTypes.DIRECTIVE, Directives.LOCAL_INCLUDEBIN);
+                                } else {
+                                    // error: malformed include path
+                                    return default;
+                                }
+                            } else {
+                              // error: malformed include path
+                              return default;
+                            }
+                            
+                            return default;
+                        case "assert":
+                        // requires a boolean, we'll depend on Eval
+
+                        case "cart":
+                            if (Program.Mode == Modes.None) {
+                                Program.Mode = Modes.Cartridge;
+                                return (OperationTypes.DIRECTIVE, Directives.CART);
+                            } else {
+                                // error already set
+                                return default;
+                            }
+
+
+                        case "disk":
+                            if (Program.Mode == Modes.None) {
+                                Program.Mode = Modes.Disk;
+                                return (OperationTypes.DIRECTIVE, Directives.DISK);
+                            } else {
+                                // error already set
+                                return default;
+                            }
+
+                        case "define":
+                            if (CheckDirectiveMalformed()) return default;
+                            Step();
+                            if (CheckDirectiveMalformed() || ActiveToken.ctx[0] != ' ') return default;
+                            Step();
+                            var define_id = ActiveToken;
+                            var define_ctx = string.Empty;
+                            
+                            // check if reserved, operator, multiple tokens or an existing identity : fail if so
+                            if (CheckLineTerminated()) {
+                                // ctx of define will be literally nothingness. This is ok.
+                                // add to db
+
+                                return (OperationTypes.DIRECTIVE, Directives.DEFINE);
+                            }
+
+                            seek_no_whitespace();
+                            if (CheckLineTerminated()) {
+                                // ctx of define will be literally nothingness. This is ok.
+                                // add to db
+
+                                return (OperationTypes.DIRECTIVE, Directives.DEFINE);
+                            }
+                            
+                            
+                            // if it's a foo(x, y) y, x situation we will mark as it as a FUNCDEFINE
+                            // that just means gather operands to use for an fstring, instead of a string for CEXP result 
+                            // recurse lexer???
+                            if (ActiveToken.ctx[0] == '(') {
+                                // gather and match param names to ids
+                                List<string> ParameterMapping = [];
+
+                                do {
+                                    seek_no_whitespace(regexParse: false);
+                                    if (CheckLineTerminated()) {
+                                        // error, malformed define
+                                        return default;
+                                    }
+
+                                    if (ParameterMapping.Contains(ActiveToken.ctx)) {
+                                        // error, duplicate declared parameter
+                                        return default;
+                                    }
+
+                                    // if ActiveToken is operator, keyword, identity ... fail
+                                    if (Reserved.Contains(ActiveToken.ctx)) {
+                                        // error, token is reserved
+                                        return default;
+                                    }
+                                   
+                                    (_, success) = GetObjectFromAlias(ActiveToken.ctx, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
+                                    if (success) {
+                                        // parameter already has a definition : cannot be used
+                                        return default;
+                                    }
+
+                                    ParameterMapping.Add(ActiveToken.ctx);
+                                    seek_no_whitespace(regexParse: false);
+                                    if (ActiveToken.ctx[0] == ',') continue;
+                                    if (ActiveToken.ctx[0] == ')') break;
+                                    
+                                    // error malformed: no comma or close bracket
+                                    return default;
+                                } while(true);
+                                
+                                seek_no_whitespace();
+                                for (; !CheckLineTerminated(); Step(false)) {
+                                    if (ActiveToken == define_id) {
+                                        // error, define is explicitly recursive
+                                        return default;
+                                    }
+                                    define_ctx  += ActiveToken;
+                                }
+                                
+                                if (ActiveToken.ctx != "//" || ActiveToken.ctx != "/*") define_ctx  += ActiveToken;
+                                
+                                // create fexp header with param count
+                                Program.ActiveScopeBuffer[^1][define_id.ctx] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
+                                    {"args", (ParameterMapping.Count, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
+                                    {"", (GenerateFunctionalDefine(define_ctx, ParameterMapping), default, default)}
+                                }, AssembleTimeTypes.FEXP, AccessLevels.PUBLIC);
+
+                                return (OperationTypes.DIRECTIVE, Directives.FUNCDEFINE);
+                            }
+
+                            
+                            /*while (DefineResolveBuffer.Count > 0) {
+                                Step();
+                                define_ctx += ActiveToken[0];
+                            }*/
+
+                            // gather until ctx exhausted, that's our define. Add as DEFINE and return as DEFINE
+                            while (DefineResolveBuffer.Count > 0 || CheckLineTerminated()) {
+                                Step(false);
+                                define_ctx += ActiveToken.ctx[0];
+                            }
+                            
+                            // this will allow comments are defines, not being included in them!
+                            if (ActiveToken.ctx != "//" || ActiveToken.ctx != "/*") define_ctx += ActiveToken;
+
+                            Program.ActiveScopeBuffer[^1][define_id.ctx] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
+                                {"", (define_ctx, default, default)}
+                            }, AssembleTimeTypes.CEXP, AccessLevels.PUBLIC);
+                            
+                            
+                            return default;
+                        
+                        case "undefine":
+                            if (CheckDirectiveMalformed()) return default;
+                            Step();
+
+                            if (ActiveToken.ctx[0] != ' ') {
+                                // error malformed
+                                return default;
+                            }
+
+                            if (CheckDirectiveMalformed()) return default;
+                            Step();
+
+                            (_, success) = GetObjectFromAlias(ActiveToken.ctx, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
+                            if (success) {
+                                Program.LabelDataBase.Remove(ActiveToken.ctx);
+                                return (OperationTypes.DIRECTIVE, Directives.UNDEFINE);
+                            } else {
+                                // error - no define to undefine
+                                return default;
+                            }
+
+                        case "rom":
+                            // #rom <CINT>/<INT>
+                            return (OperationTypes.DIRECTIVE, Directives.ROM);
+                        
+                        case "cpu":
+                            // #cpu <CINT>/<INT>
+                            return (OperationTypes.DIRECTIVE,  Directives.CPU);
+                    }
+                }
+
+                // keywords
+                
+                // some do NOT require evaluation
+                // memory reservation simply wants to capture a label, check it and check line formatting.
+                var MemoryMode = Program.ActiveScopeTypeBuffer[^1] switch {
+                    ScopeTypes.Macro => Memory.MemoryModes.FAST,
+                    ScopeTypes.Root  => Memory.MemoryModes.SYSTEM,
+                    ScopeTypes.Bank  => Memory.MemoryModes.SYSTEM,
+                    
+                    _                => Memory.MemoryModes.SLOW
+                };
+                string      Alias;
+                
+                switch (ActiveToken.ctx) {
+                    // functions ... typeof()
+                    case "if":                  // (bool) code  OR  (bool) {code block}
+                    case "else":                // else if (bool code) or (bool) {code block}
+                    case "loop":                // loop {code block}
+                    case "break":               // exit loop
+                    case "return":              // return from macro
+                    case "del":                 // delete RT or AT variable
+
+                    // AssembleTime Variables   : could be macro return or declaration
+                    case "bank":
+                    case "proc":
+                    case "interrupt":
+                    case "int":
+                    case "string":
+                    case "register":
+                    case "flag":
+                    case "const":
+                        // const int, const string ... etc  (macro return type OR constant declaration)
+                        break;
+                    
+                    case "system":
+                    case "direct":
+                    case "program":
+                    case "mapper":
+                    case "fast":
+                    case "slow":    
+                        MemoryMode = ActiveToken.ctx switch {
+                            "direct"  => Memory.MemoryModes.DIRECT, 
+                            "system"  => Memory.MemoryModes.SYSTEM, 
+                            "mapper"  => Memory.MemoryModes.MAPPER, 
+                            "program" => Memory.MemoryModes.PROGRAM, 
+                            "fast"    => Memory.MemoryModes.FAST, 
+                            "slow"    => Memory.MemoryModes.SLOW, 
+                            _         => throw new NotSupportedException()
+                        };
+                        seek_no_whitespace();
+                        (ctx, success) = ParseAsVariable(); // ctx is boxed anonymous RunTimeVariable type
+                        if (!success) {
+                            // error : invalid variable type
+                            return default;
+                        }
+                        seek_no_whitespace();
+                        Alias = ActiveToken.ctx;
+                        seek_no_whitespace();
+                        if (CheckLineTerminated()) {
+                            if (!Memory.TryReserve(MemoryMode, (int)((RunTimeVariableType)ctx).size)) return default;  // error pass back
+                            return (OperationTypes.RUNTIME, (MemoryMode, ctx, Alias));
+                        } else if (ActiveToken.ctx[0] != '=') {
+                            // error malformed instruction
+                            return default;
+                        } else {
+                            Step();
+                            seek_no_whitespace();
+                            // evaluate rightside
+                            break;
+                        }
+                }
+
+                (ctx, success) = ParseAsVariable();
+                if (success) return (OperationTypes.KEYWORD, ctx);
+
+
+                if (ActiveToken.ctx == "-:") {
+                    Step();
+
+                    // next branch back is here | when we need to "beq -" we now can
+                    return (OperationTypes.ANON_REL_BRANCH, '-');
+                } else if (ActiveToken.ctx == "+:") {
+                    Step();
+
+                    // for terms waiting on the next forward branch, we can now solve for "beq +"
+                    return (OperationTypes.ANON_REL_BRANCH, '+');
+                }
+
+                //(ctx, success) = ParseAsFilter();
+                //if (success) return (OperationTypes.KEYWORD, ctx);
+
+
+                var opcode = ActiveToken;
+
+                // Gather Instruction Information
+                var FIS_ctx = VerifyInstruction();
+
+                if (FIS_ctx == default) return default;                 // error pass back
+                if (FIS_ctx == OperandDecorators.Missing)          return (OperationTypes.EVALUATE, 0);
+                else return (OperationTypes.INSTRUCTION, (opcode, FIS_ctx));
+
+                #region         OperationExtract Local Functions
+
+                string LibGetPathFromContext() {
+                    var fp = string.Empty;
+                    var InitialCharacterCount = 0u;
+
+                    for (; !CheckLineTerminated(); Step()) {
+                        fp += ActiveToken;
+                        switch (ActiveToken.ctx[0]) {
+                            case '<':
+                                InitialCharacterCount++;
+                                continue;
+                            
+                            case '>':
+                                if (--InitialCharacterCount == 0) break;
+                                continue;
+                            
+                            default: continue;
+                        }
+                        
+                        break;
+                    }
+
+                    if (ActiveToken.ctx[0] != '>') {
+                        return string.Empty;
+                    } else {
+                        return InitialCharacterCount == 0 ? fp : string.Empty;   
+                    }
+                }
+                
+                bool CheckDirectiveMalformed() {
+                    if (CheckLineTerminated()) {
+                        // error malformed
+                        return true;
+                    }
+
+                    return false;
+                }
+                
+                (RunTimeVariableType ctx, bool succses) ParseAsVariable() {
+                    var type = ActiveToken.ctx.ToLower();
+                    if (type.Length < 2) return default;
+                    RunTimeVariableType ctx = default;
+
+                    ctx.signed = type[0] == 'i';
+                    if (!ctx.signed && type[0] != 'u') return default;
+                    
+
+                    var substring = 2;
+                    if      (type[1] == 'b') ctx.endian = true;
+                    else if (type[1] != 'l') substring = 1;
+
+                    if (substring == type.Length) return default;
+                    if (!uint.TryParse(type[substring..], out ctx.size)) return default;
+                    
+
+                    if ((ctx.size & 0b111) > 0) return default;
+                    
+
+                    ctx.size >>= 3;
+                    if (ctx.size == 0u) return default;
+                    return (ctx, true);
+                }
+
+                (RunTimeVariableFilterType ctx, bool succses) ParseAsFilter() {
+                    var type = ActiveToken;
+                    if (type.StringLength < 2) return default;
+                    RunTimeVariableFilterType ctx = default;
+
+                    if (type.ctx == "num") return (default, true);
+
+                    uint size = 0;
+
+                    if      (type.ctx[0] == 'i') ctx.signed = true;  // ix, ilx, ibx
+                    else if (type.ctx[0] == 'u') ctx.signed = false; // ux, ulx, ubx
+                    else if (type.ctx[0] == 'l') ctx.endian = false; // lx, l16, l32, l64..
+                    else if (type.ctx[0] == 'b') ctx.endian = true;  // bx, b16, b32, b64
+                    else if (type.ctx[0] == 'x') {
+                        if (!uint.TryParse(type.ctx[1..], out size))return default;
+                        if ((size & 0b111) > 0)                     return default;     // impossible size
+                        if (size == 0u)                             return default;     // impossible size
+                    } else                                          return default;
+
+                    if      (type.ctx[1] == 'l') {                                      // ilx, ulx
+                        if (ctx.endian != null)                     return default;
+                        else ctx.endian = false;
+                    }
+                    else if (type.ctx[1] == 'b') {                                      // ibx, ubx
+                        if (ctx.endian != null)                     return default;
+                        else ctx.endian = true;
+                    } else if (type.ctx[1] == 'x') {                                    // ix, ux, bx, lx
+                        if (!uint.TryParse(type.ctx[2..], out size))return default;
+                        if ((size & 0b111) > 0)                     return default;     // impossible size
+                        if (size == 0u)                             return default;     // impossible size
+                        ctx.size = size >> 3;                       return (ctx, true); // specified size (one type allowed, exclusive filter)
+                    } else                                          return default;
+
+                    if (type.StringLength < 3)                        return default;     // il, bl, ul and ub are not valid
+                    if (type.ctx[2] == 'x')                         return (ctx, true); // null size
+
+                    if (type.StringLength == 3)                       return default;
+                    if (!uint.TryParse(type.ctx[2..], out size))    return default;
+                    if ((size & 0b111) > 0)                         return default;     // impossible size
+                    if (size == 0u)                                 return default;     // impossible size
+                    ctx.size = size >> 3;                           return (ctx, true); // specified size (one type allowed, exclusive filter)
+                }
+
+                
+                OperandDecorators VerifyInstruction() {
+                    string[] CanUseA = ["asl", "lsr", "rol", "ror"];    // asl a, lsr a, rol a and ror a are all valid instructions with a as operand, no others.
+                    /*
+                     * ldr  (ld) + check for r
+                     * str  (st) + check for r
+                     * 
+                     * tra  (t)  + check for r
+                     * trx  (t)  + check for r
+                     * try  (t)  + check for r
+                     * tar  (ta) + check for r
+                     * tyr  (ty) + check for r
+                     * txr  (tx) + check for r
+                     * tir  (t)  + check for i + check for r
+                     *      check if i == r
+                     * 
+                     * bfc  (b)  + check for f
+                     * bfs  (b)  + check for f
+                     *      f must be flag type
+                     *      
+                     * inr  (in) + check for r
+                     *      r must be:
+                     *          indexing flag type
+                     *          memory location
+                     *          preprocessor INT
+                     *          
+                     * der (de)  + check for r
+                     *      r must be:
+                     *          indexing flag type
+                     *          memory location
+                     *          preprocessor INT
+                     *          
+                     */
+
+                    var opcode = ActiveToken.ctx.ToLower();
+                    switch (opcode) {
+                        #region     Explicit Instructions Supporting Immediate
+                        case "cpa": // cmp
+                        case "cpx":
+                        case "cpy":
+                        case "adc":
+                        case "and":
+                        case "cmp":
+                        case "eor": // #
+                        case "lda": // !z:
+                        case "ldx": // !a:
+                        case "ldy": // a:
+                        case "ora": // z:
+                        case "bgt":
+                        case "blt":
+                        case "bpl":
+                        case "bmi":
+                        case "bcc":
+                        case "bcs":
+                        case "bnc":
+                        case "bns":
+                        case "bvc":
+                        case "bvs":
+                        case "bzc": // #foo
+                        case "bzs": // foo
+                        case "bit":
+                            if (CheckFormat(false)) goto CheckMemoryAccessRulesWithImmediate;
+                            // error malformed instruction
+                            return default;
+                        #endregion  Explicit Instructions Supporting Immediate
+                        #region     Explicit Instructions Not Supporting Immediate
+                        case "sta":
+                        case "stx": // !z:
+                        case "sty": // !a:
+                        case "dec": // a:
+                        case "inc": // z:
+                        case "jmp":
+                        case "jeq":
+                        case "jne":
+                        case "jzs":
+                        case "jzc":
+                        case "jpl":
+                        case "jmi":
+                        case "jns":
+                        case "jnc":
+                        case "jcs":
+                        case "jcc":
+                        case "jgt":
+                        case "jlt":
+                        case "jvc":
+                        case "jvs":
+                        case "jsr":
+                        case "ceq":
+                        case "cne":
+                        case "czs":
+                        case "czc":
+                        case "cpl":
+                        case "cmi":
+                        case "cns":
+                        case "cnc":
+                        case "ccs":
+                        case "ccc":
+                        case "cgt":
+                        case "clt":
+                        case "cvc": // jmp !foo
+                        case "cvs": // jmp foo
+                        case "aso":
+                        case "slo":
+                        case "rla":
+                        case "rln":
+                        case "lse":
+                        case "sre":
+                        case "rrd":
+                        case "rra":
+                        case "aax":
+                        case "sax":
+                        case "dcm":
+                        case "dcp":
+                        case "usb":
+                        case "isc":
+                        case "axa":
+                        case "ahx":
+                        case "sha":
+                        case "sxa":
+                        case "xas":
+                        case "shx":
+                        case "sya":
+                        case "say":
+                        case "shy": // !foo
+                        case "shs": // !z:foo
+                        case "tas": // !a:foo
+                        case "lar": // z:foo
+                        case "las": // a:foo
+                            if (CheckFormat(false)) goto CheckMemoryAccessRulesNotPermittingImmediate;
+                            // error malformed instruction
+                            return default;
+                        #endregion  Explicit Instructions Not Supporting Immediate
+                        #region     Explicit Instructions Not Supporting Immediate, Supporting Implied A
+                        case "asl":
+                        case "lsr": // !z:
+                        case "rol": // !a:
+                        case "ror": // a:
+                        case "irl": // z:
+                        case "irr": //
+                            if (CheckFormat(true)) {
+                                if (CheckLineTerminated()) return OperandDecorators.Found;
+                                goto CheckMemoryAccessRulesNotPermittingImmediate;
+                            }
+                            // error malformed instruction
+                            return default;
+                        #endregion  Explicit Instructions Not Supporting Immediate, Supporting Implied A
+                        #region     Explicit Implied Instructions Supporting Overrule
+                        case "kil":
+                        case "hlt":
+                        case "jam": // !
+                        case "stp": // 
+                        case "clc":
+                        case "clv": // !
+                        case "sec": //      Implied or Implied Overruled\
+                            if (CheckFormat(true)) {
+                                if (CheckLineTerminated()) {
+                                    if (ActiveToken.ctx[0] == '!') return OperandDecorators.Overruled;
+                                    else return OperandDecorators.Found;
+                                } else if (ActiveToken.ctx[0] == '!') {
+                                    Step();
+                                    if (CheckLineTerminated()) return OperandDecorators.Overruled;
+                                    seek_no_whitespace();
+                                    if (CheckLineTerminated()) return OperandDecorators.Overruled;
+                                    // malformed instruction
+                                    return default;
+                                }
+                            }
+                            // error malformed instruction
+                            return default;
+                        #endregion  Explicit Implied Instructions Supporting Overrule
+                        #region     Explicit Immediate Instructions
+                        case "neg":
+                            if (CheckFormat(false)) goto CheckImmediate;
+                            // error malformed instruction
+                            return default;
+
+                        case "ana":
+                        case "asb":
+                        case "anc":
+                        case "asr":
+                        case "alr":
+                        case "sbx":
+                        case "xma":
+                        case "arr":
+                        case "axs":
+                        case "axm":
+                        case "ane": // !#foo
+                        case "xaa": // #foo
+                            if (CheckFormat(false)) {
+                                if (ActiveToken.ctx[0] == '!') {
+                                    if (CheckLineTerminated()) return default;
+                                    Step();
+                                    if (ActiveToken.ctx[0] == '#') return OperandDecorators.Overruled | OperandDecorators.Immediate;
+                                    else return OperandDecorators.Immediate;
+                                }
+                                goto CheckImmediate;
+                            }
+                            // error malformed instruction
+                            return default;
+                        #endregion  Explicit Immediate Instructions
+                        #region     Explicit Implied Instructions Not Supporting Overrule
+                        case "txy": 
+                        case "tyx": 
+                        case "tax":
+                        case "tay":
+                        case "tsx":
+                        case "txa":
+                        case "txs":
+                        case "dex":
+                        case "dey":
+                        case "inx":
+                        case "iny":
+                        case "pha":
+                        case "php":
+                        case "pla":
+                        case "plp":
+                        case "sei":
+                        case "rti":
+                        case "rts":
+                        case "ccf":
+                        case "sex":
+                        case "abs":
+                        case "rnc":
+                        case "rns":
+                        case "rpl":
+                        case "rmi":
+                        case "rvc":
+                        case "rvs":
+                        case "rcc":
+                        case "rlt":
+                        case "rcs":
+                        case "rgt":
+                        case "req":
+                        case "rzs":
+                        case "rne":
+                        case "rzc": //
+                            if (CheckFormat(true)) return CheckLineTerminated() ? OperandDecorators.Found: default;
+                            // error malformed instruction
+                            return default;
+                        #endregion  Explicit Implied Instructions Not Supporting Overrule
+
+
+                        case "nop":
+                            if (CheckFormat(true)) goto CheckMemoryAccessRulesWithImmediate;
+                            // error malformed instruction
+                            return default;
+                        // brk !
+                        // brk #foo
+                        case "brk": // brk  : Immediate OR Implied OR Implied (Overruled)
+                            if (CheckFormat(true)) {
+                                if (ActiveToken.ctx[0]      == '!') return OperandDecorators.Overruled;
+                                else if (ActiveToken.ctx[0] == '#') goto CheckImmediate;
+                                else if (CheckLineTerminated()) return OperandDecorators.Found;
+                                return default;
+                            }
+                            // error malformed instruction
+                            return default;
+
+                                    // !#foo
+                                    // #foo
+                                    // !foo
+                                    // !z:foo
+                                    // !a:foo
+                                    // z:foo
+                        case "lax": // a:foo
+                            // TODO: write some lax safety
+
+                            if (CheckFormat(false)) {
+                                if (ActiveToken.ctx[0] == '!') {
+                                    Step();
+                                    if (ActiveToken.ctx[0] == '#') return OperandDecorators.Overruled | OperandDecorators.Immediate;
+                                    else return default;
+                                }
+                                goto CheckMemoryAccessRulesWithImmediate;
+                            }
+                            // error malformed instruction
+                            return default;
+
+                        CheckImmediate:
+                            if (ActiveToken.ctx[0] == '!') {
+                                seek_no_whitespace();
+                                if (CheckLineTerminated()) return default;
+
+                                if (ActiveToken.ctx[0] != '#') {
+                                    // error, instruction is immediate only
+                                    return default;
+                                }
+
+                                Step();
+                                return OperandDecorators.Immediate | OperandDecorators.Overruled;
+                            }
+
+                            if (ActiveToken.ctx[0] != '#') {
+                                // error, instruction is immediate only
+                                return default;
+                            }
+
+                            Step();
+                            return OperandDecorators.Immediate;
+
+                        CheckMemoryAccessRulesNotPermittingImmediate:
+                            if (ActiveToken.ctx[0] == '#') {
+                                // error, does not permit immediate
+                                return default;
+                            }
+
+                            goto CheckMemoryAccessRules;
+
+                        CheckMemoryAccessRulesWithImmediate:
+                            if (ActiveToken.ctx[0] == '#') {
+                                Step();
+                                return OperandDecorators.Immediate;
+                            }
+
+                            goto CheckMemoryAccessRules;
+
+                        CheckMemoryAccessRules:
+                            return CheckMemoryAccessRules();
+                    }
+
+                    #region     Implicit Instruction Checking
+                    switch (opcode[..2]) {
+
+                        case "ld":
+                        case "cp":
+                            switch (opcode[2]) {
+                                case 'c':
+                                case 'n':
+                                case 'v':
+                                case 'z':
+                                    // error : ldc, ldn, ldv and ldz are forbidden terms.
+                                    // ldc   : lda #$00, rol            3 bytes, 4 cycles
+                                    // ldn   : rol, rol, lda #$00       4 bytes, 6 cycles
+                                    // ldv   : nothing
+                                    // ldz   : lda #$00                 2 bytes, 2 cycles
+                                    return default;
+                            }
+
+                            if (CheckFormat(false)) goto CheckMemoryAccessRulesWithImmediate;
+                            // error malformed instruction
+                            return default;
+
+
+                        case "st":
+                            switch (opcode[2]) {
+                                case 'c':
+                                case 'n':
+                                case 'v':
+                                case 'z':
+                                    // error not an instruction
+                                    // stz   : ldr #$00, str tar    (uses whichever reg is provably zero if reg awareness enabled, otherwise fails)
+                                    return default;
+                            }
+
+                            if (CheckFormat(false)) goto CheckMemoryAccessRulesNotPermittingImmediate;
+                            // error malformed instruction
+                            return default;
+
+                        case "ta":
+                            switch (opcode[2]) {
+                                case 'c':
+                                case 'n':
+                                case 'v':
+                                case 'z':
+                                case 'a':
+                                    // error not an instruction
+                                    // tac   : cmp #$01 ?
+                                    return default;
+
+                                default:
+                                    if (CheckFormat(true)) return OperandDecorators.Found;
+                                    // error malformed instruction
+                                    return default;
+                            }
+                        case "tx":
+                            switch (opcode[2]) {
+                                case 'c':
+                                case 'n':
+                                case 'v':
+                                case 'z':
+                                case 'x':
+                                    // error not an instruction
+                                    // tac   : cmp #$01 ?
+                                    return default;
+
+                                default:
+                                    if (CheckFormat(true)) return OperandDecorators.Found;
+                                    // error malformed instruction
+                                    return default;
+                            }
+
+                        case "ty":
+                            switch (opcode[2]) {
+                                case 'c':
+                                case 'n':
+                                case 'v':
+                                case 'z':
+                                case 'y':
+                                    // error not an instruction
+                                    // tac   : cmp #$01 ?
+                                    return default;
+
+                                default:
+                                    if (CheckFormat(true)) return OperandDecorators.Found;
+                                    // error malformed instruction
+                                    return default;
+                            }
+
+                        case "in":
+                        case "de":
+                            switch (opcode[2]) {
+                                case 'n':
+                                case 'v':
+                                case 'z':
+                                    // error not an instruction
+                                    // tac   : cmp #$01 ?
+                                    return default;
+
+                                default:
+                                    if (CheckFormat(true)) return OperandDecorators.Found;
+                                    // error malformed instruction
+                                    return default;
+                            }
+
+                        default:
+                            switch (opcode[0]) {
+                                case 'b':
+                                case 'r':
+                                    switch (opcode[1]) {
+                                        case 'a':
+                                        case 'x':
+                                        case 'y':
+                                            return default;
+                                    }
+
+                                    switch (opcode[2]) {
+                                        case 's':
+                                        case 'c':
+                                            break;
+
+                                        default: return default;
+                                    }
+
+                                    if (CheckFormat(false)) goto CheckMemoryAccessRulesWithImmediate;
+                                    // error malformed instruction
+                                    return default;
+
+                                case 't':
+                                    if (opcode[1] == opcode[2]) {
+                                        // error nothing to do not an instruction
+                                        return default;
+                                    }
+
+                                    var isFlag = (char c) => c switch { 'c' or 'n' or 'v' or 'z' => true, _ => default };
+
+                                    if (isFlag(opcode[1]) || isFlag(opcode[2])) {
+                                        // error not an instruction
+                                        return default;
+                                    }
+
+                                    if (CheckFormat(true)) return OperandDecorators.Found;
+                                    // error malformed instruction
+                                    return default;
+
+
+                                case 'c':
+                                case 'j':
+                                    switch (opcode[1]) {
+                                        case 'a':
+                                        case 'x':
+                                        case 'y':
+                                            return default;
+                                    }
+
+                                    switch (opcode[2]) {
+                                        case 's':
+                                        case 'c':
+                                            break;
+
+                                        default: return default;
+                                    }
+
+                                    if (CheckFormat(false)) goto CheckMemoryAccessRulesNotPermittingImmediate;
+                                    // error malformed instruction
+                                    return default;
+
+                            }
+                            return OperandDecorators.Missing; ;
+
+                        CheckMemoryAccessRulesNotPermittingImmediate:
+                            if (ActiveToken.ctx[0] == '#') {
+                                // error, does not permit immediate
+                                return default;
+                            }
+
+                            goto CheckMemoryAccessRules;
+
+                        CheckMemoryAccessRulesWithImmediate:
+                            if (ActiveToken.ctx[0] == '#') {
+                                Step();
+                                return OperandDecorators.Immediate;
+                            }
+
+                            goto CheckMemoryAccessRules;
+
+
+                        CheckMemoryAccessRules:
+                            return CheckMemoryAccessRules(); ; // rules
+                    }
+                    #endregion  Implicit Instruction Checking
+
+                    bool CheckFormat(bool SupportsImplied) {
+                        if (CheckLineTerminated())      return SupportsImplied;
+                        Step();
+                        if (TokenIndex == BasicRegexTokens.Length && DefineResolveBuffer.Count == 0)       
+                            return SupportsImplied;                                                     // implied may complete source (might be fail later)
+                        if (CheckLineTerminated())      return SupportsImplied;                         // implied may complete line
+                        if (ActiveToken.ctx[0] != ' ')      return false;                                   // if space does not follow opcode, fail
+                        seek_no_whitespace();
+                        return true;                                                                    // otherwise its safe to interpret
+                    }
+
+                    OperandDecorators CheckMemoryAccessRules() {
+                        if (ActiveToken.ctx == "a") {
+                            if (CanUseA.Contains(opcode)) {
+                                Step();
+                                return OperandDecorators.Found;
+                            }
+
+                            Step();
+                            if (CheckLineTerminated()) {                                                // we've already established we can't use the syntax a here
+                                // error malformed
+                                return default;
+                            }
+                            
+                            if (ActiveToken.ctx[0] == ':') {
+                                Step();
+                                return OperandDecorators.Enforced_ABS;
+                            } else {
+                                // error, a is reserved
+                                return default;
+                            }
+                        } else if (ActiveToken.ctx == "z") {
+                            Step();
+                            if (CheckLineTerminated()) return default;                                  // standalone z refers to zero flag, not implicit and unsuitable here
+                            if (ActiveToken.ctx[0] == ':') {
+                                Step();
+                                return OperandDecorators.Enforced_ZP;
+                            } else {
+                                // error, z is reserved
+                                return default;
+                            }
+                        } else if (ActiveToken.ctx[0] == '!') {
+                            Step();
+                            if (CheckLineTerminated()) {                                                // must overrule something
+                                // error malformed
+                                return default;
+                            }
+
+                            if (ActiveToken.ctx == "a") {
+                                Step();
+                                if (ActiveToken.ctx[0] == ':') {
+                                    Step();
+                                    return OperandDecorators.Enforced_ABS | OperandDecorators.Overruled;
+                                } else {
+                                    // error, a is reserved
+                                    return default;
+                                }
+                            } else if (ActiveToken.ctx == "z") {
+                                Step();
+                                if (ActiveToken.ctx[0] == ':') {
+                                    Step();
+                                    return OperandDecorators.Enforced_ZP | OperandDecorators.Overruled;
+                                } else {
+                                    // error, z is reserved
+                                    return default;
+                                }
+                            } else return OperandDecorators.Overruled;
+                        }
+
+                        return OperandDecorators.Found;
+                    }
+                }
+
+
+                #endregion      OperationExtract Local Functions
+            }
+            
+            bool CheckLineTerminated() => (TokenIndex == BasicRegexTokens.Length && DefineResolveBuffer.Count == 0) || ActiveToken.ctx[0] == ';' || ActiveToken.ctx[0] == '\n' || ActiveToken.ctx == "//" || ActiveToken.ctx == "/*";
+
+            // keep seeking beyond whitespace
+            void seek_no_whitespace(bool skip = false, bool regexParse = true) => Steps(() => !CheckLineTerminated() && (ActiveToken.ctx[0] == ' ' || ActiveToken.ctx[0] == '\t'), skip, regexParse);
+
             }
 
 
