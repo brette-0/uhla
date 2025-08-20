@@ -16,13 +16,6 @@ using static Numinous.Memory;
 
 namespace Numinous.Engine {
     internal static partial class Engine {
-        /// <summary>
-        /// Tokenizes referred source code at referred line from referred substring index into tokens split by step, then by delta in hierarchy, then by term.
-        /// </summary>
-        /// <param name="SourceFileReference"></param>
-        /// <param name="SourceLineReference"></param>
-        /// <param name="SourceLineSubStringIndex"></param>
-        /// <returns></returns>
         internal static (List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, int Finish, bool Success, bool Continue) Lexer(Memory<string> BasicRegexTokens, ref int SourceTokenIndex, ref int ErrorReportLineNumber, ref int ErrorReportStepNumber, string SourceFilePath) {
             // use BasicRegexTokens => RegexTokens (ref, no cloning?) | Ensures we solve all new defines without mutating the original
             //List<string> RegexTokens = ResolveDefines(BasicRegexTokens);
@@ -68,11 +61,6 @@ namespace Numinous.Engine {
 
                 // handle tokens
                 switch (ActiveToken.ctx) {
-                    //case "\n":
-                    //    // marks the end of this tasks ctx
-                    //    //ErrorReportLineNumber++;
-                    //    goto CheckForTermination;
-
                     case "//":
                         // marks the end of this tasks ctx
                         Steps(() => ActiveToken.ctx[0] != '\n');
@@ -113,25 +101,14 @@ namespace Numinous.Engine {
                             return default;
                         }
 
-
-
                         CopyDeltaTokens();
-
-                        //if (i == RegexTokens.Count - 1) {
-                        //    if (Program.WarningLevel.HasFlag(WarningLevels.VERBOSE))
-                        //        Terminal.Warn(ErrorTypes.SyntaxError, DecodingPhases.TOKEN,
-                        //            "Lines should not end with a semi-colon", ErrorReportLineNumber, Tokens.Count, ApplyWiggle(CollectiveContext, ActiveToken.StringIndex + 1, 1)
-                        //        );
-                        //    return Program.WarningLevel.HasFlag(WarningLevels.ERROR) ? default : Success();
-                        //}
-
-                        // modify regex tokens to remove used and stored
-                        //RegexTokens = [.. RegexTokens.TakeLast(RegexTokens.Count - i - 1)]; // trim last step from pattern
+                    
                         i                 = 0;
                         CollectiveContext = CollectiveContext[(ActiveToken.StringIndex + ActiveToken.StringLength)..];
                         ActiveToken.StringIndex       = 0;
                         break;
 
+                    // TODO: Add ++, --, and ~
                     case "+":   SimpleAddOperator(Operators.ADD);           break;
                     case "-":   SimpleAddOperator(Operators.SUB);           break;
                     case "*":   SimpleAddOperator(Operators.MULT);          break;
@@ -360,20 +337,6 @@ namespace Numinous.Engine {
                 }
             }
 
-            bool DoesNotRequireEvaluation(Directives ctx) {
-                Directives[] WhiteList = [Directives.CART, Directives.DEFINE, Directives.DISK, Directives.INCLUDE, Directives.INCLUDEBIN];
-                return WhiteList.Contains(ctx);
-            }
-            
-            //void PrepareNextStep(ref int ErrorReportLineNumber) {
-            //    MaxHierarchy = 0;
-            //    StepTokens.Clear();
-            //    TermTokens.Clear();
-            //    ContainerBuffer = [];
-            //    LastNonWhiteSpaceIndex = -1;
-            //    ExtractOperation(ref ErrorReportLineNumber);
-            //}
-
             bool CaptureCSTRING(Func<char, bool> HaltCapturePredicate) {
                 int csi = ActiveToken.StringIndex;
 
@@ -468,17 +431,6 @@ namespace Numinous.Engine {
             }
 
             bool SimpleCloseContainer(Operators Operator) => CloseContainer(Operator, Operator - 1);
-
-            //void CopyStepTokens() {
-            //    var StepTokenShallowCopy = StepTokens
-            //        .Select(t => (
-            //            t.DeltaTokens,                  // reference to a clone, should be fine
-            //            t.Hierachy,
-            //            t.Representation
-            //        )).ToList();
-
-            //    Tokens.Add((StepTokenShallowCopy, MaxHierarchy, OperationType));
-            //}
 
             void CopyDeltaTokens() {
                 CopyDeltaTermTokens();
