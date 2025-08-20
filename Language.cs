@@ -4,6 +4,8 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using Numinous.Engine;
 
+// Convert typical interpolated strings to use composite formatting for better language accuracy.
+
 namespace Numinous {
     namespace Language {
         internal enum Languages {
