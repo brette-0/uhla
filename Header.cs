@@ -4,6 +4,7 @@ using Numinous.Engine;
 namespace Numinous;
 
 public enum Mappers {
+    UNSPECIFIED = -1,
     NROM
 }
 
