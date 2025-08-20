@@ -7,51 +7,6 @@ namespace Numinous {
     namespace Engine {
         internal static partial class Engine {
 
-            [Flags]
-            internal enum 
-                Directives : byte {
-                PUSH_ILLEGAL,
-                POP_ILLEGAL,
-
-                PUSH_CPU,
-                POP_CPU,
-
-                PUSH_GPR,
-                POP_GPR,
-
-                PUSH_MEM,
-                POP_MEM,
-                
-                INCLUDE,
-                LOCAL_INCLUDE,
-                INCLUDEBIN,
-                LOCAL_INCLUDEBIN,
-                
-                ASSERT,
-                
-                CART,
-                DISK,
-                
-                DEFINE,
-                FUNCDEFINE,
-                UNDEFINE,
-                
-                ROM,
-                CPU,
-                
-                ERROR = byte.MaxValue
-            }
-
-            internal enum OperationTypes : byte {
-                FAIL,
-                DIRECTIVE,          // eg.. #include
-                INSTRUCTION,        // eg.. lda foo
-                EVALUATE,           // function, macros, RODATA writes
-                KEYWORD,            // int foo = bar, return
-                RUNTIME,            // u8 foo       : is a keyword BUT returns different ctx
-
-                ANON_REL_BRANCH,    // +: and -:
-            }
 
             /// <summary>
             /// default : error
@@ -81,11 +36,18 @@ namespace Numinous {
              *          propagate object references as much as possible
              *          generate constant static object literals
              */
+            
+            /// <summary>
+            /// 
+            /// </summary>
+            /// <param name="LinearTokens">Tokens that live between deltas in hierarchy when lexing.</param>
+            /// <returns></returns>
 
-            internal static (List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> Result, bool Success) StepLinearEvaluate(List<(int StringOffset, int StringLength, object data, bool IsOperator)> StepDeltaTokens) {
-                List<Operators> ValueMutators = [];
-                List<Operators> OperatorBuffer = [];
-                List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> ValueTokenBuffer = [];
+            internal static (List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> Result, bool Success) LinearEvalulate(List<(int StringOffset, int StringLength, object data, bool IsOperator)> LinearTokens) {
+                List<Operators>                                                          ValueMutators    = [];
+                List<Operators>                                                          OperatorBuffer   = [];
+                
+                List<(int StringOffset, int StringLength, object data, bool IsOperator)> ValueTokenBuffer = [];
 
                 List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> ResultTermTokens = [];
 
@@ -93,31 +55,74 @@ namespace Numinous {
 
                 bool ExpectOperator;
 
-                int i = 0; for (; i < StepDeltaTokens.Count; i++) {
+                int i = 0; for (; i < LinearTokens.Count; i++) {
+                    ValueMutators = [];
+                    while (LinearTokens[i].IsOperator) {
+                        if ((Operators)LinearTokens[i].data is not (Operators.INC or Operators.DEC or Operators.ADD or Operators.SUB or Operators.BITNOT or Operators.NOT)) {
+                            // error, invalid value modifier
+                        }
 
+                        ValueMutators.Add((Operators)LinearTokens[i].data);
+                    }
+                    
+                    // template latest buffer entry with token form
+                    ValueTokenBuffer.Add(LinearTokens[i]);
+                    
+                    var resp = GetObjectFromAlias((string)ValueTokenBuffer[i].data, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
+                    
+                    
+                    
+                    // New gen tokens must contain object data.
+                    
+                    
+                    // push token into processor
+                    
+                    // 2 values, 1 operator
+                    while (OperatorBuffer.Count + ValueTokenBuffer.Count < 3) {
+                        
+                    }
                 }
 
                 return default;
 
+                // Only for Operations between values, value modifiers like ++, --, +, -, ! and ~ are ackwnoledged on the value level.
+                int GetOperatorPrecedence(string Operator) => Operator switch {
+                    "*" or "/" or "%"  => 0,
+                    "+" or "-" => 1,
+                    "<<" or ">>" => 2,
+                    "<" or "<=" or ">" or ">=" or "<=>" => 3,
+                    "==" or "!=" => 4,
+                    "&" => 5,
+                    "^" => 6,
+                    "|" => 7,
+                    "&&" => 8,
+                    "||" => 9,
+                    "??" => 10,
+                    "?" or ":" => 11,
+                    "=" or "+=" or "-=" or "*=" or "/=" or "%=" or ">>=" or "<<=" or "&=" or "^=" or "|=" or "??=" => 12,
+                    
+                    _ => -1
+                };
+
                 ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool succses) ResolveCEXP() {
                     var LocalTargetScope = TargetScope;
                     ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) = (default, default);
-                    for (; i < StepDeltaTokens.Count; i++) {
-                        if (ExpectOperator != StepDeltaTokens[i].IsOperator) {
+                    for (; i < LinearTokens.Count; i++) {
+                        if (ExpectOperator != LinearTokens[i].IsOperator) {
                             // error, violated VOV
                             return default;
                         }
 
-                        (ctx, success) = GetObjectFromAlias((string)StepDeltaTokens[i].data, LocalTargetScope, AccessLevels.PUBLIC);
+                        (ctx, success) = GetObjectFromAlias((string)LinearTokens[i].data, LocalTargetScope, AccessLevels.PUBLIC);
                         if (ExpectOperator) {
-                            if ((Operators)(StepDeltaTokens[i].data) != Operators.PROPERTY) {
+                            if ((Operators)(LinearTokens[i].data) != Operators.PROPERTY) {
                                 if (ctx.data == null) {
                                     // error, null reference exception
                                     return default;
                                 }
                                 ReTargetWithMember();     // else search object for member of alias
 
-                            } else if ((Operators)StepDeltaTokens[i].data != Operators.NULLPROPERTY) {
+                            } else if ((Operators)LinearTokens[i].data != Operators.NULLPROPERTY) {
                                 if (ctx.data == null) {
                                     i++;                    // Skip next Operator, do not clear expect operator
                                     continue;               // pass down ctx as null
@@ -274,7 +279,6 @@ namespace Numinous {
             *      
             *      Whitespace will have to be an CEXP that begins with a whitespace token.
             *      
-            *      PER STEP
             *          TOKENS
             *              DELTA_TOKENS [TERMS]
             *                  STEP_DELTA_TOKENS
