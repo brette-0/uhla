@@ -38,24 +38,58 @@ namespace Numinous {
              */
             
             /// <summary>
+            /// TODO: make it support terms (CRUCIAL)
             /// 
             /// </summary>
             /// <param name="LinearTokens">Tokens that live between deltas in hierarchy when lexing.</param>
             /// <returns></returns>
 
-            internal static (List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> Result, bool Success) LinearEvalulate(List<(int StringOffset, int StringLength, object data, bool IsOperator)> LinearTokens) {
+            internal static ((int StringOffset, int StringLength, object data, bool IsOperator) result, bool Success, bool Unevaluable) LinearEvalulate(List<(int StringOffset, int StringLength, object data, bool IsOperator)> LinearTokens) {
                 List<Operators>                                                          ValueMutators    = [];
                 List<Operators>                                                          OperatorBuffer   = [];
                 
                 List<(int StringOffset, int StringLength, object data, bool IsOperator)> ValueTokenBuffer = [];
 
-                List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> ResultTermTokens = [];
+                //List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> ResultTermTokens = [];
 
                 Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>? TargetScope = Program.ActiveScopeBuffer[^1];
+                
+                var  i = 0;
 
-                bool ExpectOperator;
+                var ResolveOperationIndex = ^2;
 
-                int i = 0; for (; i < LinearTokens.Count; i++) {
+                // process the start here as there is no need to perform a check until we have 2 operators in the buffer.
+                var (Success, Unevaluable) = ProcessValue();
+                if (!Success) return Unevaluable ? (default, false, true) : default;    // error pass back 
+                
+                // each access is (Operator, Value)
+                for (; i < LinearTokens.Count; i++) {
+                    Success                              = ProcessOperator();
+                    if (!Success) return default;                                                               // error pass back 
+
+                    (Success, Unevaluable)               = ProcessValue();
+                    if (!Success) return Unevaluable ? (default, false, true) : default; // error pass back 
+
+                    // if the top element has lower priority than second from top, resolve second from top.
+                    while (OperatorBuffer.Count > 1 && GetHierarchy(OperatorBuffer[^1]) > GetHierarchy(OperatorBuffer[^2])) {
+                        // solve ^2 until the above is false.
+                        ResolveOperation();
+                    }
+                }
+                
+                // process last task (2 values, 1 operator) | invoke ProcessOperation for final elements
+                ResolveOperationIndex = ^1;
+                ResolveOperation();
+
+                return (ValueTokenBuffer[0], true, false);
+
+                // foo oper bar | first/second value order DOES NOT MATTER
+                bool ResolveOperation() {
+                    // We perform the operation as described in the parameters, removing data afterward. 
+                    return false;
+                }
+
+                (bool success, bool unevaluable) ProcessValue() {
                     ValueMutators = [];
                     while (LinearTokens[i].IsOperator) {
                         if ((Operators)LinearTokens[i].data is not (Operators.INC or Operators.DEC or Operators.ADD or Operators.SUB or Operators.BITNOT or Operators.NOT)) {
@@ -66,24 +100,48 @@ namespace Numinous {
                     }
                     
                     // template latest buffer entry with token form
+                    if (GetOperatorPrecedence((string)LinearTokens[i].data) > -1) {
+                        // error, expected a value
+                        return default;
+                    }
+                    
+                    // push token into processor
                     ValueTokenBuffer.Add(LinearTokens[i]);
                     
                     var resp = GetObjectFromAlias((string)ValueTokenBuffer[i].data, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
-                    
-                    
-                    
-                    // New gen tokens must contain object data.
-                    
-                    
-                    // push token into processor
-                    
-                    // 2 values, 1 operator
-                    while (OperatorBuffer.Count + ValueTokenBuffer.Count < 3) {
-                        
+                    if (!resp.success) {
+                        return (false, true);   // resulting value to be marked as Unevaluable
                     }
+
+                    // New gen tokens must contain object data.
+                    ValueTokenBuffer[i] = (
+                        ValueTokenBuffer[i].StringOffset,
+                        ValueTokenBuffer[i].StringLength,
+                        resp.ctx,                                   // inject object reference
+                        ValueTokenBuffer[i].IsOperator
+                    );
+                    
+                    // scan for post mut, looks like ++, --, INDEX, or CALL
+                    
+                    
+                    return (true, false);
+                }
+                
+                bool ProcessOperator() {
+                    if (!LinearTokens[i].IsOperator) {
+                        // error not an operator
+                        return false;
+                    }
+
+                    if ((Operators)LinearTokens[i].data is Operators.INC or Operators.DEC or Operators.NOT or Operators.BITNOT) {
+                        // error this operator cannot be used that way
+                        return false;
+                    }
+                    
+                    OperatorBuffer.Add((Operators)LinearTokens[i].data);
+                    return false;
                 }
 
-                return default;
 
                 // Only for Operations between values, value modifiers like ++, --, +, -, ! and ~ are ackwnoledged on the value level.
                 int GetOperatorPrecedence(string Operator) => Operator switch {
@@ -104,7 +162,7 @@ namespace Numinous {
                     _ => -1
                 };
 
-                ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool succses) ResolveCEXP() {
+                /*((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool succses) ResolveCEXP() {
                     var LocalTargetScope = TargetScope;
                     ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) = (default, default);
                     for (; i < LinearTokens.Count; i++) {
@@ -153,7 +211,7 @@ namespace Numinous {
                                 return;
                         }
                     }
-                }
+                }*/
             }
 
             /// <summary>

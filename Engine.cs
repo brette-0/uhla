@@ -383,6 +383,9 @@ namespace Numinous {
             MINT,    // int macro
             MSTRING, // string macro
             MEXP,    // expression macro
+            
+            
+            TOKENS, // for unresolved but declared expressions
         }
 
         internal enum AccessLevels : byte {
