@@ -1,4 +1,6 @@
-﻿using static Numinous.Engine.Engine;
+﻿using System.Runtime.InteropServices.ComTypes;
+using Antlr4.Runtime.Atn;
+using static Numinous.Engine.Engine;
 
 // YOU NEED TO WRITE RULES FOR LOADING INSTRUCTIONS
 // REMEMBER WE STILL NEED THE CF TO BE COOL
@@ -38,38 +40,100 @@ namespace Numinous {
              */
             
             /// <summary>
-            /// TODO: make it support terms (CRUCIAL)
+            /// 
             /// 
             /// </summary>
             /// <param name="LinearTokens">Tokens that live between deltas in hierarchy when lexing.</param>
             /// <returns></returns>
 
-            internal static ((int StringOffset, int StringLength, object data, bool IsOperator) result, bool Success, bool Unevaluable) LinearEvalulate(List<(int StringOffset, int StringLength, object data, bool IsOperator)> LinearTokens) {
+            internal static (List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data, bool IsOperator)> result, bool Success, bool Unevaluable) LinearEvalulate(List<(int StringOffset, int StringLength, object data, bool IsOperator)> LinearTokens) {
                 List<Operators>                                                          ValueMutators    = [];
                 List<Operators>                                                          OperatorBuffer   = [];
                 
                 List<(int StringOffset, int StringLength, object data, bool IsOperator)> ValueTokenBuffer = [];
 
-                //List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> ResultTermTokens = [];
+                List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data, bool IsOperator)> ResultTermTokens = [];
 
                 Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>? TargetScope = Program.ActiveScopeBuffer[^1];
                 
-                var  i = 0;
+                var  LinearTokenIndex = 0;
 
                 var ResolveOperationIndex = ^2;
 
                 // process the start here as there is no need to perform a check until we have 2 operators in the buffer.
-                var (Success, Unevaluable) = ProcessValue();
-                if (!Success) return Unevaluable ? (default, false, true) : default;    // error pass back 
+                bool Terminate; var (Success, Unevaluable) = ProcessValue();
+                if (!Success) return Unevaluable ? ([], false, true) : default;    // error pass back 
+
+                List<bool> SkipBuffer = [];
                 
                 // each access is (Operator, Value)
-                for (; i < LinearTokens.Count; i++) {
-                    Success                              = ProcessOperator();
-                    if (!Success) return default;                                                               // error pass back 
+                LinearTokenIndex++; while (LinearTokenIndex < LinearTokens.Count) {
+                    var        CheckCount       = 0;
+                    while (SkipBuffer.Count > 0 && !SkipBuffer[^1]) {
+                        LinearTokenIndex += 2;  // ensure there is information at space lti -1, but we can accept no info at lti
+                        if (!LinearTokens[LinearTokenIndex].IsOperator) {
+                            // error malformed
+                            return default;
+                        }
 
-                    (Success, Unevaluable)               = ProcessValue();
-                    if (!Success) return Unevaluable ? (default, false, true) : default; // error pass back 
+                        if      ((Operators)LinearTokens[LinearTokenIndex].data == Operators.CHECK) CheckCount++;
+                        else if ((Operators)LinearTokens[LinearTokenIndex].data == Operators.ELSE && --CheckCount == 0)
+                            SkipBuffer.RemoveAt(SkipBuffer.Count - 1);
+                    }
+                    
+                    (Success, Terminate)                = ProcessOperator(); LinearTokenIndex++;
+                    if (!Success) {
+                        if (!Terminate) return default; // error pass back 
+                        
+                        ResolveOperationIndex = ^1;     // clean out all tokens
+                        while (OperatorBuffer.Count > 0) ResolveOperation();
+                        ResolveOperationIndex = ^2;     // reset checker
+                        continue;
+                    }
 
+                    if (!LinearTokens[LinearTokenIndex].IsOperator) {
+                        // error operator malformed
+                    }
+
+                    if ((Operators)LinearTokens[LinearTokenIndex].data == Operators.CHECK) {
+                        // evaluate the buffer
+
+                        var CheckValue = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> data, AssembleTimeTypes type, AccessLevels access))ValueTokenBuffer[^1].data;
+                        bool result;
+                        
+                        switch (CheckValue.type) {
+                            case AssembleTimeTypes.INT: 
+                            case AssembleTimeTypes.CINT:    result = (int)CheckValue.data[""].data == 0; break;
+                            
+                            case AssembleTimeTypes.STRING:
+                            case AssembleTimeTypes.CSTRING: result = ((string)CheckValue.data[""].data).Length == 0; break;
+                            
+                            default:
+                                // error: ternary cannot use type
+                                return default;
+                        }
+
+                        SkipBuffer.Add(!result);
+                    } else if ((Operators)LinearTokens[LinearTokenIndex].data == Operators.ELSE) {
+                        // evaluate the buffer
+                        ResolveOperationIndex = ^1;     // clean out all tokens
+                        while (OperatorBuffer.Count > 0) ResolveOperation();
+                        ResolveOperationIndex = ^2;     // reset checker
+                        
+                        SkipBuffer[^1]        = true;
+                    } else if ((Operators)LinearTokens[LinearTokenIndex].data is Operators.TERM) {
+                        // evaluate the buffer
+                        ResolveOperationIndex = ^1;     // clean out all tokens
+                        while (OperatorBuffer.Count > 0) ResolveOperation();
+                        ResolveOperationIndex = ^2;     // reset checker
+                        
+                        ResultTermTokens.Add(((int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data, bool IsOperator))ValueTokenBuffer[0]);
+                    }
+                    
+                    (Success, Unevaluable)               = ProcessValue();   LinearTokenIndex++;
+                    if (!Success) return Unevaluable ? ([], false, true) : default; // error pass back 
+                    
+                    
                     // if the top element has lower priority than second from top, resolve second from top.
                     while (OperatorBuffer.Count > 1 && GetHierarchy(OperatorBuffer[^1]) > GetHierarchy(OperatorBuffer[^2])) {
                         // solve ^2 until the above is false.
@@ -81,65 +145,357 @@ namespace Numinous {
                 ResolveOperationIndex = ^1;
                 ResolveOperation();
 
-                return (ValueTokenBuffer[0], true, false);
+                return (ResultTermTokens, true, false);
+                
 
                 // foo oper bar | first/second value order DOES NOT MATTER
                 bool ResolveOperation() {
+                    var Modifier = ValueTokenBuffer[ResolveOperationIndex];
+                    ValueTokenBuffer.RemoveAt(ResolveOperationIndex.GetOffset(ValueTokenBuffer.Count));
+                    
+                    // the new value at ValueTokenBuffer[ResolveOperationIndex] is the new output variable.
+                    
+                    // The modifier should store this as an object entry, data would contain its 'self' value but its type is contained on its object level
+                    var tA = (((object data, AssembleTimeTypes type, AccessLevels access))Modifier.data).type;
+                    var tB = (((object data, AssembleTimeTypes type, AccessLevels access))ValueTokenBuffer[ResolveOperationIndex].data).type;
+
+                    if (OperatorBuffer[ResolveOperationIndex] is Operators.SET or Operators.INCREASE or Operators.DECREASE
+                                                         or Operators.MULTIPLY or Operators.DIVIDE
+                                                         or Operators.MODULATE or Operators.ASSIGNMASK
+                                                         or Operators.ASSIGNFLIP or Operators.ASSIGNSET
+                                                         or Operators.RIGHTSET or Operators.LEFTSET
+                                                         or Operators.NULLSET) {
+                        // ensure type compatibility for setting (polarity matters)
+                    }
+                    
+                    if (OperatorBuffer[ResolveOperationIndex] is Operators.PROPERTY or Operators.NULLPROPERTY) {
+                        // member getting is always a possible operation, given the member exists.
+                    }
+
+                    // for each type, switch case for operation. | won't ever assign. nor get member
+                    // math with anything with a location uses the offset of that member. Bank, Proc, Inter, RT
+                    switch (tA, tB) {
+                        case (AssembleTimeTypes.INT, AssembleTimeTypes.INT):
+                        case (AssembleTimeTypes.CINT, AssembleTimeTypes.INT):
+                        case (AssembleTimeTypes.INT, AssembleTimeTypes.CINT):
+                        case (AssembleTimeTypes.CINT, AssembleTimeTypes.CINT):
+                            switch (OperatorBuffer[ResolveOperationIndex]) {
+                                case Operators.ADD:
+                                case Operators.SUB:
+                                case Operators.MULT:
+                                case Operators.DIV:
+                                case Operators.MOD:
+                                case Operators.RIGHT:
+                                case Operators.LEFT:
+                                case Operators.EQUAL:
+                                case Operators.INEQUAL:
+                                    
+                                case Operators.NULL:
+                                case Operators.GT:
+                                case Operators.LT:
+                                case Operators.GOET:
+                                case Operators.LOET:
+                                case Operators.SERIAL:
+                                case Operators.BITMASK:
+                                case Operators.BITSET:
+                                case Operators.BITFLIP:
+                                case Operators.OR:
+                                case Operators.AND:
+                                    
+                                     break;
+                            }
+                            // yields CINT
+                            break;
+                        
+                        case (AssembleTimeTypes.STRING, AssembleTimeTypes.STRING):
+                        case (AssembleTimeTypes.CSTRING, AssembleTimeTypes.STRING):
+                        case (AssembleTimeTypes.STRING, AssembleTimeTypes.CSTRING):
+                        case (AssembleTimeTypes.CSTRING, AssembleTimeTypes.CSTRING):
+                            // yields CSTRING
+                            break;
+                        
+                        case (AssembleTimeTypes.CHARMAP, AssembleTimeTypes.CHARMAP):
+                            // per element, process remap as X[n] oper Y[n] for each value of n.
+                            break;
+                        
+                        case (AssembleTimeTypes.CHARMAP, AssembleTimeTypes.STRING):
+                        case (AssembleTimeTypes.STRING, AssembleTimeTypes.CHARMAP):
+                        case (AssembleTimeTypes.CHARMAP, AssembleTimeTypes.CSTRING):
+                        case (AssembleTimeTypes.CSTRING, AssembleTimeTypes.CHARMAP):
+                            // yields formatted char array
+                            break;
+                            
+                        
+                        case (AssembleTimeTypes.REG, AssembleTimeTypes.INT):
+                        case (AssembleTimeTypes.REG, AssembleTimeTypes.CINT):
+                        case (AssembleTimeTypes.CREG, AssembleTimeTypes.INT):
+                        case (AssembleTimeTypes.CREG, AssembleTimeTypes.CINT):
+                            // yields (constant?) indexing register with constant (IRWC) X, Y or R
+                            break;
+                        
+                        
+                        case (AssembleTimeTypes.ICRWN, AssembleTimeTypes.INT):
+                        case (AssembleTimeTypes.ICRWN, AssembleTimeTypes.CINT):
+                        case (AssembleTimeTypes.IRWN, AssembleTimeTypes.INT):
+                        case (AssembleTimeTypes.IRWN, AssembleTimeTypes.CINT):
+                            // yields (constant?) indexing register with constant (IRWC) X, Y or R
+                            break;
+                        
+                        default:
+                            // error : cannot use tA against tB
+                            return false;
+                    }
+                    
+                    
                     // We perform the operation as described in the parameters, removing data afterward. 
                     return false;
                 }
 
                 (bool success, bool unevaluable) ProcessValue() {
                     ValueMutators = [];
-                    while (LinearTokens[i].IsOperator) {
-                        if ((Operators)LinearTokens[i].data is not (Operators.INC or Operators.DEC or Operators.ADD or Operators.SUB or Operators.BITNOT or Operators.NOT)) {
+                    var Modified = false;
+                    while (LinearTokens[LinearTokenIndex].IsOperator) {
+                        if ((Operators)LinearTokens[LinearTokenIndex].data is not (Operators.INC or Operators.DEC or Operators.ADD or Operators.SUB or Operators.BITNOT or Operators.NOT)) {
                             // error, invalid value modifier
+                            return default;
+                        } else if (Modified && (Operators)LinearTokens[LinearTokenIndex].data is Operators.INC or Operators.DEC) {
+                            // error, double unary assignment
+                            return default;
                         }
 
-                        ValueMutators.Add((Operators)LinearTokens[i].data);
+                        ValueMutators.Add((Operators)LinearTokens[LinearTokenIndex].data);
                     }
                     
                     // template latest buffer entry with token form
-                    if (GetOperatorPrecedence((string)LinearTokens[i].data) > -1) {
+                    if (GetOperatorPrecedence((string)LinearTokens[LinearTokenIndex].data) > -1) {
                         // error, expected a value
                         return default;
                     }
                     
                     // push token into processor
-                    ValueTokenBuffer.Add(LinearTokens[i]);
+                    ValueTokenBuffer.Add(LinearTokens[LinearTokenIndex]);
                     
-                    var resp = GetObjectFromAlias((string)ValueTokenBuffer[i].data, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
+                    var resp = GetObjectFromAlias((string)ValueTokenBuffer[LinearTokenIndex].data, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
                     if (!resp.success) {
                         return (false, true);   // resulting value to be marked as Unevaluable
                     }
 
+                    while (ValueMutators.Count > 0) ApplyMutation();
+
                     // New gen tokens must contain object data.
-                    ValueTokenBuffer[i] = (
-                        ValueTokenBuffer[i].StringOffset,
-                        ValueTokenBuffer[i].StringLength,
+                    ValueTokenBuffer[LinearTokenIndex] = (
+                        ValueTokenBuffer[LinearTokenIndex].StringOffset,
+                        ValueTokenBuffer[LinearTokenIndex].StringLength,
                         resp.ctx,                                   // inject object reference
-                        ValueTokenBuffer[i].IsOperator
+                        ValueTokenBuffer[LinearTokenIndex].IsOperator
                     );
                     
                     // scan for post mut, looks like ++, --, INDEX, or CALL
+                    LinearTokenIndex++;
+                    if (LinearTokens[LinearTokenIndex].IsOperator) {
+                        var LastValue = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>) ValueTokenBuffer[^1].data);
+                        if (LastValue[""].type is not (AssembleTimeTypes.INT or AssembleTimeTypes.CINT)) {
+                            switch ((Operators)LinearTokens[LinearTokenIndex].data) {
+                                case Operators.INC:
+                                case  Operators.DEC:
+                                    
+                                    
+                                default:    // operator is intended for next operation
+                                    break;
+                            } 
+                        }
+                    } else {
+                        var CurrentValue = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>) LinearTokens[LinearTokenIndex].data);
+                        var LastValue = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>) ValueTokenBuffer[^1].data);
+                        
+                        if (CurrentValue[""].type is AssembleTimeTypes.INDEX) {
+                            /*
+                             *  int/cint : cpu space
+                             *                  indexed with int, reg, ir
+                             *                  lda 2[2], lda 2[x], lda 2[x + 2]
+                             * 
+                             *  rt       : endian based index (like CS index type)
+                             *                  lda foo[2]
+                             *                  lda foo[x]      :: do not support for big endian!
+                             *                  lda foo[2 + x]  :: do not support for big endian!
+                             *  string   : char
+                             *      "phrase"[2]
+                             *
+                             *  we do support the following:
+                             *  2[2][2] => 6
+                             *  2[2][x] => 4[x]
+                             *  2[x][2] => 4[x]
+                             *  2[x + 2][2] = 4[x]
+                             *  2[x][x] => error, no double x memory address mode
+                             *  2[x][y] => error, cannot index by both x and y
+                             * 
+                             *  array type : element    NOT IMPLEMENTED YET
+                             */
+
+                            switch (LastValue[""].type) {
+                                case  AssembleTimeTypes.RT:
+                                case AssembleTimeTypes.CRT:
+                                    RunTimeVariableType tRT       =  (RunTimeVariableType)LastValue[""].data;
+                                    int                 offset;
+                                    switch (CurrentValue[""].type) {
+                                        case AssembleTimeTypes.INT:
+                                        case AssembleTimeTypes.CINT:
+                                            offset = (int)LastValue["offset"].data + (tRT.endian ? (int)CurrentValue[""].data : (int)(tRT.size - (int)CurrentValue[""].data));
+                                            break;
+                                        
+                                        case AssembleTimeTypes.REG:
+                                        case AssembleTimeTypes.CREG:
+                                            // new irwn/icrwn combination?
+                                        
+                                        case AssembleTimeTypes.IRWN:
+                                        case AssembleTimeTypes.ICRWN:
+                                            // apply immediate to offset based on endian, apply register. New ir objet
+                                            break;
+                                        
+                                        default:
+                                            // error cannot index with type {type}
+                                            return default;
+                                    } 
+                                    
+                                    // create cint literal in place
+                                    break;
+                                    
+                                case AssembleTimeTypes.STRING:
+                                case AssembleTimeTypes.CSTRING:
+                                    // int type of the char at index specified
+                                    break;
+                                
+                                default:
+                                    // error type does not support index
+                                    return default;
+                            }
+                        } else if (CurrentValue[""].type is AssembleTimeTypes.CALL) {
+                            // load macro into source buffer
+                            // recurse into invocation
+                            // create new constant object in place of LastValue
+                        }
+                    }
                     
                     
                     return (true, false);
+
+                    void ApplyMutation() {
+                        var LastValue = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>) ValueTokenBuffer[^1].data);
+                        switch (LastValue[""].type, ValueMutators[^1]) {
+
+                            case (AssembleTimeTypes.INT, Operators.ADD):
+                            case (AssembleTimeTypes.CINT, Operators.ADD): // abs
+                                LastValue[""] = new (){
+                                    data  = Math.Abs((int)LastValue[""].data),
+                                    type  = LastValue[""].type,
+                                    level = LastValue[""].level
+                                };
+                            
+                                break;
+                            
+                            // inc/dec does NOT support constant object references for obvious reasons
+                            case (AssembleTimeTypes.INT, Operators.INC): // inc
+                                LastValue[""] = new (){
+                                    data  = Math.Abs((int)LastValue[""].data + 1),
+                                    type  = LastValue[""].type,
+                                    level = LastValue[""].level
+                                };
+                            
+                                break;
+                            
+                            case (AssembleTimeTypes.INT, Operators.DEC): // dec
+                                LastValue[""] = new (){
+                                    data  = Math.Abs((int)LastValue[""].data - 1),
+                                    type  = LastValue[""].type,
+                                    level = LastValue[""].level
+                                };
+                            
+                                break;
+                            
+                            case (AssembleTimeTypes.INT, Operators.SUB):
+                            case (AssembleTimeTypes.CINT, Operators.SUB):   // neg
+                                LastValue[""] = new (){
+                                    data  = -(int)LastValue[""].data,
+                                    type  = LastValue[""].type,
+                                    level = LastValue[""].level
+                                };
+                                break;
+
+                            case (AssembleTimeTypes.INT, Operators.NOT):
+                            case (AssembleTimeTypes.CINT, Operators.NOT):   // == 0
+                                LastValue[""] = new (){
+                                    data  = (0 == (int)LastValue[""].data) ? 1 : 0,
+                                    type  = LastValue[""].type,
+                                    level = LastValue[""].level
+                                };
+                                break;
+
+                            case (AssembleTimeTypes.INT, Operators.BITNOT):
+                            case (AssembleTimeTypes.CINT, Operators.BITNOT):// ^= (uint)-1
+                                LastValue[""] = new (){
+                                    data  = ~(int)LastValue[""].data,
+                                    type  = LastValue[""].type,
+                                    level = LastValue[""].level
+                                };
+                                break;
+
+                            case (AssembleTimeTypes.STRING, Operators.ADD):
+                            case (AssembleTimeTypes.CSTRING, Operators.ADD): // upper case
+                                LastValue[""] = new (){
+                                    data  = ((string)LastValue[""].data).ToUpper(),
+                                    type  = LastValue[""].type,
+                                    level = LastValue[""].level
+                                };
+                                break;
+                            
+                            case (AssembleTimeTypes.STRING, Operators.SUB):
+                            case (AssembleTimeTypes.CSTRING, Operators.SUB): // lower case
+                                LastValue[""] = new (){
+                                    data  = ((string)LastValue[""].data).ToLower(),
+                                    type  = LastValue[""].type,
+                                    level = LastValue[""].level
+                                };
+                                break;
+
+                                
+                            case (AssembleTimeTypes.STRING, Operators.NOT):
+                            case (AssembleTimeTypes.CSTRING, Operators.NOT): // turn into spaces
+                                LastValue[""] = new (){
+                                    data  = new string(' ', ((string)LastValue[""].data).Length),
+                                    type  = LastValue[""].type,
+                                    level = LastValue[""].level
+                                };
+                                break;
+
+                            case (AssembleTimeTypes.STRING, Operators.BITNOT):
+                            case (AssembleTimeTypes.CSTRING, Operators.BITNOT):  // length of
+                                LastValue[""] = new (){
+                                    data  = ((string)LastValue[""].data).Length,
+                                    type  = LastValue[""].type,
+                                    level = LastValue[""].level
+                                };
+                                break;
+                            
+                            default:
+                                // error : cannot apply unary to this
+                                break;
+                        }
+                    }
                 }
                 
-                bool ProcessOperator() {
-                    if (!LinearTokens[i].IsOperator) {
+                (bool Success, bool Terminate) ProcessOperator() {
+                    if (!LinearTokens[LinearTokenIndex].IsOperator) {
                         // error not an operator
-                        return false;
+                        return default;
                     }
 
-                    if ((Operators)LinearTokens[i].data is Operators.INC or Operators.DEC or Operators.NOT or Operators.BITNOT) {
+                    if ((Operators)LinearTokens[LinearTokenIndex].data is Operators.INC or Operators.DEC or Operators.NOT or Operators.BITNOT) {
                         // error this operator cannot be used that way
-                        return false;
-                    }
+                        return default;
+                    } 
                     
-                    OperatorBuffer.Add((Operators)LinearTokens[i].data);
-                    return false;
+                    OperatorBuffer.Add((Operators)LinearTokens[LinearTokenIndex].data);
+                    return (true, false);
                 }
 
 

@@ -352,25 +352,24 @@ namespace Numinous {
             BANK,  // Bank
             EXP,   // Expression
 
-            OBJECT,  // The Boxed 'AnyType' such as long as its not constant
-            COBJECT, // The Boxed 'AnyType' clearing object reference from object, or a constant object
-
-
+            OBJECT,  // The Boxed 'AnyType' such as long as its not constant      | Cast Exclusive Type
+            
             CONSTANT = 0x040,
 
             CINT = CONSTANT, // Constant int
             CSTRING,         // Constant string
-            TYPE,            // typeof result
-
-            CSCOPE, // Constant Scope reference
-            CRT,    // Constant runtime reference
-            CREG,   // Constant register reference
-            CFLAG,  // Constant flag reference
-            CPROC,  // Constant procedure reference
-            CINTER, // Constant interrupt reference
-            CBANK,  // Constant bank reference
-            CEXP,   // Constant Expression
-            FEXP,   // Functional Expression
+            
+            CSCOPE,  // Constant Scope reference
+            CRT,     // Constant runtime reference
+            CREG,    // Constant register reference
+            CFLAG,   // Constant flag reference
+            CPROC,   // Constant procedure reference
+            CINTER,  // Constant interrupt reference
+            CBANK,   // Constant bank reference
+            CEXP,    // Constant Expression
+            COBJECT, // The Boxed 'AnyType' clearing object reference from object, or a constant object      | Cast Exclusive Type
+            
+            FEXP,    // Functional Expression
 
             IRWN,  // Indexing Register with N             foo[i + 2] situations
             ICRWN, // Indexing Constant Register with N    foo[x + 2] situations
@@ -379,13 +378,14 @@ namespace Numinous {
             OPER,     // Operation
 
             MACRO = 0x80,
-            // void macro
-            MINT,    // int macro
-            MSTRING, // string macro
-            MEXP,    // expression macro
             
+            TYPE,    // typeof result
+            CHARMAP, // for ASCII redirection
             
-            TOKENS, // for unresolved but declared expressions
+            INDEX,
+            CALL,
+            
+            TOKENS,  // for unresolved but declared expressions
         }
 
         internal enum AccessLevels : byte {
