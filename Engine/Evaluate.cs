@@ -594,24 +594,110 @@ namespace Numinous {
                              *  array type : element    NOT IMPLEMENTED YET
                              */
 
+                            int                 offset;
                             switch (LastValue[""].type) {
+                                case AssembleTimeTypes.CSTRING:
+                                case AssembleTimeTypes.STRING:
+                                    switch (CurrentValue[""].type) {
+                                        case AssembleTimeTypes.CINT:
+                                        case AssembleTimeTypes.INT:
+                                            LastValue[""] = (
+                                                data: ((string)LastValue[""].data)[(int)CurrentValue[""].data],
+                                                type: AssembleTimeTypes.CSTRING,
+                                                level: AccessLevels.PUBLIC
+                                            );
+                                            break;
+                                        
+                                        default:
+                                            // error, may not index string with anything but int
+                                            return default;
+                                    }
+                                    
+                                    break;
+                                
+                                case AssembleTimeTypes.INT:
+                                case AssembleTimeTypes.CINT:
+                                    offset = (int)LastValue[""].data;
+
+                                    switch (CurrentValue[""].type) {
+                                        case AssembleTimeTypes.RT:
+                                        case AssembleTimeTypes.CRT:
+                                            offset += (int)CurrentValue["offset"].data;
+                                            LastValue[""] = (
+                                                data: offset,
+                                                type: AssembleTimeTypes.CINT,
+                                                level: AccessLevels.PUBLIC
+                                            );
+                                            
+                                            break;
+                                        
+                                        case AssembleTimeTypes.INT:
+                                        case AssembleTimeTypes.CINT:
+                                            offset += (int)CurrentValue[""].data;
+                                            LastValue[""] = (
+                                                data: offset,
+                                                type: AssembleTimeTypes.CINT,
+                                                level: AccessLevels.PUBLIC
+                                            );
+                                            
+                                            break;
+                                        
+                                        case AssembleTimeTypes.CREG:
+                                        case AssembleTimeTypes.REG:
+                                            LastValue = new() {
+                                                {"",            (0,                                       AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
+                                                {"coefficient", ((int)LastValue[""].data,                 AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
+                                                {"register",    ((System.Registers)CurrentValue[""].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
+                                            };
+                                            break;
+                                        
+                                        case AssembleTimeTypes.ICRWN:
+                                        case AssembleTimeTypes.IRWN:
+                                            offset += (int)CurrentValue["coefficient"].data;
+                                            LastValue = new() {
+                                                {"",            (0,                                               AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
+                                                {"coefficient", (offset,                                          AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
+                                                {"register",    ((System.Registers)CurrentValue["register"].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
+                                            };
+                                            break;
+                                    }
+                                    break;        
+                                
                                 case  AssembleTimeTypes.RT:
                                 case AssembleTimeTypes.CRT:
                                     RunTimeVariableType tRT       =  (RunTimeVariableType)LastValue[""].data;
-                                    int                 offset;
+                                    
                                     switch (CurrentValue[""].type) {
                                         case AssembleTimeTypes.INT:
                                         case AssembleTimeTypes.CINT:
                                             offset = (int)LastValue["offset"].data + (tRT.endian ? (int)CurrentValue[""].data : (int)(tRT.size - (int)CurrentValue[""].data));
+                                            LastValue[""] = (
+                                                data: offset,
+                                                type: AssembleTimeTypes.CINT,
+                                                level: AccessLevels.PUBLIC
+                                            );
                                             break;
                                         
                                         case AssembleTimeTypes.REG:
                                         case AssembleTimeTypes.CREG:
+                                            LastValue = new() {
+                                                {"",            (0,                                       AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
+                                                {"coefficient", ((int)LastValue["offset"].data,           AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
+                                                {"register",    ((System.Registers)CurrentValue[""].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
+                                            };
+                                            break;
+                                        
                                             // new irwn/icrwn combination?
                                         
                                         case AssembleTimeTypes.IRWN:
                                         case AssembleTimeTypes.ICRWN:
                                             // apply immediate to offset based on endian, apply register. New ir objet
+                                            offset = (int)LastValue["offset"].data + (tRT.endian ? (int)CurrentValue["coefficient"].data : (int)(tRT.size - (int)CurrentValue["coefficient"].data));
+                                            LastValue = new() {
+                                                {"",            (0,                                               AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
+                                                {"coefficient", (offset,                                          AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
+                                                {"register",    ((System.Registers)CurrentValue["register"].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
+                                            };
                                             break;
                                         
                                         default:
@@ -620,11 +706,6 @@ namespace Numinous {
                                     } 
                                     
                                     // create cint literal in place
-                                    break;
-                                    
-                                case AssembleTimeTypes.STRING:
-                                case AssembleTimeTypes.CSTRING:
-                                    // int type of the char at index specified
                                     break;
                                 
                                 default:
