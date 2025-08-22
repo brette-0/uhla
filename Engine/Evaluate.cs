@@ -46,7 +46,7 @@ namespace Numinous {
             /// <param name="LinearTokens">Tokens that live between deltas in hierarchy when lexing.</param>
             /// <returns></returns>
 
-            internal static (List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data, bool IsOperator)> result, bool Success, bool Unevaluable) LinearEvalulate(List<(int StringOffset, int StringLength, object data, bool IsOperator)> LinearTokens) {
+            internal static (List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data, bool IsOperator)> result, bool Success, bool Unevaluable) LinearEvaluate(List<(int StringOffset, int StringLength, object data, bool IsOperator)> LinearTokens) {
                 List<Operators>                                                          ValueMutators    = [];
                 List<Operators>                                                          OperatorBuffer   = [];
                 
@@ -150,14 +150,12 @@ namespace Numinous {
 
                 // foo oper bar | first/second value order DOES NOT MATTER
                 bool ResolveOperation() {
-                    var Modifier = ValueTokenBuffer[ResolveOperationIndex];
-                    ValueTokenBuffer.RemoveAt(ResolveOperationIndex.GetOffset(ValueTokenBuffer.Count));
-                    
                     // the new value at ValueTokenBuffer[ResolveOperationIndex] is the new output variable.
                     
                     // The modifier should store this as an object entry, data would contain its 'self' value but its type is contained on its object level
-                    var tA = (((object data, AssembleTimeTypes type, AccessLevels access))Modifier.data).type;
-                    var tB = (((object data, AssembleTimeTypes type, AccessLevels access))ValueTokenBuffer[ResolveOperationIndex].data).type;
+                    var Modifier = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)ValueTokenBuffer[ResolveOperationIndex].data);
+                    ValueTokenBuffer.RemoveAt(ResolveOperationIndex.GetOffset(ValueTokenBuffer.Count));
+                    var Output = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)ValueTokenBuffer[ResolveOperationIndex].data);
 
                     if (OperatorBuffer[ResolveOperationIndex] is Operators.SET or Operators.INCREASE or Operators.DECREASE
                                                          or Operators.MULTIPLY or Operators.DIVIDE
@@ -174,35 +172,179 @@ namespace Numinous {
 
                     // for each type, switch case for operation. | won't ever assign. nor get member
                     // math with anything with a location uses the offset of that member. Bank, Proc, Inter, RT
-                    switch (tA, tB) {
+                    switch (Modifier[""].type, Output[""].type) {
                         case (AssembleTimeTypes.INT, AssembleTimeTypes.INT):
                         case (AssembleTimeTypes.CINT, AssembleTimeTypes.INT):
                         case (AssembleTimeTypes.INT, AssembleTimeTypes.CINT):
                         case (AssembleTimeTypes.CINT, AssembleTimeTypes.CINT):
                             switch (OperatorBuffer[ResolveOperationIndex]) {
                                 case Operators.ADD:
+                                    Output[""] = (
+                                       data:    (int)(Output[""].data) + (int)(Modifier[""].data),
+                                       type:    AssembleTimeTypes.CINT,
+                                       access: Output[""].access
+                                    ); 
+                                    break;
+                                
+                                // polarity matters
                                 case Operators.SUB:
+                                    Output[""] = (
+                                        data:    (int)(Output[""].data) - (int)(Modifier[""].data),
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
                                 case Operators.MULT:
+                                    Output[""] = (
+                                        data:    (int)(Output[""].data) * (int)(Modifier[""].data),
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
+                                // polarity matters here on
                                 case Operators.DIV:
+                                    Output[""] = (
+                                        data:    (int)(Output[""].data) / (int)(Modifier[""].data),
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
                                 case Operators.MOD:
+                                    Output[""] = (
+                                        data:    (int)(Output[""].data) % (int)(Modifier[""].data),
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
                                 case Operators.RIGHT:
+                                    Output[""] = (
+                                        data:    (int)Output[""].data >>> (int)Modifier[""].data,
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
                                 case Operators.LEFT:
+                                    Output[""] = (
+                                        data:    (int)Output[""].data << (int)Modifier[""].data,
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
                                 case Operators.EQUAL:
+                                    Output[""] = (
+                                        data:    Output[""].data == Modifier[""].data ? 1 : 0,
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
                                 case Operators.INEQUAL:
-                                    
+                                    Output[""] = (
+                                        data:    Output[""].data != Modifier[""].data ? 1 : 0,
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
                                 case Operators.NULL:
+                                    Output[""] = (
+                                        data:    Output[""].data ?? Modifier[""].data,  // TODO: Look into why resharper thinks ?? will never trigger.
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
                                 case Operators.GT:
+                                    Output[""] = (
+                                        data:    (int)Output[""].data > (int)Modifier[""].data ? 1 : 0,
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
                                 case Operators.LT:
+                                    Output[""] = (
+                                        data:    (int)Output[""].data < (int)Modifier[""].data ? 1 : 0,
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
                                 case Operators.GOET:
+                                    Output[""] = (
+                                        data:    (int)Output[""].data >= (int)Modifier[""].data ? 1 : 0,
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
                                 case Operators.LOET:
+                                    Output[""] = (
+                                        data:    (int)Output[""].data <= (int)Modifier[""].data ? 1 : 0,
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
                                 case Operators.SERIAL:
+                                    Output[""] = (
+                                        data:    Output[""].data == Modifier[""].data ? 0 : (int)Output[""].data < (int)Modifier[""].data ? -1 : 1,
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
                                 case Operators.BITMASK:
+                                    Output[""] = (
+                                        data:    (int)Output[""].data & (int)Modifier[""].data,
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
                                 case Operators.BITSET:
+                                    Output[""] = (
+                                        data:    (int)Output[""].data | (int)Modifier[""].data,
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
                                 case Operators.BITFLIP:
+                                    Output[""] = (
+                                        data:    (int)Output[""].data ^ (int)Modifier[""].data,
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
                                 case Operators.OR:
+                                    Output[""] = (
+                                        data:    (int)Output[""].data > 0 || (int)Modifier[""].data > 0,
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
                                 case Operators.AND:
-                                    
-                                     break;
+                                    Output[""] = (
+                                        data:    (int)Output[""].data > 0 && (int)Modifier[""].data > 0,
+                                        type:    AssembleTimeTypes.CINT,
+                                        access: Output[""].access
+                                    ); 
+                                    break;
+                                
+                                
+                                default:
+                                    // error operator isn't supported between types int and int
+                                    return false;
+                                
                             }
                             // yields CINT
                             break;
@@ -211,12 +353,22 @@ namespace Numinous {
                         case (AssembleTimeTypes.CSTRING, AssembleTimeTypes.STRING):
                         case (AssembleTimeTypes.STRING, AssembleTimeTypes.CSTRING):
                         case (AssembleTimeTypes.CSTRING, AssembleTimeTypes.CSTRING):
+                            if (OperatorBuffer[ResolveOperationIndex] == Operators.ADD)
+                                Output[""] = (
+                                    data: (string)Output[""].data + (string)Modifier[""].data,
+                                    type: AssembleTimeTypes.CINT,
+                                    access: Output[""].access
+                                );
+                            else
+                                // error operator isn't supported between types string and string
+                                return false;
+
                             // yields CSTRING
                             break;
                         
-                        case (AssembleTimeTypes.CHARMAP, AssembleTimeTypes.CHARMAP):
-                            // per element, process remap as X[n] oper Y[n] for each value of n.
-                            break;
+//                        case (AssembleTimeTypes.CHARMAP, AssembleTimeTypes.CHARMAP):                  // TODO: Later version
+//                            // per element, process remap as X[n] oper Y[n] for each value of n.
+//                            break;
                         
                         case (AssembleTimeTypes.CHARMAP, AssembleTimeTypes.STRING):
                         case (AssembleTimeTypes.STRING, AssembleTimeTypes.CHARMAP):
@@ -225,24 +377,134 @@ namespace Numinous {
                             // yields formatted char array
                             break;
                             
-                        
-                        case (AssembleTimeTypes.REG, AssembleTimeTypes.INT):
-                        case (AssembleTimeTypes.REG, AssembleTimeTypes.CINT):
-                        case (AssembleTimeTypes.CREG, AssembleTimeTypes.INT):
-                        case (AssembleTimeTypes.CREG, AssembleTimeTypes.CINT):
-                            // yields (constant?) indexing register with constant (IRWC) X, Y or R
-                            break;
-                        
-                        
                         case (AssembleTimeTypes.ICRWN, AssembleTimeTypes.INT):
                         case (AssembleTimeTypes.ICRWN, AssembleTimeTypes.CINT):
                         case (AssembleTimeTypes.IRWN, AssembleTimeTypes.INT):
                         case (AssembleTimeTypes.IRWN, AssembleTimeTypes.CINT):
-                            // yields (constant?) indexing register with constant (IRWC) X, Y or R
+                        case (AssembleTimeTypes.CREG, AssembleTimeTypes.INT):
+                        case (AssembleTimeTypes.CREG, AssembleTimeTypes.CINT):
+                        case (AssembleTimeTypes.REG, AssembleTimeTypes.INT):
+                        case (AssembleTimeTypes.REG, AssembleTimeTypes.CINT):
+                            Output[""] = (
+                                data: 0,
+                                type: AssembleTimeTypes.CINT,
+                                access: Output[""].access
+                            );
+
+                            switch (OperatorBuffer[ResolveOperationIndex]) {
+                                case Operators.ADD:
+                                    Output["coefficient"] = (
+                                        data: (int)Modifier[""].data,
+                                        type: AssembleTimeTypes.CINT,
+                                        access: AccessLevels.PRIVATE
+                                    );
+                                    
+                                    break;
+                                
+                                case Operators.SUB:
+                                    Output["coefficient"] = (
+                                        data: -(int)Modifier[""].data,
+                                        type: AssembleTimeTypes.CREG,
+                                        access: AccessLevels.PRIVATE
+                                    );
+                                    
+                                    break;
+
+                                default:
+                                    // error : registers may be only added or subtracted to by a constant
+                                    return false;
+                            }
+                            
+                            Output["register"] = (
+                                data: (System.Registers)Output[""].data,
+                                type: AssembleTimeTypes.CREG,
+                                access: AccessLevels.PRIVATE
+                            );
+                            
+                            // yields constant indexing register with constant (IRWC) X, Y or R
+                            break;
+                        
+                        case (AssembleTimeTypes.BANK,   AssembleTimeTypes.BANK):
+                        case (AssembleTimeTypes.CBANK,  AssembleTimeTypes.BANK):
+                        case (AssembleTimeTypes.PROC,   AssembleTimeTypes.BANK):
+                        case (AssembleTimeTypes.CPROC,  AssembleTimeTypes.BANK):
+                        case (AssembleTimeTypes.INTER,  AssembleTimeTypes.BANK):
+                        case (AssembleTimeTypes.CINTER, AssembleTimeTypes.BANK):
+                        case (AssembleTimeTypes.MACRO,  AssembleTimeTypes.BANK):
+                        case (AssembleTimeTypes.RT,     AssembleTimeTypes.BANK):
+                        case (AssembleTimeTypes.CRT,    AssembleTimeTypes.BANK):
+                        case (AssembleTimeTypes.CBANK,  AssembleTimeTypes.CBANK):
+                        case (AssembleTimeTypes.PROC,   AssembleTimeTypes.CBANK):
+                        case (AssembleTimeTypes.CPROC,  AssembleTimeTypes.CBANK):
+                        case (AssembleTimeTypes.INTER,  AssembleTimeTypes.CBANK):
+                        case (AssembleTimeTypes.CINTER, AssembleTimeTypes.CBANK):
+                        case (AssembleTimeTypes.MACRO,  AssembleTimeTypes.CBANK):
+                        case (AssembleTimeTypes.RT,     AssembleTimeTypes.CBANK):
+                        case (AssembleTimeTypes.CRT,    AssembleTimeTypes.CBANK):
+                        case (AssembleTimeTypes.CBANK,  AssembleTimeTypes.PROC):
+                        case (AssembleTimeTypes.PROC,   AssembleTimeTypes.PROC):
+                        case (AssembleTimeTypes.CPROC,  AssembleTimeTypes.PROC):
+                        case (AssembleTimeTypes.INTER,  AssembleTimeTypes.PROC):
+                        case (AssembleTimeTypes.CINTER, AssembleTimeTypes.PROC):
+                        case (AssembleTimeTypes.MACRO,  AssembleTimeTypes.PROC):
+                        case (AssembleTimeTypes.RT,     AssembleTimeTypes.PROC):
+                        case (AssembleTimeTypes.CRT,    AssembleTimeTypes.PROC):
+                        case (AssembleTimeTypes.CBANK,  AssembleTimeTypes.CPROC):
+                        case (AssembleTimeTypes.PROC,   AssembleTimeTypes.CPROC):
+                        case (AssembleTimeTypes.CPROC,  AssembleTimeTypes.CPROC):
+                        case (AssembleTimeTypes.INTER,  AssembleTimeTypes.CPROC):
+                        case (AssembleTimeTypes.CINTER, AssembleTimeTypes.CPROC):
+                        case (AssembleTimeTypes.MACRO,  AssembleTimeTypes.CPROC):
+                        case (AssembleTimeTypes.RT,     AssembleTimeTypes.CPROC):
+                        case (AssembleTimeTypes.CRT,    AssembleTimeTypes.CPROC):
+                        case (AssembleTimeTypes.CBANK,  AssembleTimeTypes.INTER):
+                        case (AssembleTimeTypes.PROC,   AssembleTimeTypes.INTER):
+                        case (AssembleTimeTypes.CPROC,  AssembleTimeTypes.INTER):
+                        case (AssembleTimeTypes.INTER,  AssembleTimeTypes.INTER):
+                        case (AssembleTimeTypes.CINTER, AssembleTimeTypes.INTER):
+                        case (AssembleTimeTypes.MACRO,  AssembleTimeTypes.INTER):
+                        case (AssembleTimeTypes.RT,     AssembleTimeTypes.INTER):
+                        case (AssembleTimeTypes.CRT,    AssembleTimeTypes.INTER):
+                        case (AssembleTimeTypes.CBANK,  AssembleTimeTypes.CINTER):
+                        case (AssembleTimeTypes.PROC,   AssembleTimeTypes.CINTER):
+                        case (AssembleTimeTypes.CPROC,  AssembleTimeTypes.CINTER):
+                        case (AssembleTimeTypes.INTER,  AssembleTimeTypes.CINTER):
+                        case (AssembleTimeTypes.CINTER, AssembleTimeTypes.CINTER):
+                        case (AssembleTimeTypes.MACRO,  AssembleTimeTypes.CINTER):
+                        case (AssembleTimeTypes.RT,     AssembleTimeTypes.CINTER):
+                        case (AssembleTimeTypes.CRT,    AssembleTimeTypes.CINTER):
+                        case (AssembleTimeTypes.CBANK,  AssembleTimeTypes.MACRO):
+                        case (AssembleTimeTypes.PROC,   AssembleTimeTypes.MACRO):
+                        case (AssembleTimeTypes.CPROC,  AssembleTimeTypes.MACRO):
+                        case (AssembleTimeTypes.INTER,  AssembleTimeTypes.MACRO):
+                        case (AssembleTimeTypes.CINTER, AssembleTimeTypes.MACRO):
+                        case (AssembleTimeTypes.MACRO,  AssembleTimeTypes.MACRO):
+                        case (AssembleTimeTypes.RT,     AssembleTimeTypes.MACRO):
+                        case (AssembleTimeTypes.CRT,    AssembleTimeTypes.MACRO):
+                        case (AssembleTimeTypes.CBANK,  AssembleTimeTypes.RT):
+                        case (AssembleTimeTypes.PROC,   AssembleTimeTypes.RT):
+                        case (AssembleTimeTypes.CPROC,  AssembleTimeTypes.RT):
+                        case (AssembleTimeTypes.INTER,  AssembleTimeTypes.RT):
+                        case (AssembleTimeTypes.CINTER, AssembleTimeTypes.RT):
+                        case (AssembleTimeTypes.MACRO,  AssembleTimeTypes.RT):
+                        case (AssembleTimeTypes.RT,     AssembleTimeTypes.RT):
+                        case (AssembleTimeTypes.CRT,    AssembleTimeTypes.RT):
+                        case (AssembleTimeTypes.CBANK,  AssembleTimeTypes.CRT):
+                        case (AssembleTimeTypes.PROC,   AssembleTimeTypes.CRT):
+                        case (AssembleTimeTypes.CPROC,  AssembleTimeTypes.CRT):
+                        case (AssembleTimeTypes.INTER,  AssembleTimeTypes.CRT):
+                        case (AssembleTimeTypes.CINTER, AssembleTimeTypes.CRT):
+                        case (AssembleTimeTypes.MACRO,  AssembleTimeTypes.CRT):
+                        case (AssembleTimeTypes.RT,     AssembleTimeTypes.CRT):
+                        case (AssembleTimeTypes.CRT,    AssembleTimeTypes.CRT):
+                            Output = new() {
+                                {"", ((int)Modifier["offset"].data + (int)Output["offset"].data, AssembleTimeTypes.CINT, AccessLevels.PUBLIC)}
+                            };
+                            
                             break;
                         
                         default:
-                            // error : cannot use tA against tB
+                            // error : cannot use types against other type
                             return false;
                     }
                     
@@ -280,7 +542,7 @@ namespace Numinous {
                         return (false, true);   // resulting value to be marked as Unevaluable
                     }
 
-                    while (ValueMutators.Count > 0) ApplyMutation();
+                    while (ValueMutators.Count > 0) if (!ApplyPreMutation()) return default; // error pass back, process value mutators from back to front
 
                     // New gen tokens must contain object data.
                     ValueTokenBuffer[LinearTokenIndex] = (
@@ -379,7 +641,7 @@ namespace Numinous {
                     
                     return (true, false);
 
-                    void ApplyMutation() {
+                    bool ApplyPreMutation() {
                         var LastValue = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>) ValueTokenBuffer[^1].data);
                         switch (LastValue[""].type, ValueMutators[^1]) {
 
@@ -478,8 +740,10 @@ namespace Numinous {
                             
                             default:
                                 // error : cannot apply unary to this
-                                break;
+                                return false;
                         }
+
+                        return true;
                     }
                 }
                 
@@ -517,57 +781,25 @@ namespace Numinous {
                     
                     _ => -1
                 };
-
-                /*((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool succses) ResolveCEXP() {
-                    var LocalTargetScope = TargetScope;
-                    ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) = (default, default);
-                    for (; i < LinearTokens.Count; i++) {
-                        if (ExpectOperator != LinearTokens[i].IsOperator) {
-                            // error, violated VOV
-                            return default;
-                        }
-
-                        (ctx, success) = GetObjectFromAlias((string)LinearTokens[i].data, LocalTargetScope, AccessLevels.PUBLIC);
-                        if (ExpectOperator) {
-                            if ((Operators)(LinearTokens[i].data) != Operators.PROPERTY) {
-                                if (ctx.data == null) {
-                                    // error, null reference exception
-                                    return default;
-                                }
-                                ReTargetWithMember();     // else search object for member of alias
-
-                            } else if ((Operators)LinearTokens[i].data != Operators.NULLPROPERTY) {
-                                if (ctx.data == null) {
-                                    i++;                    // Skip next Operator, do not clear expect operator
-                                    continue;               // pass down ctx as null
-                                }
-                                ReTargetWithMember();     // else search object for member of alias
-                            } else {
-                                // end of value resolve, return value
-                                return (ctx, true);
-                            }
+            }
+            
+            /// <summary>
+            /// 
+            /// </summary>
+            /// <param name="Tokens"></param>
+            /// <param name="MaxHierachy"></param>
+            /// <returns></returns>
+            internal static (List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data)> result, bool Success, bool Unevaluable) DeltaEvaluate(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy) {
+                while (MaxHierachy > 0) {
+                    foreach (var deltas in Tokens) {
+                        if (deltas.Hierachy == MaxHierachy) {
+                            // linear evaluate delta tokens
+                            // convert two contigous spaces into one hunk.
+                            break;
                         }
                     }
-
-                    return default;
-
-                    void ReTargetWithMember() {
-                        ExpectOperator = false;                     // mark from here not to expect an operator
-                        switch (ctx.type) {
-                            case AssembleTimeTypes.CINT:
-                                TargetScope = (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)GenerateCINT((int)ctx.data).data;
-                                return;
-
-                            case AssembleTimeTypes.CSTRING:
-                                TargetScope = (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)GenerateCSTRING((string)ctx.data).data;
-                                return;
-
-                            default:                                // other types
-                                TargetScope = (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)ctx.data;
-                                return;
-                        }
-                    }
-                }*/
+                }
+                return default;
             }
 
             /// <summary>
