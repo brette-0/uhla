@@ -40,13 +40,17 @@ namespace Numinous {
              */
             
             /// <summary>
-            /// 
+            ///
+            /// TODO: Fix Database Accesses : SERIOUSLY WE NEED TO REVISE WHAT THIS LOOKS LIKE! THIS IS IMPORTANT
+            ///       WE ALSO NEED TO USE TOKEN TYPE IN LEXER, I HATE HOW THIS HAS TO BE THIS WAY.
+            ///
+            /// TODO: Implement Assignment / Member Access
             /// 
             /// </summary>
-            /// <param name="LinearTokens">Tokens that live between deltas in hierarchy when lexing.</param>
+            /// <param name="LinearTermTokens">Tokens that live between deltas in hierarchy when lexing.</param>
             /// <returns></returns>
 
-            internal static (List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data, bool IsOperator)> result, bool Success, bool Unevaluable) LinearEvaluate(List<(int StringOffset, int StringLength, object data, bool IsOperator)> LinearTokens) {
+            internal static (List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data, bool IsOperator)> result, bool Success, bool Unevaluable) LinearTermEvaluate(List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data, bool IsOperator)> LinearTermTokens) {
                 List<Operators>                                                          ValueMutators    = [];
                 List<Operators>                                                          OperatorBuffer   = [];
                 
@@ -67,17 +71,17 @@ namespace Numinous {
                 List<bool> SkipBuffer = [];
                 
                 // each access is (Operator, Value)
-                LinearTokenIndex++; while (LinearTokenIndex < LinearTokens.Count) {
+                LinearTokenIndex++; while (LinearTokenIndex < LinearTermTokens.Count) {
                     var        CheckCount       = 0;
                     while (SkipBuffer.Count > 0 && !SkipBuffer[^1]) {
                         LinearTokenIndex += 2;  // ensure there is information at space lti -1, but we can accept no info at lti
-                        if (!LinearTokens[LinearTokenIndex].IsOperator) {
+                        if (!LinearTermTokens[LinearTokenIndex].IsOperator) {
                             // error malformed
                             return default;
                         }
 
-                        if      ((Operators)LinearTokens[LinearTokenIndex].data == Operators.CHECK) CheckCount++;
-                        else if ((Operators)LinearTokens[LinearTokenIndex].data == Operators.ELSE && --CheckCount == 0)
+                        if      ((Operators)LinearTermTokens[LinearTokenIndex].data == Operators.CHECK) CheckCount++;
+                        else if ((Operators)LinearTermTokens[LinearTokenIndex].data == Operators.ELSE && --CheckCount == 0)
                             SkipBuffer.RemoveAt(SkipBuffer.Count - 1);
                     }
                     
@@ -91,11 +95,11 @@ namespace Numinous {
                         continue;
                     }
 
-                    if (!LinearTokens[LinearTokenIndex].IsOperator) {
+                    if (!LinearTermTokens[LinearTokenIndex].IsOperator) {
                         // error operator malformed
                     }
 
-                    if ((Operators)LinearTokens[LinearTokenIndex].data == Operators.CHECK) {
+                    if ((Operators)LinearTermTokens[LinearTokenIndex].data == Operators.CHECK) {
                         // evaluate the buffer
 
                         var CheckValue = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> data, AssembleTimeTypes type, AccessLevels access))ValueTokenBuffer[^1].data;
@@ -114,14 +118,14 @@ namespace Numinous {
                         }
 
                         SkipBuffer.Add(!result);
-                    } else if ((Operators)LinearTokens[LinearTokenIndex].data == Operators.ELSE) {
+                    } else if ((Operators)LinearTermTokens[LinearTokenIndex].data == Operators.ELSE) {
                         // evaluate the buffer
                         ResolveOperationIndex = ^1;     // clean out all tokens
                         while (OperatorBuffer.Count > 0) ResolveOperation();
                         ResolveOperationIndex = ^2;     // reset checker
                         
                         SkipBuffer[^1]        = true;
-                    } else if ((Operators)LinearTokens[LinearTokenIndex].data is Operators.TERM) {
+                    } else if ((Operators)LinearTermTokens[LinearTokenIndex].data is Operators.TERM) {
                         // evaluate the buffer
                         ResolveOperationIndex = ^1;     // clean out all tokens
                         while (OperatorBuffer.Count > 0) ResolveOperation();
@@ -516,26 +520,26 @@ namespace Numinous {
                 (bool success, bool unevaluable) ProcessValue() {
                     ValueMutators = [];
                     var Modified = false;
-                    while (LinearTokens[LinearTokenIndex].IsOperator) {
-                        if ((Operators)LinearTokens[LinearTokenIndex].data is not (Operators.INC or Operators.DEC or Operators.ADD or Operators.SUB or Operators.BITNOT or Operators.NOT)) {
+                    while (LinearTermTokens[LinearTokenIndex].IsOperator) {
+                        if ((Operators)LinearTermTokens[LinearTokenIndex].data is not (Operators.INC or Operators.DEC or Operators.ADD or Operators.SUB or Operators.BITNOT or Operators.NOT)) {
                             // error, invalid value modifier
                             return default;
-                        } else if (Modified && (Operators)LinearTokens[LinearTokenIndex].data is Operators.INC or Operators.DEC) {
+                        } else if (Modified && (Operators)LinearTermTokens[LinearTokenIndex].data is Operators.INC or Operators.DEC) {
                             // error, double unary assignment
                             return default;
                         }
 
-                        ValueMutators.Add((Operators)LinearTokens[LinearTokenIndex].data);
+                        ValueMutators.Add((Operators)LinearTermTokens[LinearTokenIndex].data);
                     }
                     
                     // template latest buffer entry with token form
-                    if (GetOperatorPrecedence((string)LinearTokens[LinearTokenIndex].data) > -1) {
+                    if (GetOperatorPrecedence((string)LinearTermTokens[LinearTokenIndex].data) > -1) {
                         // error, expected a value
                         return default;
                     }
                     
                     // push token into processor
-                    ValueTokenBuffer.Add(LinearTokens[LinearTokenIndex]);
+                    ValueTokenBuffer.Add(LinearTermTokens[LinearTokenIndex]);
                     
                     var resp = GetObjectFromAlias((string)ValueTokenBuffer[LinearTokenIndex].data, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
                     if (!resp.success) {
@@ -554,10 +558,10 @@ namespace Numinous {
                     
                     // scan for post mut, looks like ++, --, INDEX, or CALL
                     LinearTokenIndex++;
-                    if (LinearTokens[LinearTokenIndex].IsOperator) {
+                    if (LinearTermTokens[LinearTokenIndex].IsOperator) {
                         var LastValue = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>) ValueTokenBuffer[^1].data);
                         if (LastValue[""].type is not (AssembleTimeTypes.INT or AssembleTimeTypes.CINT)) {
-                            switch ((Operators)LinearTokens[LinearTokenIndex].data) {
+                            switch ((Operators)LinearTermTokens[LinearTokenIndex].data) {
                                 case Operators.INC:
                                 case  Operators.DEC:
                                     
@@ -567,7 +571,7 @@ namespace Numinous {
                             } 
                         }
                     } else {
-                        var CurrentValue = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>) LinearTokens[LinearTokenIndex].data);
+                        var CurrentValue = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>) LinearTermTokens[LinearTokenIndex].data);
                         var LastValue = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>) ValueTokenBuffer[^1].data);
                         
                         if (CurrentValue[""].type is AssembleTimeTypes.INDEX) {
@@ -713,9 +717,14 @@ namespace Numinous {
                                     return default;
                             }
                         } else if (CurrentValue[""].type is AssembleTimeTypes.CALL) {
-                            // load macro into source buffer
-                            // recurse into invocation
-                            // create new constant object in place of LastValue
+                            if        (LastValue[""].type == AssembleTimeTypes.MACRO) {
+                                // load macro into source buffer
+                                // recurse into invocation
+                                // create new constant object in place of LastValue
+                            } else if (LastValue[""].type != AssembleTimeTypes.FUNCTION) {
+                                // error cannot invoke if not a macro
+                                return default;
+                            }
                         }
                     }
                     
@@ -829,17 +838,17 @@ namespace Numinous {
                 }
                 
                 (bool Success, bool Terminate) ProcessOperator() {
-                    if (!LinearTokens[LinearTokenIndex].IsOperator) {
+                    if (!LinearTermTokens[LinearTokenIndex].IsOperator) {
                         // error not an operator
                         return default;
                     }
 
-                    if ((Operators)LinearTokens[LinearTokenIndex].data is Operators.INC or Operators.DEC or Operators.NOT or Operators.BITNOT) {
+                    if ((Operators)LinearTermTokens[LinearTokenIndex].data is Operators.INC or Operators.DEC or Operators.NOT or Operators.BITNOT) {
                         // error this operator cannot be used that way
                         return default;
                     } 
                     
-                    OperatorBuffer.Add((Operators)LinearTokens[LinearTokenIndex].data);
+                    OperatorBuffer.Add((Operators)LinearTermTokens[LinearTokenIndex].data);
                     return (true, false);
                 }
 
@@ -870,10 +879,55 @@ namespace Numinous {
             /// <param name="Tokens"></param>
             /// <param name="MaxHierachy"></param>
             /// <returns></returns>
-            internal static (List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data)> result, bool Success, bool Unevaluable) DeltaEvaluate(List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy) {
+            internal static (List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data)> result, bool Success, bool Unevaluable) DeltaEvaluate(List<(List<List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data, bool IsOperator)>> DeltaTokens, int Hierachy)> Tokens, int MaxHierachy) {
                 while (MaxHierachy > 0) {
-                    foreach (var deltas in Tokens) {
+                    for (var DeltaIndex = 0; DeltaIndex < Tokens.Count; DeltaIndex++) {
+                        var deltas = Tokens[DeltaIndex];
                         if (deltas.Hierachy == MaxHierachy) {
+                            List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data, bool IsOperator)> Tuple = [];
+                            foreach (var LinearTermTokens in deltas.DeltaTokens) {
+                                var resp = LinearTermEvaluate(LinearTermTokens);
+
+                                if (!resp.Success) {
+                                    if (resp.Unevaluable) {
+                                        // store as type tokens with current information
+                                        return ([], false, true);
+                                    } else return default; // error pass back
+                                } else
+                                    Tuple.AddRange(resp.result);
+                            }
+
+                            var InsertObject = Tuple[0];
+                            
+                            if (Tuple.Count > 0) {
+                                // tuple member to push back.
+                                InsertObject = (
+                                    StringIndex:  Tuple[0].StringOffset,
+                                    StringLength: Tuple[^1].StringOffset + Tuple[^1].StringLength,
+                                    
+                                    data: (
+                                        data:  (object)Tuple,
+                                        type:  AssembleTimeTypes.TUPLE,
+                                        level: AccessLevels.PRIVATE
+                                    ),
+                                    
+                                    IsOperator: false
+                                );
+                            }
+                            
+                            // merge result into contigous nodes. (Mathematically safe code)
+                            Tokens[DeltaIndex - 1].DeltaTokens[^1].Add(InsertObject);
+                            Tokens[DeltaIndex - 1].DeltaTokens[^1].AddRange(Tokens[DeltaIndex + 1].DeltaTokens[0]);
+                            Tokens[DeltaIndex + 1].DeltaTokens.RemoveAt(0);
+                            Tokens[DeltaIndex - 1].DeltaTokens.AddRange(Tokens[DeltaIndex + 1].DeltaTokens);
+                            Tokens[DeltaIndex - 1] = (
+                                DeltaTokens: Tokens[DeltaIndex].DeltaTokens,
+                                Hierachy: MaxHierachy - 1
+                            );
+                                
+                            Tokens.RemoveAt(DeltaIndex);
+                            Tokens.RemoveAt(DeltaIndex);
+
                             // linear evaluate delta tokens
                             // convert two contigous spaces into one hunk.
                             break;

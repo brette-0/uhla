@@ -80,14 +80,24 @@ internal static class Program {
         
         // Functions are just lambdas, 0 refers to arg 0, and so on. They are of type Function  returns type of type type
         // The 'self' containing the lambda's type is the return type
-        LabelDataBase["typeof"] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
+        LabelDataBase["typeof"] = (new Dictionary<string, (object? data, AssembleTimeTypes type, AccessLevels access)>() {
             {"",        (((object data, AssembleTimeTypes type, AccessLevels access) ctx) => (ctx.type, AssembleTimeTypes.TYPE, AccessLevels.PUBLIC), AssembleTimeTypes.TYPE, AccessLevels.PRIVATE)},
-            {"0",       (0, AssembleTimeTypes.COBJECT, AccessLevels.PRIVATE) }
+            {"ctx",     (null, AssembleTimeTypes.COBJECT, AccessLevels.PRIVATE) },
+            
+            // arg num 0 => ctx
+            {"0", ("ctx", default, default)},
+            
+            {"args",    (1, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)}
         }, AssembleTimeTypes.FUNCTION, AccessLevels.PUBLIC);
 
-        LabelDataBase["exists"] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
+        LabelDataBase["exists"] = (new Dictionary<string, (object? data, AssembleTimeTypes type, AccessLevels access)>() {
             {"",        (((object data, AssembleTimeTypes type, AccessLevels access) ctx) => {(object _, bool success) = GetObjectFromAlias((string)ctx.data, ActiveScopeBuffer[^1], AccessLevels.PUBLIC); return success; }, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
-            {"0",       (0, AssembleTimeTypes.COBJECT, AccessLevels.PRIVATE) }
+            {"ctx",     (null, AssembleTimeTypes.COBJECT, AccessLevels.PRIVATE) },
+            
+            // arg num 0 => ctx
+            {"0", ("ctx", default, default)},
+            
+            {"args",    (1, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)}
         }, AssembleTimeTypes.FUNCTION, AccessLevels.PUBLIC);
 
         ActiveScopeBuffer.Add(LabelDataBase);   // add rs to as, default rs

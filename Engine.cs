@@ -385,6 +385,8 @@ namespace Numinous {
             INDEX,
             CALL,
             
+            TUPLE,   // elems = List<Object>    types = List<AssembleTimeTypes>
+            
             TOKENS,  // for unresolved but declared expressions
         }
 
@@ -447,6 +449,13 @@ namespace Numinous {
 
 
         internal static partial class Engine {
+            internal static bool Permits(RunTimeVariableFilterType filter, RunTimeVariableType variable) =>
+                       filter.size   == null || filter.size   == variable.size   &&
+                       filter.endian == null || filter.endian == variable.endian &&
+                       filter.signed == null || filter.signed == variable.signed;
+            
+            
+            
             // Generated Function
             // TODO: Rewrite this code looks terrible - GPT has been underperfoming
             internal static object GenerateFunctionalDefine(string Context, List<string> ParameterMapping) {

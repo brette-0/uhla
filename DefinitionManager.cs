@@ -35,6 +35,8 @@ internal static class DefinitionManager {
 
     internal static void CheckDeclare(Dictionary<string, (object data, AssembleTimeTypes, AccessLevels access)> scope, string key, ReferenceType type,  int rom = -1) {
         if (UndefinedReferences.ContainsKey((scope, key))) {
+            // if so, ensure we are creating a constant! Using a variable here is cursed because it makes the value stored an assembler search property instead of user code.
+            // pragma to prevent this? Seriously, don't recommend this.
             if (rom != -1) UndefinedReferences[(scope, key)].Add((rom, type));
         }
     }
