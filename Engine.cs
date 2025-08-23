@@ -1046,9 +1046,6 @@ namespace Numinous {
                 // TODO: Function to capture requested task
                 
                 void Step(bool regexParse = true) {
-                    List<(string token, int StringIndex, int StringLength)> ctx;
-                    bool                                                    success;
-
                     if (DefineResolveBuffer.Count == 0) {                                                   // si to be mutated ONLY by typed tokens
                         CollectiveContext += BasicRegexTokens.Span[TokenIndex];
                         StringIndex       += BasicRegexTokens.Span[TokenIndex].Length;      
@@ -1056,6 +1053,8 @@ namespace Numinous {
                     }
 
                     if (regexParse) {
+                        List<(string token, int StringIndex, int StringLength)> ctx;
+                        bool                                                    success;
                         if (DefineResolveBuffer.Count == 0) {
                             (ctx, success)      = PartialResolveDefine(BasicRegexTokens.Span[TokenIndex++]);
                             DefineResolveBuffer = ctx;
