@@ -692,7 +692,7 @@ namespace Numinous {
 
                 var BasicRegexTokens = new global::System.Memory<string>(Program.SourceFileContentBuffer[^1].ToArray());
 
-                var StringIndex = 0; var StringLength = 0;
+                var StringIndex = 0;
                 var TokenIndex  = 0;
 
                 while (true) {
@@ -1046,10 +1046,10 @@ namespace Numinous {
                 // TODO: Function to capture requested task
                 
                 void Step(bool regexParse = true) {
+                    ActiveToken = default;
                     if (DefineResolveBuffer.Count == 0) {                                                   // si to be mutated ONLY by typed tokens
                         CollectiveContext += BasicRegexTokens.Span[TokenIndex];
-                        StringIndex       += BasicRegexTokens.Span[TokenIndex].Length;      
-                        StringLength      =  BasicRegexTokens.Span[TokenIndex].Length;
+                        StringIndex       += BasicRegexTokens.Span[TokenIndex].Length;
                     }
 
                     if (regexParse) {
