@@ -1053,8 +1053,9 @@ namespace Numinous {
                     }
 
                     if (regexParse) {
-                        List<(string token, int StringIndex, int StringLength)> ctx;
-                        bool                                                    success;
+                        // providing defaults because github demands it?
+                        List<(string token, int StringIndex, int StringLength)> ctx = [];
+                        var                                                     success = false;
                         if (DefineResolveBuffer.Count == 0) {
                             (ctx, success)      = PartialResolveDefine(BasicRegexTokens.Span[TokenIndex++]);
                             DefineResolveBuffer = ctx;
