@@ -2914,9 +2914,9 @@ Svenska           ""-l sw""
             /// <param name="TargetScope"></param>
             /// <param name="UsedAccessLevel"></param>
             /// <returns></returns>
-            internal static ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) GetObjectFromAlias(string Alias, Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> TargetScope, AccessLevels UsedAccessLevel) {
-                ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool found, bool error) = (default, default, default);
-                List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>> LocalObjectSearchBuffer;
+            internal static ((object data, AssembleTimeTypes type, AccessLevels level) ctx, bool success) GetObjectFromAlias(string Alias, Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)> TargetScope, AccessLevels UsedAccessLevel) {
+                ((object data, AssembleTimeTypes type, AccessLevels level) ctx, bool found, bool error) = (default, default, default);
+                List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> LocalObjectSearchBuffer;
 
                 if (TargetScope == Program.ActiveScopeBuffer[^1]) {
                     LocalObjectSearchBuffer = [.. Program.ObjectSearchBuffer, Program.ActiveScopeBuffer[^1]];
@@ -2927,7 +2927,7 @@ Svenska           ""-l sw""
 
                 foreach (var LocalObjectSearchContainer in LocalObjectSearchBuffer) {
                     if (LocalObjectSearchContainer.TryGetValue(Alias, out ctx)) {
-                        if (UsedAccessLevel < ctx.access) {
+                        if (UsedAccessLevel < ctx.level) {
                             // error, invalid permissions to access item
                             return default;
                         } else return (ctx, true);
@@ -2951,7 +2951,7 @@ Svenska           ""-l sw""
                 /// <param name="UsedAccessLevel"></param>
                 /// <returns></returns>
                 internal static ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) GetObjectFromAlias(string Alias, AccessLevels UsedAccessLevel) {
-                    List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>> LocalObjectSearchBuffer = [Program.ActiveScopeBuffer[^1], .. Program.ObjectSearchBuffer];
+                    List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> LocalObjectSearchBuffer = [Program.ActiveScopeBuffer[^1], .. Program.ObjectSearchBuffer];
                     return __GetObjectFromAlias(Alias, LocalObjectSearchBuffer, UsedAccessLevel);
                 }
                 /// <summary>
@@ -2963,7 +2963,7 @@ Svenska           ""-l sw""
                 /// <param name="UsedAccessLevel"></param>
                 /// <returns></returns>
                 /// 
-                internal static ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) GetObjectFromAlias(string Alias, Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> TargetScope, AccessLevels UsedAccessLevel) => __GetObjectFromAlias(Alias, [TargetScope], UsedAccessLevel);
+                internal static ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) GetObjectFromAlias(string Alias, Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)> TargetScope, AccessLevels UsedAccessLevel) => __GetObjectFromAlias(Alias, [TargetScope], UsedAccessLevel);
                 
                 /// <summary>
                 /// Internal function iterating over the LocalObjectSearchPath to find the required context if possible.
@@ -2972,11 +2972,11 @@ Svenska           ""-l sw""
                 /// <param name="LocalObjectSearchBuffer"></param>
                 /// <param name="UsedAccessLevel"></param>
                 /// <returns></returns>
-                private  static ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) __GetObjectFromAlias(string Alias, List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>> LocalObjectSearchBuffer, AccessLevels UsedAccessLevel) {
-                    ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool found, bool error) = (default, default, default);
+                private  static ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) __GetObjectFromAlias(string Alias, List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> LocalObjectSearchBuffer, AccessLevels UsedAccessLevel) {
+                    ((object data, AssembleTimeTypes type, AccessLevels level) ctx, bool found, bool error) = (default, default, default);
                     foreach (var LocalObjectSearchContainer in LocalObjectSearchBuffer) {
                         if (LocalObjectSearchContainer.TryGetValue(Alias, out ctx)) {
-                            if (UsedAccessLevel < ctx.access) {
+                            if (UsedAccessLevel < ctx.level) {
                                 // error, invalid permissions to access item
                                 return default;
                             } else return (ctx, true);

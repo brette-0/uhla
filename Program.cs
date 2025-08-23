@@ -121,10 +121,10 @@ internal static class Program {
     internal static List<int>           SourceFileLineBuffer  = [];  // Used for ERROR REPORT ONLY
     internal static List<int>           SourceFileStepBuffer  = [];  // Used for ERROR REPORT ONLY
 
-    internal static Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> LabelDataBase = [];
-    internal static List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>> ActiveScopeBuffer = [];
-    internal static List<ScopeTypes>                                                                     ActiveScopeTypeBuffer =[];
-    internal static List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>> ObjectSearchBuffer = [];
+    internal static Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>       LabelDataBase         = [];
+    internal static List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> ActiveScopeBuffer     = [];
+    internal static List<ScopeTypes>                                                                    ActiveScopeTypeBuffer =[];
+    internal static List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> ObjectSearchBuffer    = [];
 
     internal static List<string> SourceFileSearchPaths = [];
 

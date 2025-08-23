@@ -41,8 +41,7 @@ namespace Numinous {
             
             /// <summary>
             ///
-            /// TODO: Fix Database Accesses : SERIOUSLY WE NEED TO REVISE WHAT THIS LOOKS LIKE! THIS IS IMPORTANT
-            ///       WE ALSO NEED TO USE TOKEN TYPE IN LEXER, I HATE HOW THIS HAS TO BE THIS WAY.
+            /// TODO: Fix Database Accesses :  WE NEED TO USE TOKEN TYPE IN LEXER, I HATE HOW THIS HAS TO BE THIS WAY.
             ///
             /// TODO: Implement Assignment / Member Access
             /// 
@@ -50,13 +49,13 @@ namespace Numinous {
             /// <param name="LinearTermTokens">Tokens that live between deltas in hierarchy when lexing.</param>
             /// <returns></returns>
 
-            internal static (List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data, bool IsOperator)> result, bool Success, bool Unevaluable) LinearTermEvaluate(List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data, bool IsOperator)> LinearTermTokens) {
+            internal static (List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> result, bool Success, bool Unevaluable) LinearTermEvaluate(List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> LinearTermTokens) {
                 List<Operators>                                                          ValueMutators    = [];
                 List<Operators>                                                          OperatorBuffer   = [];
                 
-                List<(int StringOffset, int StringLength, object data, bool IsOperator)> ValueTokenBuffer = [];
+                List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> ValueTokenBuffer = [];
 
-                List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data, bool IsOperator)> ResultTermTokens = [];
+                List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> ResultTermTokens = [];
 
                 Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>? TargetScope = Program.ActiveScopeBuffer[^1];
                 
@@ -131,7 +130,7 @@ namespace Numinous {
                         while (OperatorBuffer.Count > 0) ResolveOperation();
                         ResolveOperationIndex = ^2;     // reset checker
                         
-                        ResultTermTokens.Add(((int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data, bool IsOperator))ValueTokenBuffer[0]);
+                        ResultTermTokens.Add(ValueTokenBuffer[0]);
                     }
                     
                     (Success, Unevaluable)               = ProcessValue();   LinearTokenIndex++;
@@ -552,7 +551,9 @@ namespace Numinous {
                     ValueTokenBuffer[LinearTokenIndex] = (
                         ValueTokenBuffer[LinearTokenIndex].StringOffset,
                         ValueTokenBuffer[LinearTokenIndex].StringLength,
-                        resp.ctx,                                   // inject object reference
+                        resp.ctx.data,                                   // inject object reference
+                        resp.ctx.type,
+                        resp.ctx.level,
                         ValueTokenBuffer[LinearTokenIndex].IsOperator
                     );
                     
@@ -879,12 +880,12 @@ namespace Numinous {
             /// <param name="Tokens"></param>
             /// <param name="MaxHierachy"></param>
             /// <returns></returns>
-            internal static (List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data)> result, bool Success, bool Unevaluable) DeltaEvaluate(List<(List<List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data, bool IsOperator)>> DeltaTokens, int Hierachy)> Tokens, int MaxHierachy) {
+            internal static (List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data)> result, bool Success, bool Unevaluable) DeltaEvaluate(List<(List<List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)>> DeltaTokens, int Hierachy)> Tokens, int MaxHierachy) {
                 while (MaxHierachy > 0) {
                     for (var DeltaIndex = 0; DeltaIndex < Tokens.Count; DeltaIndex++) {
                         var deltas = Tokens[DeltaIndex];
                         if (deltas.Hierachy == MaxHierachy) {
-                            List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data, bool IsOperator)> Tuple = [];
+                            List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> Tuple = [];
                             foreach (var LinearTermTokens in deltas.DeltaTokens) {
                                 var resp = LinearTermEvaluate(LinearTermTokens);
 
@@ -902,15 +903,11 @@ namespace Numinous {
                             if (Tuple.Count > 0) {
                                 // tuple member to push back.
                                 InsertObject = (
-                                    StringIndex:  Tuple[0].StringOffset,
+                                    StringOffset:  Tuple[0].StringOffset,
                                     StringLength: Tuple[^1].StringOffset + Tuple[^1].StringLength,
-                                    
-                                    data: (
-                                        data:  (object)Tuple,
-                                        type:  AssembleTimeTypes.TUPLE,
-                                        level: AccessLevels.PRIVATE
-                                    ),
-                                    
+                                    data:  (object)Tuple,
+                                    type:  AssembleTimeTypes.TUPLE,
+                                    level: AccessLevels.PRIVATE,
                                     IsOperator: false
                                 );
                             }
