@@ -290,6 +290,7 @@ namespace Numinous.Engine {
             (List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, int Finish, bool Success, bool Continue) Success() => (Tokens, MaxHierarchy, Finish, true, false);
             
             void Step(bool regexParse = true) {
+                ActiveToken = default;
                 List<(string token, int StringIndex, int StringLength)> ctx;
                 bool success;
 
