@@ -49,13 +49,11 @@ namespace Numinous {
             /// <param name="LinearTermTokens">Tokens that live between deltas in hierarchy when lexing.</param>
             /// <returns></returns>
 
-            internal static (List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> result, bool Success, bool Unevaluable) LinearTermEvaluate(List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> LinearTermTokens) {
+            internal static ((int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator) result, bool Success, bool Unevaluable) LinearTermEvaluate(List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> LinearTermTokens) {
                 List<Operators>                                                          ValueMutators    = [];
                 List<Operators>                                                          OperatorBuffer   = [];
                 
                 List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> ValueTokenBuffer = [];
-
-                List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> ResultTermTokens = [];
 
                 Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>? TargetScope = Program.ActiveScopeBuffer[^1];
                 
@@ -65,7 +63,7 @@ namespace Numinous {
 
                 // process the start here as there is no need to perform a check until we have 2 operators in the buffer.
                 bool Terminate; var (Success, Unevaluable) = ProcessValue();
-                if (!Success) return Unevaluable ? ([], false, true) : default;    // error pass back 
+                if (!Success) return Unevaluable ? (default, false, true) : default;    // error pass back 
 
                 List<bool> SkipBuffer = [];
                 
@@ -124,17 +122,10 @@ namespace Numinous {
                         ResolveOperationIndex = ^2;     // reset checker
                         
                         SkipBuffer[^1]        = true;
-                    } else if ((Operators)LinearTermTokens[LinearTokenIndex].data is Operators.TERM) {
-                        // evaluate the buffer
-                        ResolveOperationIndex = ^1;     // clean out all tokens
-                        while (OperatorBuffer.Count > 0) ResolveOperation();
-                        ResolveOperationIndex = ^2;     // reset checker
-                        
-                        ResultTermTokens.Add(ValueTokenBuffer[0]);
                     }
                     
                     (Success, Unevaluable)               = ProcessValue();   LinearTokenIndex++;
-                    if (!Success) return Unevaluable ? ([], false, true) : default; // error pass back 
+                    if (!Success) return Unevaluable ? (default, false, true) : default; // error pass back 
                     
                     
                     // if the top element has lower priority than second from top, resolve second from top.
@@ -148,7 +139,7 @@ namespace Numinous {
                 ResolveOperationIndex = ^1;
                 ResolveOperation();
 
-                return (ResultTermTokens, true, false);
+                return (ValueTokenBuffer[0], true, false);
                 
 
                 // foo oper bar | first/second value order DOES NOT MATTER
@@ -875,63 +866,55 @@ namespace Numinous {
             }
             
             /// <summary>
-            /// 
+            /// TODO: Consider 'ForceEvaluation' as phase, so we evaluate if convenient and possible but if required and impossible error.
             /// </summary>
             /// <param name="Tokens"></param>
             /// <param name="MaxHierachy"></param>
             /// <returns></returns>
-            internal static (List<(int StringOffset, int StringLength, (object data, AssembleTimeTypes type, AccessLevels level) data)> result, bool Success, bool Unevaluable) DeltaEvaluate(List<(List<List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)>> DeltaTokens, int Hierachy)> Tokens, int MaxHierachy) {
-                while (MaxHierachy > 0) {
-                    for (var DeltaIndex = 0; DeltaIndex < Tokens.Count; DeltaIndex++) {
-                        var deltas = Tokens[DeltaIndex];
-                        if (deltas.Hierachy == MaxHierachy) {
-                            List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> Tuple = [];
-                            foreach (var LinearTermTokens in deltas.DeltaTokens) {
-                                var resp = LinearTermEvaluate(LinearTermTokens);
+            internal static (List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> result, bool Success, bool Unevaluable) DeltaEvaluate(List<(List<List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)>> DeltaTokens, int Hierachy)> Tokens, int MaxHierachy) {
+                List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> args = [];
+                while (MaxHierachy >= 0) {
+                    var tardeltas = Tokens.Where(t => t.Hierachy == MaxHierachy);
+                    
+                    
 
-                                if (!resp.Success) {
-                                    if (resp.Unevaluable) {
-                                        // store as type tokens with current information
-                                        return ([], false, true);
-                                    } else return default; // error pass back
-                                } else
-                                    Tuple.AddRange(resp.result);
+                    List<int> DeletionSchedule = [];
+                    
+                    // reverse so indexes aren't corrupted
+                    foreach (var delta in tardeltas.Select(t => t.DeltaTokens).Reverse()) {
+                        foreach (var term in delta) {
+                            var resp = LinearTermEvaluate(term);
+                            if (resp.Success) {
+                                args.Add(resp.result);
+                                continue;
                             }
 
-                            var InsertObject = Tuple[0];
-                            
-                            if (Tuple.Count > 0) {
-                                // tuple member to push back.
-                                InsertObject = (
-                                    StringOffset:  Tuple[0].StringOffset,
-                                    StringLength: Tuple[^1].StringOffset + Tuple[^1].StringLength,
-                                    data:  (object)Tuple,
-                                    type:  AssembleTimeTypes.TUPLE,
-                                    level: AccessLevels.PRIVATE,
-                                    IsOperator: false
-                                );
+                            if (resp.Unevaluable) {
+                                // preserve type as TOKENS
+                                continue;
                             }
-                            
-                            // merge result into contigous nodes. (Mathematically safe code)
-                            Tokens[DeltaIndex - 1].DeltaTokens[^1].Add(InsertObject);
-                            Tokens[DeltaIndex - 1].DeltaTokens[^1].AddRange(Tokens[DeltaIndex + 1].DeltaTokens[0]);
-                            Tokens[DeltaIndex + 1].DeltaTokens.RemoveAt(0);
-                            Tokens[DeltaIndex - 1].DeltaTokens.AddRange(Tokens[DeltaIndex + 1].DeltaTokens);
-                            Tokens[DeltaIndex - 1] = (
-                                DeltaTokens: Tokens[DeltaIndex].DeltaTokens,
-                                Hierachy: MaxHierachy - 1
-                            );
-                                
-                            Tokens.RemoveAt(DeltaIndex);
-                            Tokens.RemoveAt(DeltaIndex);
 
-                            // linear evaluate delta tokens
-                            // convert two contigous spaces into one hunk.
-                            break;
+                            // error pass-back
+                            return default;
                         }
+
+                        var index = Tokens.IndexOf((delta, MaxHierachy));
+                        DeletionSchedule.Add(index);
+                        
+                        Tokens[index - 1].DeltaTokens[^1].Add((args[0].StringOffset, args[^1].StringOffset + args[^1].StringLength, args, AssembleTimeTypes.TUPLE, AccessLevels.PRIVATE, false));
+                        Tokens[index - 1].DeltaTokens.AddRange(Tokens[index + 1].DeltaTokens);
                     }
+
+                    // this whole index mutation is barely safe
+                    foreach (var index in DeletionSchedule) {
+                        Tokens.RemoveAt(index);
+                        Tokens.RemoveAt(index);
+                    }
+
+                    MaxHierachy--;
                 }
-                return default;
+
+                return (args, true, false);
             }
 
             /// <summary>

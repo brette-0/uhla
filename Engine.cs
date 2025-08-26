@@ -1026,6 +1026,11 @@ namespace Numinous {
                                 // error : not a deletable type
                             }
 
+                            if (!resp.ctx.type.HasFlag(AssembleTimeTypes.CONSTANT)) {
+                                // error : cannot delete constant objects :: TODO: drop them a link to the wiki explaining the backwards definition mutation problem
+                                return default;
+                            }
+
                             Program.ActiveScopeBuffer[^1].Remove(ActiveToken.ctx);
                             continue;
                         
