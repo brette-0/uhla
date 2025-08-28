@@ -3005,14 +3005,8 @@ Svenska           ""-l sw""
             }
 
 
-            // Generated function : I don't know how regex works
             /// <summary>
-            /// Tokenizes a line of code. SPACES ARE IMPORTANT FOR LINE INDEX MATH
-            /// </summary>
-            /// <param name="input"></param>
-            /// <returns></returns>
-            /// <summary>
-            /// Tokenizes a line of code. SPACES ARE IMPORTANT FOR LINE INDEX MATH
+            /// NOT PART OF THE DEFINE SYSTEM => THIS IS THE REGEX PATTERN MATCHER TO CREATE LEXER TOKENS
             /// </summary>
             /// <param name="input"></param>
             /// <returns></returns>

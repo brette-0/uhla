@@ -867,23 +867,25 @@ namespace Numinous {
             
             /// <summary>
             /// TODO: Consider 'ForceEvaluation' as phase, so we evaluate if convenient and possible but if required and impossible error.
+            ///
+            /// Passed tokens with ref as we permit partial definition.
+            /// returns empty context if unevaluable.
+            ///
             /// </summary>
             /// <param name="Tokens"></param>
             /// <param name="MaxHierachy"></param>
             /// <returns></returns>
-            internal static (List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> result, bool Success, bool Unevaluable) DeltaEvaluate(List<(List<List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)>> DeltaTokens, int Hierachy)> Tokens, int MaxHierachy) {
+            internal static (List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> result, bool Success, bool Unevaluable) DeltaEvaluate(ref List<(List<List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)>> DeltaTokens, int Hierachy)> Tokens, int MaxHierachy) {
                 List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> args = [];
                 while (MaxHierachy >= 0) {
                     var tardeltas = Tokens.Where(t => t.Hierachy == MaxHierachy);
-                    
-                    
-
                     List<int> DeletionSchedule = [];
+                    ((int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator) result, bool Success, bool Unevaluable) resp = default;
                     
                     // reverse so indexes aren't corrupted
                     foreach (var delta in tardeltas.Select(t => t.DeltaTokens).Reverse()) {
                         foreach (var term in delta) {
-                            var resp = LinearTermEvaluate(term);
+                            resp = LinearTermEvaluate(term);
                             if (resp.Success) {
                                 args.Add(resp.result);
                                 continue;
@@ -891,7 +893,7 @@ namespace Numinous {
 
                             if (resp.Unevaluable) {
                                 // preserve type as TOKENS
-                                continue;
+                                break;
                             }
 
                             // error pass-back
@@ -903,6 +905,7 @@ namespace Numinous {
                         
                         Tokens[index - 1].DeltaTokens[^1].Add((args[0].StringOffset, args[^1].StringOffset + args[^1].StringLength, args, AssembleTimeTypes.TUPLE, AccessLevels.PRIVATE, false));
                         Tokens[index - 1].DeltaTokens.AddRange(Tokens[index + 1].DeltaTokens);
+                        Tokens[index - 1] = (Tokens[index - 1].DeltaTokens, MaxHierachy - 1);
                     }
 
                     // this whole index mutation is barely safe
@@ -912,6 +915,9 @@ namespace Numinous {
                     }
 
                     MaxHierachy--;
+                    if (resp.Unevaluable) {
+                        return ([], true, false);
+                    }
                 }
 
                 return (args, true, false);
