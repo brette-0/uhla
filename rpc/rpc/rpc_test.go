@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing" // library
+	"time"
 
 	"rpc/rpc" // local
 )
@@ -44,7 +45,8 @@ func TestDecode(t *testing.T) {
 }
 
 func TestGetLogger(t *testing.T) {
-	_, err := os.OpenFile(filepath.Join(os.TempDir(), "Numinous-rpc.log"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
+	const TimeFormatting = "2006-01-02_15-04-05"
+	_, err := os.OpenFile(filepath.Join(os.TempDir(), fmt.Sprintf("Numinous-rpc-%s.log", time.Now().Format(TimeFormatting))), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
 
 	if err != nil {
 		t.Fatalf("could not begin logging : %s", err.Error())
