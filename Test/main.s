@@ -1,3 +1,1 @@
-#cart
-#mapper nrom
-#assert 2 > 1
+int foo = 1 + 2 * 3 - (5 * 5)

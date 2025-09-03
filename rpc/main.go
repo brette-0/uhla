@@ -1,5 +1,42 @@
 package main
 
+/*
+
+	To become feature complete we must:
+		actions:
+			illegal   -> legal
+			synthetic -> expand
+			macro     -> inline
+
+		autocomplete with dependency referral
+
+		colourise:
+			opcodes:
+			scripting:
+
+		hover for:
+			opcodes
+				implicit:
+					register determinism (string)
+					encodes				 (true)		-> can be used to refer to scripting variables
+					idtable				 (true)		-> uses a found identity table
+				explicit|implicit:
+					legal			     (bool)
+					cycle time			 (int)
+					size				 (int)
+					supported MAOs		 (string)
+					Mnemonic long name	 (string)
+				synthetic:
+
+			directives
+			keywords
+			registered
+
+			variables
+			constants
+
+*/
+
 import (
 	"bufio"
 	"encoding/json"
@@ -20,6 +57,9 @@ func main() {
 
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Split(rpc.Split)
+
+	state := lsp.NewState()
+
 	for scanner.Scan() {
 		msg := scanner.Bytes()
 		method, contents, err := rpc.DecodeMessage(msg)
@@ -28,11 +68,11 @@ func main() {
 			continue
 		}
 
-		handleMessage(method, contents, logger)
+		handleMessage(method, state, contents, logger)
 	}
 }
 
-func handleMessage(method string, contents []byte, logger *log.Logger) {
+func handleMessage(method string, state lsp.State_t, contents []byte, logger *log.Logger) {
 	logger.Printf("Recieved request '%s'", method)
 
 	switch method {
@@ -51,6 +91,27 @@ func handleMessage(method string, contents []byte, logger *log.Logger) {
 		writer.Write([]byte(reply))
 
 		logger.Printf("Replied to %s : %s", request.Params.ClientInfo.Name, request.Params.ClientInfo.Version)
+
+	case "textDocument/didOpen":
+		var request lsp.DidOpenTextDocumentNotification_t
+		if err := json.Unmarshal(contents, &request); err != nil {
+			logger.Printf("%s: %s", method, err)
+		}
+
+		logger.Printf("Opened: %s with size of %d", request.Params.TextDocumentItem.URI, len(request.Params.TextDocumentItem.Text))
+		state.OpenDocument(request.Params.TextDocumentItem.URI, request.Params.TextDocumentItem.Text)
+
+	case "textDocument/didChange":
+		var request lsp.DidChangeTextDocumentNotification_t
+		if err := json.Unmarshal(contents, &request); err != nil {
+			logger.Printf("%s: %s", method, err)
+		}
+
+		logger.Printf("Changed: %s with size of %d", request.Params.TextDocument.URI, len(request.Params.ContentChanges))
+
+		for _, change := range request.Params.ContentChanges {
+			state.UpdateDocument(request.Params.TextDocument.URI, change.Text)
+		}
 	}
 }
 
