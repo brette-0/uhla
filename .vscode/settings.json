@@ -1,3 +1,0 @@
-{
-  "asm-lsp.serverPath": "/absolute/path/to/your/compiled/go/lsp/server"
-}
