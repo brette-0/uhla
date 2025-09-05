@@ -1,2 +1,0 @@
-[NuminousRPC]2025/08/28 22:48:51 main.go:13: Numinous RPC logging init
-[NuminousRPC]2025/08/28 22:48:51 main.go:24: Recieved : %!s(func() string=0x7ff63d92ed20)
