@@ -49,13 +49,13 @@ namespace Numinous {
             /// <param name="LinearTermTokens">Tokens that live between deltas in hierarchy when lexing.</param>
             /// <returns></returns>
 
-            internal static ((int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator) result, bool Success, bool Unevaluable) LinearTermEvaluate(List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> LinearTermTokens) {
+            internal static (EvaluatedLexerToken result, bool Success, bool Unevaluable) LinearTermEvaluate(List<EvaluatedLexerToken> LinearTermTokens) {
                 List<Operators>                                                          ValueMutators    = [];
                 List<Operators>                                                          OperatorBuffer   = [];
                 
-                List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> ValueTokenBuffer = [];
+                List<EvaluatedLexerToken> ValueTokenBuffer = [];
 
-                Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>? TargetScope = Program.ActiveScopeBuffer[^1];
+                Dictionary<string, ObjectToken>? TargetScope = Program.ActiveScopeBuffer[^1];
                 
                 var  LinearTokenIndex = 0;
 
@@ -147,9 +147,9 @@ namespace Numinous {
                     // the new value at ValueTokenBuffer[ResolveOperationIndex] is the new output variable.
                     
                     // The modifier should store this as an object entry, data would contain its 'self' value but its type is contained on its object level
-                    var Modifier = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)ValueTokenBuffer[ResolveOperationIndex].data);
+                    var Modifier = ((Dictionary<string, ObjectToken>)ValueTokenBuffer[ResolveOperationIndex].data);
                     ValueTokenBuffer.RemoveAt(ResolveOperationIndex.GetOffset(ValueTokenBuffer.Count));
-                    var Output = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)ValueTokenBuffer[ResolveOperationIndex].data);
+                    var Output = ((Dictionary<string, ObjectToken>)ValueTokenBuffer[ResolveOperationIndex].data);
 
                     if (OperatorBuffer[ResolveOperationIndex] is Operators.SET or Operators.INCREASE or Operators.DECREASE
                                                          or Operators.MULTIPLY or Operators.DIVIDE
@@ -173,164 +173,164 @@ namespace Numinous {
                         case (AssembleTimeTypes.CINT, AssembleTimeTypes.CINT):
                             switch (OperatorBuffer[ResolveOperationIndex]) {
                                 case Operators.ADD:
-                                    Output[""] = (
-                                       data:    (int)(Output[""].data) + (int)(Modifier[""].data),
-                                       type:    AssembleTimeTypes.CINT,
-                                       access: Output[""].access
+                                    Output[""] = new(
+                                       (int)(Output[""].data) + (int)(Modifier[""].data),
+                                       AssembleTimeTypes.CINT,
+                                       Output[""].level
                                     ); 
                                     break;
                                 
                                 // polarity matters
                                 case Operators.SUB:
-                                    Output[""] = (
-                                        data:    (int)(Output[""].data) - (int)(Modifier[""].data),
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        (int)(Output[""].data) - (int)(Modifier[""].data),
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 case Operators.MULT:
-                                    Output[""] = (
-                                        data:    (int)(Output[""].data) * (int)(Modifier[""].data),
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        (int)(Output[""].data) * (int)(Modifier[""].data),
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 // polarity matters here on
                                 case Operators.DIV:
-                                    Output[""] = (
-                                        data:    (int)(Output[""].data) / (int)(Modifier[""].data),
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        (int)(Output[""].data) / (int)(Modifier[""].data),
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 case Operators.MOD:
-                                    Output[""] = (
-                                        data:    (int)(Output[""].data) % (int)(Modifier[""].data),
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        (int)(Output[""].data) % (int)(Modifier[""].data),
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 case Operators.RIGHT:
-                                    Output[""] = (
-                                        data:    (int)Output[""].data >>> (int)Modifier[""].data,
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        (int)Output[""].data >>> (int)Modifier[""].data,
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 case Operators.LEFT:
-                                    Output[""] = (
-                                        data:    (int)Output[""].data << (int)Modifier[""].data,
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        (int)Output[""].data << (int)Modifier[""].data,
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 case Operators.EQUAL:
-                                    Output[""] = (
-                                        data:    Output[""].data == Modifier[""].data ? 1 : 0,
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        Output[""].data == Modifier[""].data ? 1 : 0,
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 case Operators.INEQUAL:
-                                    Output[""] = (
-                                        data:    Output[""].data != Modifier[""].data ? 1 : 0,
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        Output[""].data != Modifier[""].data ? 1 : 0,
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 case Operators.NULL:
-                                    Output[""] = (
-                                        data:    Output[""].data ?? Modifier[""].data,  // TODO: Look into why resharper thinks ?? will never trigger.
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        Output[""].data ?? Modifier[""].data,  // TODO: Look into why resharper thinks ?? will never trigger.
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 case Operators.GT:
-                                    Output[""] = (
-                                        data:    (int)Output[""].data > (int)Modifier[""].data ? 1 : 0,
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        (int)Output[""].data > (int)Modifier[""].data ? 1 : 0,
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 case Operators.LT:
-                                    Output[""] = (
-                                        data:    (int)Output[""].data < (int)Modifier[""].data ? 1 : 0,
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        (int)Output[""].data < (int)Modifier[""].data ? 1 : 0,
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 case Operators.GOET:
-                                    Output[""] = (
-                                        data:    (int)Output[""].data >= (int)Modifier[""].data ? 1 : 0,
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        (int)Output[""].data >= (int)Modifier[""].data ? 1 : 0,
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 case Operators.LOET:
-                                    Output[""] = (
-                                        data:    (int)Output[""].data <= (int)Modifier[""].data ? 1 : 0,
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        (int)Output[""].data <= (int)Modifier[""].data ? 1 : 0,
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 case Operators.SERIAL:
-                                    Output[""] = (
-                                        data:    Output[""].data == Modifier[""].data ? 0 : (int)Output[""].data < (int)Modifier[""].data ? -1 : 1,
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        Output[""].data == Modifier[""].data ? 0 : (int)Output[""].data < (int)Modifier[""].data ? -1 : 1,
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 case Operators.BITMASK:
-                                    Output[""] = (
-                                        data:    (int)Output[""].data & (int)Modifier[""].data,
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        (int)Output[""].data & (int)Modifier[""].data,
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 case Operators.BITSET:
-                                    Output[""] = (
-                                        data:    (int)Output[""].data | (int)Modifier[""].data,
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        (int)Output[""].data | (int)Modifier[""].data,
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 case Operators.BITFLIP:
-                                    Output[""] = (
-                                        data:    (int)Output[""].data ^ (int)Modifier[""].data,
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        (int)Output[""].data ^ (int)Modifier[""].data,
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 case Operators.OR:
-                                    Output[""] = (
-                                        data:    (int)Output[""].data > 0 || (int)Modifier[""].data > 0,
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        (int)Output[""].data > 0 || (int)Modifier[""].data > 0,
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
                                 case Operators.AND:
-                                    Output[""] = (
-                                        data:    (int)Output[""].data > 0 && (int)Modifier[""].data > 0,
-                                        type:    AssembleTimeTypes.CINT,
-                                        access: Output[""].access
+                                    Output[""] = new(
+                                        (int)Output[""].data > 0 && (int)Modifier[""].data > 0,
+                                        AssembleTimeTypes.CINT,
+                                        Output[""].level
                                     ); 
                                     break;
                                 
@@ -348,10 +348,10 @@ namespace Numinous {
                         case (AssembleTimeTypes.STRING, AssembleTimeTypes.CSTRING):
                         case (AssembleTimeTypes.CSTRING, AssembleTimeTypes.CSTRING):
                             if (OperatorBuffer[ResolveOperationIndex] == Operators.ADD)
-                                Output[""] = (
-                                    data: (string)Output[""].data + (string)Modifier[""].data,
-                                    type: AssembleTimeTypes.CINT,
-                                    access: Output[""].access
+                                Output[""] = new(
+                                    (string)Output[""].data + (string)Modifier[""].data,
+                                    AssembleTimeTypes.CINT,
+                                    Output[""].level
                                 );
                             else
                                 // error operator isn't supported between types string and string
@@ -379,27 +379,27 @@ namespace Numinous {
                         case (AssembleTimeTypes.CREG, AssembleTimeTypes.CINT):
                         case (AssembleTimeTypes.REG, AssembleTimeTypes.INT):
                         case (AssembleTimeTypes.REG, AssembleTimeTypes.CINT):
-                            Output[""] = (
-                                data: 0,
-                                type: AssembleTimeTypes.CINT,
-                                access: Output[""].access
+                            Output[""] = new(
+                                0,
+                                AssembleTimeTypes.CINT,
+                                Output[""].level
                             );
 
                             switch (OperatorBuffer[ResolveOperationIndex]) {
                                 case Operators.ADD:
-                                    Output["coefficient"] = (
-                                        data: (int)Modifier[""].data,
-                                        type: AssembleTimeTypes.CINT,
-                                        access: AccessLevels.PRIVATE
+                                    Output["coefficient"] = new(
+                                        (int)Modifier[""].data,
+                                        AssembleTimeTypes.CINT,
+                                        AccessLevels.PRIVATE
                                     );
                                     
                                     break;
                                 
                                 case Operators.SUB:
-                                    Output["coefficient"] = (
-                                        data: -(int)Modifier[""].data,
-                                        type: AssembleTimeTypes.CREG,
-                                        access: AccessLevels.PRIVATE
+                                    Output["coefficient"] = new(
+                                        -(int)Modifier[""].data,
+                                        AssembleTimeTypes.CREG,
+                                        AccessLevels.PRIVATE
                                     );
                                     
                                     break;
@@ -409,10 +409,10 @@ namespace Numinous {
                                     return false;
                             }
                             
-                            Output["register"] = (
-                                data: (System.Registers)Output[""].data,
-                                type: AssembleTimeTypes.CREG,
-                                access: AccessLevels.PRIVATE
+                            Output["register"] = new(
+                                (System.Registers)Output[""].data,
+                                AssembleTimeTypes.CREG,
+                                AccessLevels.PRIVATE
                             );
                             
                             // yields constant indexing register with constant (IRWC) X, Y or R
@@ -492,7 +492,7 @@ namespace Numinous {
                         case (AssembleTimeTypes.RT,     AssembleTimeTypes.CRT):
                         case (AssembleTimeTypes.CRT,    AssembleTimeTypes.CRT):
                             Output = new() {
-                                {"", ((int)Modifier["offset"].data + (int)Output["offset"].data, AssembleTimeTypes.CINT, AccessLevels.PUBLIC)}
+                                {"", new((int)Modifier["offset"].data + (int)Output["offset"].data, AssembleTimeTypes.CINT, AccessLevels.PUBLIC)}
                             };
                             
                             break;
@@ -531,20 +531,20 @@ namespace Numinous {
                     // push token into processor
                     ValueTokenBuffer.Add(LinearTermTokens[LinearTokenIndex]);
                     
-                    var resp = GetObjectFromAlias((string)ValueTokenBuffer[LinearTokenIndex].data, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
-                    if (!resp.success) {
+                    var resp = Database.GetObjectFromAlias((string)ValueTokenBuffer[LinearTokenIndex].data, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
+                    if (resp is null) {
                         return (false, true);   // resulting value to be marked as Unevaluable
                     }
 
                     while (ValueMutators.Count > 0) if (!ApplyPreMutation()) return default; // error pass back, process value mutators from back to front
 
                     // New gen tokens must contain object data.
-                    ValueTokenBuffer[LinearTokenIndex] = (
-                        ValueTokenBuffer[LinearTokenIndex].StringOffset,
+                    ValueTokenBuffer[LinearTokenIndex] = new(
+                        ValueTokenBuffer[LinearTokenIndex].StringIndex,
                         ValueTokenBuffer[LinearTokenIndex].StringLength,
-                        resp.ctx.data,                                   // inject object reference
-                        resp.ctx.type,
-                        resp.ctx.level,
+                        resp.data,                                   // inject object reference
+                        resp.type,
+                        resp.level,
                         ValueTokenBuffer[LinearTokenIndex].IsOperator
                     );
                     
@@ -563,8 +563,8 @@ namespace Numinous {
                             } 
                         }
                     } else {
-                        var CurrentValue = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>) LinearTermTokens[LinearTokenIndex].data);
-                        var LastValue = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>) ValueTokenBuffer[^1].data);
+                        var CurrentValue = ((Dictionary<string, ObjectToken>) LinearTermTokens[LinearTokenIndex].data);
+                        var LastValue = ((Dictionary<string, ObjectToken>) ValueTokenBuffer[^1].data);
                         
                         if (CurrentValue[""].type is AssembleTimeTypes.INDEX) {
                             /*
@@ -597,10 +597,10 @@ namespace Numinous {
                                     switch (CurrentValue[""].type) {
                                         case AssembleTimeTypes.CINT:
                                         case AssembleTimeTypes.INT:
-                                            LastValue[""] = (
-                                                data: ((string)LastValue[""].data)[(int)CurrentValue[""].data],
-                                                type: AssembleTimeTypes.CSTRING,
-                                                level: AccessLevels.PUBLIC
+                                            LastValue[""] = new(
+                                                ((string)LastValue[""].data)[(int)CurrentValue[""].data],
+                                                AssembleTimeTypes.CSTRING,
+                                                AccessLevels.PUBLIC
                                             );
                                             break;
                                         
@@ -619,10 +619,10 @@ namespace Numinous {
                                         case AssembleTimeTypes.RT:
                                         case AssembleTimeTypes.CRT:
                                             offset += (int)CurrentValue["offset"].data;
-                                            LastValue[""] = (
-                                                data: offset,
-                                                type: AssembleTimeTypes.CINT,
-                                                level: AccessLevels.PUBLIC
+                                            LastValue[""] = new(
+                                                offset,
+                                                AssembleTimeTypes.CINT,
+                                                AccessLevels.PUBLIC
                                             );
                                             
                                             break;
@@ -630,10 +630,10 @@ namespace Numinous {
                                         case AssembleTimeTypes.INT:
                                         case AssembleTimeTypes.CINT:
                                             offset += (int)CurrentValue[""].data;
-                                            LastValue[""] = (
-                                                data: offset,
-                                                type: AssembleTimeTypes.CINT,
-                                                level: AccessLevels.PUBLIC
+                                            LastValue[""] = new(
+                                                offset,
+                                                AssembleTimeTypes.CINT,
+                                                AccessLevels.PUBLIC
                                             );
                                             
                                             break;
@@ -641,9 +641,9 @@ namespace Numinous {
                                         case AssembleTimeTypes.CREG:
                                         case AssembleTimeTypes.REG:
                                             LastValue = new() {
-                                                {"",            (0,                                       AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
-                                                {"coefficient", ((int)LastValue[""].data,                 AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
-                                                {"register",    ((System.Registers)CurrentValue[""].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
+                                                {"",            new(0,                                       AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
+                                                {"coefficient", new((int)LastValue[""].data,                 AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
+                                                {"register",    new((System.Registers)CurrentValue[""].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
                                             };
                                             break;
                                         
@@ -651,9 +651,9 @@ namespace Numinous {
                                         case AssembleTimeTypes.IRWN:
                                             offset += (int)CurrentValue["coefficient"].data;
                                             LastValue = new() {
-                                                {"",            (0,                                               AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
-                                                {"coefficient", (offset,                                          AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
-                                                {"register",    ((System.Registers)CurrentValue["register"].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
+                                                {"",            new(0,                                               AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
+                                                {"coefficient", new(offset,                                          AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
+                                                {"register",    new((System.Registers)CurrentValue["register"].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
                                             };
                                             break;
                                     }
@@ -667,19 +667,19 @@ namespace Numinous {
                                         case AssembleTimeTypes.INT:
                                         case AssembleTimeTypes.CINT:
                                             offset = (int)LastValue["offset"].data + (tRT.endian ? (int)CurrentValue[""].data : (int)(tRT.size - (int)CurrentValue[""].data));
-                                            LastValue[""] = (
-                                                data: offset,
-                                                type: AssembleTimeTypes.CINT,
-                                                level: AccessLevels.PUBLIC
+                                            LastValue[""] = new(
+                                                offset,
+                                                AssembleTimeTypes.CINT,
+                                                AccessLevels.PUBLIC
                                             );
                                             break;
                                         
                                         case AssembleTimeTypes.REG:
                                         case AssembleTimeTypes.CREG:
                                             LastValue = new() {
-                                                {"",            (0,                                       AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
-                                                {"coefficient", ((int)LastValue["offset"].data,           AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
-                                                {"register",    ((System.Registers)CurrentValue[""].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
+                                                {"",            new(0,                                       AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
+                                                {"coefficient", new((int)LastValue["offset"].data,           AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
+                                                {"register",    new((System.Registers)CurrentValue[""].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
                                             };
                                             break;
                                         
@@ -690,9 +690,9 @@ namespace Numinous {
                                             // apply immediate to offset based on endian, apply register. New ir objet
                                             offset = (int)LastValue["offset"].data + (tRT.endian ? (int)CurrentValue["coefficient"].data : (int)(tRT.size - (int)CurrentValue["coefficient"].data));
                                             LastValue = new() {
-                                                {"",            (0,                                               AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
-                                                {"coefficient", (offset,                                          AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
-                                                {"register",    ((System.Registers)CurrentValue["register"].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
+                                                {"",            new(0,                                               AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
+                                                {"coefficient", new(offset,                                          AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
+                                                {"register",    new((System.Registers)CurrentValue["register"].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
                                             };
                                             break;
                                         
@@ -724,100 +724,100 @@ namespace Numinous {
                     return (true, false);
 
                     bool ApplyPreMutation() {
-                        var LastValue = ((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>) ValueTokenBuffer[^1].data);
+                        var LastValue = ((Dictionary<string, ObjectToken>) ValueTokenBuffer[^1].data);
                         switch (LastValue[""].type, ValueMutators[^1]) {
 
                             case (AssembleTimeTypes.INT, Operators.ADD):
                             case (AssembleTimeTypes.CINT, Operators.ADD): // abs
-                                LastValue[""] = new (){
-                                    data  = Math.Abs((int)LastValue[""].data),
-                                    type  = LastValue[""].type,
-                                    level = LastValue[""].level
-                                };
+                                LastValue[""] = new (
+                                    Math.Abs((int)LastValue[""].data),
+                                    LastValue[""].type,
+                                    LastValue[""].level
+                                );
                             
                                 break;
                             
                             // inc/dec does NOT support constant object references for obvious reasons
                             case (AssembleTimeTypes.INT, Operators.INC): // inc
-                                LastValue[""] = new (){
-                                    data  = Math.Abs((int)LastValue[""].data + 1),
-                                    type  = LastValue[""].type,
-                                    level = LastValue[""].level
-                                };
+                                LastValue[""] = new (
+                                    Math.Abs((int)LastValue[""].data + 1),
+                                    LastValue[""].type,
+                                    LastValue[""].level
+                                );
                             
                                 break;
                             
                             case (AssembleTimeTypes.INT, Operators.DEC): // dec
-                                LastValue[""] = new (){
-                                    data  = Math.Abs((int)LastValue[""].data - 1),
-                                    type  = LastValue[""].type,
-                                    level = LastValue[""].level
-                                };
+                                LastValue[""] = new (
+                                    Math.Abs((int)LastValue[""].data - 1),
+                                    LastValue[""].type,
+                                    LastValue[""].level
+                                );
                             
                                 break;
                             
                             case (AssembleTimeTypes.INT, Operators.SUB):
                             case (AssembleTimeTypes.CINT, Operators.SUB):   // neg
-                                LastValue[""] = new (){
-                                    data  = -(int)LastValue[""].data,
-                                    type  = LastValue[""].type,
-                                    level = LastValue[""].level
-                                };
+                                LastValue[""] = new (
+                                    -(int)LastValue[""].data,
+                                    LastValue[""].type,
+                                    LastValue[""].level
+                                );
                                 break;
 
                             case (AssembleTimeTypes.INT, Operators.NOT):
                             case (AssembleTimeTypes.CINT, Operators.NOT):   // == 0
-                                LastValue[""] = new (){
-                                    data  = (0 == (int)LastValue[""].data) ? 1 : 0,
-                                    type  = LastValue[""].type,
-                                    level = LastValue[""].level
-                                };
+                                LastValue[""] = new (
+                                    0 == (int)LastValue[""].data ? 1 : 0,
+                                    LastValue[""].type,
+                                    LastValue[""].level
+                                );
                                 break;
 
                             case (AssembleTimeTypes.INT, Operators.BITNOT):
                             case (AssembleTimeTypes.CINT, Operators.BITNOT):// ^= (uint)-1
-                                LastValue[""] = new (){
-                                    data  = ~(int)LastValue[""].data,
-                                    type  = LastValue[""].type,
-                                    level = LastValue[""].level
-                                };
+                                LastValue[""] = new (
+                                    ~(int)LastValue[""].data,
+                                    LastValue[""].type,
+                                    LastValue[""].level
+                                );
                                 break;
 
                             case (AssembleTimeTypes.STRING, Operators.ADD):
                             case (AssembleTimeTypes.CSTRING, Operators.ADD): // upper case
-                                LastValue[""] = new (){
-                                    data  = ((string)LastValue[""].data).ToUpper(),
-                                    type  = LastValue[""].type,
-                                    level = LastValue[""].level
-                                };
+                                LastValue[""] = new (
+                                    ((string)LastValue[""].data).ToUpper(),
+                                    LastValue[""].type,
+                                    LastValue[""].level
+                                );
                                 break;
                             
                             case (AssembleTimeTypes.STRING, Operators.SUB):
                             case (AssembleTimeTypes.CSTRING, Operators.SUB): // lower case
-                                LastValue[""] = new (){
-                                    data  = ((string)LastValue[""].data).ToLower(),
-                                    type  = LastValue[""].type,
-                                    level = LastValue[""].level
-                                };
+                                LastValue[""] = new (
+                                    ((string)LastValue[""].data).ToLower(),
+                                    LastValue[""].type,
+                                    LastValue[""].level
+                                );
                                 break;
 
                                 
                             case (AssembleTimeTypes.STRING, Operators.NOT):
                             case (AssembleTimeTypes.CSTRING, Operators.NOT): // turn into spaces
-                                LastValue[""] = new (){
-                                    data  = new string(' ', ((string)LastValue[""].data).Length),
-                                    type  = LastValue[""].type,
-                                    level = LastValue[""].level
-                                };
+                                LastValue[""] = new (
+                                    new string(' ', ((string)LastValue[""].data).Length),
+                                    LastValue[""].type,
+                                    LastValue[""].level
+                                );
                                 break;
 
                             case (AssembleTimeTypes.STRING, Operators.BITNOT):
                             case (AssembleTimeTypes.CSTRING, Operators.BITNOT):  // length of
-                                LastValue[""] = new (){
-                                    data  = ((string)LastValue[""].data).Length,
-                                    type  = LastValue[""].type,
-                                    level = LastValue[""].level
-                                };
+                                LastValue[""] = new (
+                                    ((string)LastValue[""].data).Length,
+                                    LastValue[""].type,
+                                    LastValue[""].level
+                                );
                                 break;
                             
                             default:
@@ -875,12 +875,12 @@ namespace Numinous {
             /// <param name="Tokens"></param>
             /// <param name="MaxHierachy"></param>
             /// <returns></returns>
-            internal static (List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> result, bool Success, bool Unevaluable) DeltaEvaluate(ref List<(List<List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)>> DeltaTokens, int Hierachy)> Tokens, int MaxHierachy) {
-                List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> args = [];
+            internal static (List<EvaluatedLexerToken> result, bool Success, bool Unevaluable) DeltaEvaluate(ref List<(List<List<EvaluatedLexerToken>> DeltaTokens, int Hierachy)> Tokens, int MaxHierachy) {
+                List<EvaluatedLexerToken> args = [];
                 while (MaxHierachy >= 0) {
                     var tardeltas = Tokens.Where(t => t.Hierachy == MaxHierachy);
                     List<int> DeletionSchedule = [];
-                    ((int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator) result, bool Success, bool Unevaluable) resp = default;
+                    (EvaluatedLexerToken result, bool Success, bool Unevaluable) resp = default;
                     
                     // reverse so indexes aren't corrupted
                     foreach (var delta in tardeltas.Select(t => t.DeltaTokens).Reverse()) {
@@ -903,7 +903,7 @@ namespace Numinous {
                         var index = Tokens.IndexOf((delta, MaxHierachy));
                         DeletionSchedule.Add(index);
                         
-                        Tokens[index - 1].DeltaTokens[^1].Add((args[0].StringOffset, args[^1].StringOffset + args[^1].StringLength, args, AssembleTimeTypes.TUPLE, AccessLevels.PRIVATE, false));
+                        Tokens[index - 1].DeltaTokens[^1].Add(new(args[0].StringIndex, args[^1].StringIndex + args[^1].StringLength, args, AssembleTimeTypes.TUPLE, AccessLevels.PRIVATE, false));
                         Tokens[index - 1].DeltaTokens.AddRange(Tokens[index + 1].DeltaTokens);
                         Tokens[index - 1] = (Tokens[index - 1].DeltaTokens, MaxHierachy - 1);
                     }

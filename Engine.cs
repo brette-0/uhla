@@ -23,6 +23,43 @@ namespace Numinous {
     }
 
     namespace Engine {
+
+        internal class ObjectToken {
+            internal ObjectToken(object pData, AssembleTimeTypes pType, AccessLevels pLevel) {
+                data         = pData;
+                type         = pType;
+                level        = pLevel;
+            }
+
+            ObjectToken? GetMember(string name) {
+                var obj = (Dictionary<string, ObjectToken>)data;
+                return obj.GetValueOrDefault(name);
+            }
+            
+            internal  object           data;  // contains members
+            internal AssembleTimeTypes type;  // type of object
+            internal AccessLevels      level; // access level
+        }
+
+        internal class EvaluatedLexerToken : ObjectToken {
+            internal EvaluatedLexerToken(
+                int               pStringIndex,
+                int               pStringLength,
+                object            pData,
+                AssembleTimeTypes pType,
+                AccessLevels      pLevel,
+                bool              pIsOperator
+            ) : base(pData, pType, pLevel) {
+                StringIndex  = pStringIndex;
+                StringLength = pStringLength;
+                IsOperator   = pIsOperator;
+            }
+
+            internal int               StringIndex, StringLength; // debugging indexes
+            internal bool              IsOperator;                // if its an operator or a value
+        }
+        
+        
         namespace System {
             internal enum Registers { A, X, Y }
             
@@ -520,24 +557,23 @@ namespace Numinous {
                     int                                                                   fallbackIndex,
                     int                                                                   fallbackLength) {
                     // Token-pasting (##)
-                    for (int i = 0; i < tokens.Count - 2; i++) {
-                        if (tokens[i + 1].token == "##") {
-                            var left  = tokens[i];
-                            var right = tokens[i + 2];
+                    for (var i = 0; i < tokens.Count - 2; i++) {
+                        if (tokens[i + 1].token != "##") continue;
+                        var left  = tokens[i];
+                        var right = tokens[i + 2];
 
-                            int idx = left.StringIndex >= 0 ? left.StringIndex :
-                                right.StringIndex      >= 0 ? right.StringIndex : fallbackIndex;
-                            int len                       = left.StringLength + right.StringLength;
-                            if (idx == fallbackIndex) len = fallbackLength;
+                        var idx = left.StringIndex >= 0 ? left.StringIndex :
+                            right.StringIndex         >= 0 ? right.StringIndex : fallbackIndex;
+                        var len                     = left.StringLength + right.StringLength;
+                        if (idx == fallbackIndex) len = fallbackLength;
 
-                            var merged = (left.token + right.token, idx, len);
+                        var merged = (left.token + right.token, idx, len);
 
-                            // Replace [left, ##, right] with merged
-                            tokens.RemoveAt(i); // remove left
-                            tokens.RemoveAt(i); // remove ##
-                            tokens[i] = merged; // replace right with merged
-                            i--;                // re-check in case of multiple pastes
-                        }
+                        // Replace [left, ##, right] with merged
+                        tokens.RemoveAt(i); // remove left
+                        tokens.RemoveAt(i); // remove ##
+                        tokens[i] = merged; // replace right with merged
+                        i--;                // re-check in case of multiple pastes
                     }
 
                     // Stringification (#)
@@ -613,11 +649,11 @@ namespace Numinous {
                 if (string.IsNullOrEmpty(input) || input[0] != '\\')
                     return (input, false);
 
-                int i = 1;
+                var i = 1;
                 if (i >= input.Length)
                     return (input, false);
 
-                char c = input[i];
+                var c = input[i];
                 switch (c) {
                     case 'n':  return ("\n", true);
                     case 'r':  return ("\r", true);
@@ -632,8 +668,8 @@ namespace Numinous {
                     case '?':  return ("?", true);
 
                     case 'x': {
-                        int start = i + 1;
-                        int j     = start;
+                        var start = i + 1;
+                        var j     = start;
 
                         while (j < input.Length) {
                             char ch = input[j];
@@ -648,15 +684,15 @@ namespace Numinous {
 
                         if (j == start) return (input, false);
 
-                        string hex = input.Substring(start, j - start);
-                        if (int.TryParse(hex, global::System.Globalization.NumberStyles.HexNumber, null, out int value))
+                        var hex = input.Substring(start, j - start);
+                        if (int.TryParse(hex, global::System.Globalization.NumberStyles.HexNumber, null, out var value))
                             return (((char)value).ToString(), true);
 
                         return (input, false);
                     }
 
                     case >= '0' and <= '7': {
-                        int value = ParseOctal(input.AsSpan(i));
+                        var value = ParseOctal(input.AsSpan(i));
                         return (((char)value).ToString(), true);
                     }
 
@@ -669,8 +705,8 @@ namespace Numinous {
                     int value = 0, count = 0;
                     while (count < 3 && count < span.Length)
                     {
-                        char digit = span[count];
-                        if (digit < '0' || digit > '7') break;
+                        var digit = span[count];
+                        if (digit is < '0' or > '7') break;
                         value = value * 8 + (digit - '0');
                         count++;
                     }
@@ -682,7 +718,7 @@ namespace Numinous {
 
                 Span<List<string>>  SourceFileContentBufferSpan = CollectionsMarshal.AsSpan(Program.SourceFileContentBuffer);
                 Span<string>        SourceFileNameBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileNameBuffer);
-                Span<int>           SourceSubstringBufferSpan   = CollectionsMarshal.AsSpan(Program.SourceTokenIndexBuffer);
+                Span<int>           SourceTokenIndexBufferSpan   = CollectionsMarshal.AsSpan(Program.SourceTokenIndexBuffer);
                 Span<int>           SourceFileLineBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
                 Span<int>           SourceFileStepBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
                 
@@ -694,6 +730,9 @@ namespace Numinous {
 
                 var StringIndex = 0;
                 var TokenIndex  = 0;
+                
+                (List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, int Finish, bool Success, bool Continue) lexer_resp; 
+                (List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> result, bool Success, bool Unevaluable)                                              evaluate_resp;
 
                 while (true) {
                     Step();
@@ -884,18 +923,15 @@ namespace Numinous {
                             
                             case "undef":
                                 seek_no_whitespace();
-                                var resp = GetObjectFromAlias(ActiveToken.ctx, Program.ActiveScopeBuffer[^1],
+                                var resp = Database.GetObjectFromAlias(ActiveToken.ctx, Program.ActiveScopeBuffer[^1],
                                                               AccessLevels.PUBLIC);
-                                if (!resp.success) {
+                                if (resp is null) {
                                     // error, could not find
                                     return default;
-                                } else if (resp.ctx.type is AssembleTimeTypes.EXP 
+                                } else if (resp.type is AssembleTimeTypes.EXP 
                                                          or AssembleTimeTypes.FEXP
                                                          or AssembleTimeTypes.CEXP) {
-                                    var dbcast =
-                                        (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)
-                                        Program.ActiveScopeBuffer[^1];
-                                    dbcast.Remove(ActiveToken.ctx);
+                                    Program.ActiveScopeBuffer[^1].Remove(ActiveToken.ctx);
                                 } else {
                                     // target is not define type, cannot undefine.
                                     return default;
@@ -1013,20 +1049,20 @@ namespace Numinous {
                         
                         case "del":
                             seek_no_whitespace();
-                            var resp = GetObjectFromAlias(ActiveToken.ctx,  Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
-                            if (!resp.success) {
+                            var resp = Database.GetObjectFromAlias(ActiveToken.ctx,  Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
+                            if (resp is null) {
                                 // error : label does not exist
                                 return default;
                             }
 
-                            if (!(resp.ctx.type is AssembleTimeTypes.FUNCTION
+                            if (!(resp.type is AssembleTimeTypes.FUNCTION
                                                 or AssembleTimeTypes.ICRWN
                                                 or AssembleTimeTypes.IRWN
                                                 or AssembleTimeTypes.OPER)) {
                                 // error : not a deletable type
                             }
 
-                            if (!resp.ctx.type.HasFlag(AssembleTimeTypes.CONSTANT)) {
+                            if (!resp.type.HasFlag(AssembleTimeTypes.CONSTANT)) {
                                 // error : cannot delete constant objects :: TODO: drop them a link to the wiki explaining the backwards definition mutation problem
                                 return default;
                             }
@@ -1094,14 +1130,14 @@ namespace Numinous {
                 
 
                     List<(string token, int StringIndex, int StringLength)>    Resolved = [(Token, ActiveToken.StringIndex, Token.Length)];
-                    (object data, AssembleTimeTypes type, AccessLevels access) ctx;
+                    ObjectToken? ctx;
                     bool                                                       success;
                     bool                                                       HadSuccess = false;
 
                     do {
-                        (ctx, success) = Database.GetObjectFromAlias(Resolved[0].token, AccessLevels.PUBLIC);
+                        ctx = Database.GetObjectFromAlias(Resolved[0].token, AccessLevels.PUBLIC);
 
-                        if (success && ctx.type == AssembleTimeTypes.CEXP) {
+                        if (ctx is not null && ctx.type == AssembleTimeTypes.CEXP) {
                             HadSuccess = true;
                             Resolved.RemoveAt(0);
                         
@@ -1110,7 +1146,7 @@ namespace Numinous {
                                                    .ToList());
                         }
 
-                    } while (success && ctx.type == AssembleTimeTypes.CEXP);
+                    } while (ctx is not null && ctx.type == AssembleTimeTypes.CEXP);
 
                     return (Resolved, HadSuccess);
                 }
@@ -2912,36 +2948,6 @@ Svenska           ""-l sw""
             }
 
             /// <summary>
-            /// Searches for 'Alias' in TargetScope (Either ActiveScope or specified scope)
-            /// </summary>
-            /// <param name="Alias"></param>
-            /// <param name="TargetScope"></param>
-            /// <param name="UsedAccessLevel"></param>
-            /// <returns></returns>
-            internal static ((object data, AssembleTimeTypes type, AccessLevels level) ctx, bool success) GetObjectFromAlias(string Alias, Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)> TargetScope, AccessLevels UsedAccessLevel) {
-                ((object data, AssembleTimeTypes type, AccessLevels level) ctx, bool found, bool error) = (default, default, default);
-                List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> LocalObjectSearchBuffer;
-
-                if (TargetScope == Program.ActiveScopeBuffer[^1]) {
-                    LocalObjectSearchBuffer = [.. Program.ObjectSearchBuffer, Program.ActiveScopeBuffer[^1]];
-                } else  LocalObjectSearchBuffer = [TargetScope]; 
-
-
-                if (!LocalObjectSearchBuffer.Contains(TargetScope)) LocalObjectSearchBuffer.Add(TargetScope);
-
-                foreach (var LocalObjectSearchContainer in LocalObjectSearchBuffer) {
-                    if (LocalObjectSearchContainer.TryGetValue(Alias, out ctx)) {
-                        if (UsedAccessLevel < ctx.level) {
-                            // error, invalid permissions to access item
-                            return default;
-                        } else return (ctx, true);
-                    }
-                }
-
-                return default;
-            }
-
-            /// <summary>
             /// Database methods
             /// </summary>
             internal static class Database {
@@ -2954,8 +2960,8 @@ Svenska           ""-l sw""
                 /// <param name="Alias"></param>
                 /// <param name="UsedAccessLevel"></param>
                 /// <returns></returns>
-                internal static ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) GetObjectFromAlias(string Alias, AccessLevels UsedAccessLevel) {
-                    List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> LocalObjectSearchBuffer = [Program.ActiveScopeBuffer[^1], .. Program.ObjectSearchBuffer];
+                internal static ObjectToken? GetObjectFromAlias(string Alias, AccessLevels UsedAccessLevel) {
+                    List<Dictionary<string, ObjectToken>> LocalObjectSearchBuffer = [Program.ActiveScopeBuffer[^1], .. Program.ObjectSearchBuffer];
                     return __GetObjectFromAlias(Alias, LocalObjectSearchBuffer, UsedAccessLevel);
                 }
                 /// <summary>
@@ -2967,7 +2973,7 @@ Svenska           ""-l sw""
                 /// <param name="UsedAccessLevel"></param>
                 /// <returns></returns>
                 /// 
-                internal static ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) GetObjectFromAlias(string Alias, Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)> TargetScope, AccessLevels UsedAccessLevel) => __GetObjectFromAlias(Alias, [TargetScope], UsedAccessLevel);
+                internal static ObjectToken? GetObjectFromAlias(string Alias, Dictionary<string, ObjectToken> TargetScope, AccessLevels UsedAccessLevel) => __GetObjectFromAlias(Alias, [TargetScope], UsedAccessLevel);
                 
                 /// <summary>
                 /// Internal function iterating over the LocalObjectSearchPath to find the required context if possible.
@@ -2976,14 +2982,15 @@ Svenska           ""-l sw""
                 /// <param name="LocalObjectSearchBuffer"></param>
                 /// <param name="UsedAccessLevel"></param>
                 /// <returns></returns>
-                private  static ((object data, AssembleTimeTypes type, AccessLevels access) ctx, bool success) __GetObjectFromAlias(string Alias, List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> LocalObjectSearchBuffer, AccessLevels UsedAccessLevel) {
-                    ((object data, AssembleTimeTypes type, AccessLevels level) ctx, bool found, bool error) = (default, default, default);
+                private  static ObjectToken? __GetObjectFromAlias(string Alias, List<Dictionary<string, ObjectToken>> LocalObjectSearchBuffer, AccessLevels UsedAccessLevel) {
+                    ObjectToken ctx;
+                    var (found, error) = (false, false);
                     foreach (var LocalObjectSearchContainer in LocalObjectSearchBuffer) {
                         if (LocalObjectSearchContainer.TryGetValue(Alias, out ctx)) {
                             if (UsedAccessLevel < ctx.level) {
                                 // error, invalid permissions to access item
-                                return default;
-                            } else return (ctx, true);
+                                return null;
+                            }   return null;
                         }
                     }
 

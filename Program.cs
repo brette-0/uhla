@@ -48,59 +48,59 @@ internal static class Program {
 
         // rs "Root Scope" has itself as key, value and parent - sitting in the root pointing to itself.
         // this is the only way via asm to directly refer to rs. Useful for when you use a 'as' level keyword but desires rs resolve.
-        LabelDataBase["rs"] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
-            {"",        (LabelDataBase, default, AccessLevels.PRIVATE)},
+        LabelDataBase["rs"] =  new(new Dictionary<string, ObjectToken>() {
+            {"",        new (LabelDataBase, AssembleTimeTypes.CSCOPE, AccessLevels.PRIVATE)},
         }, AssembleTimeTypes.CSCOPE, AccessLevels.PUBLIC);
 
         // make language a compiler variable
-        LabelDataBase["lang"]   = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
-            {"",        ($"\"{ActiveLanguage}\"", default, AccessLevels.PRIVATE)},
+        LabelDataBase["lang"]   = new(new Dictionary<string, ObjectToken>() {
+            {"",        new($"\"{ActiveLanguage}\"", AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
         }, AssembleTimeTypes.CSTRING, AccessLevels.PUBLIC);
 
-        LabelDataBase["a"] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
-            {"",        (Numinous.Engine.System.Registers.A, AssembleTimeTypes.CREG, AccessLevels.PRIVATE)},
-            {"indexing", (0, AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
+        LabelDataBase["a"] = new(new Dictionary<string, ObjectToken>() {
+            {"",         new(Numinous.Engine.System.Registers.A, AssembleTimeTypes.CREG, AccessLevels.PRIVATE)},
+            {"indexing", new(0, AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
         }, AssembleTimeTypes.CREG, AccessLevels.PUBLIC);
 
-        LabelDataBase["x"] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
-            {"",        (Numinous.Engine.System.Registers.X, default, AccessLevels.PRIVATE)},
-            {"indexing", (0, AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
+        LabelDataBase["x"] = new(new Dictionary<string, ObjectToken>() {
+            {"",         new(Numinous.Engine.System.Registers.X, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
+            {"indexing", new(0, AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
         }, AssembleTimeTypes.CREG, AccessLevels.PUBLIC);
 
-        LabelDataBase["y"] = (new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
-            {"",        (Numinous.Engine.System.Registers.Y, default, AccessLevels.PRIVATE)},
-            {"indexing", (0, AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
+        LabelDataBase["y"] = new(new Dictionary<string, ObjectToken>() {
+            {"",         new(Numinous.Engine.System.Registers.Y, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
+            {"indexing", new(0, AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
         }, AssembleTimeTypes.CREG, AccessLevels.PUBLIC);
 
-        LabelDataBase["ToString"] = (
+        LabelDataBase["ToString"] = new(
             new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
                 {"args", (1, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
                 {"", (GenerateFunctionalDefine("# args", ["args"]), default, default)}
             }, AssembleTimeTypes.FEXP , AccessLevels.PUBLIC);
         
-        // Functions are just lambdas, 0 refers to arg 0, and so on. They are of type Function  returns type of type type
+        // Functions are just lambdas, 0 refers to arg 0, and so on. They are of type Function returns type of type 'type'
         // The 'self' containing the lambda's type is the return type
-        LabelDataBase["typeof"] = (new Dictionary<string, (object? data, AssembleTimeTypes type, AccessLevels access)>() {
-            {"",        (((object data, AssembleTimeTypes type, AccessLevels access) ctx) => (ctx.type, AssembleTimeTypes.TYPE, AccessLevels.PUBLIC), AssembleTimeTypes.TYPE, AccessLevels.PRIVATE)},
-            {"ctx",     (null, AssembleTimeTypes.COBJECT, AccessLevels.PRIVATE) },
+        LabelDataBase["typeof"] = new(new Dictionary<string, ObjectToken>() {
+            {"",        new((ObjectToken ctx) => new ObjectToken(ctx.type, AssembleTimeTypes.TYPE, AccessLevels.PUBLIC), AssembleTimeTypes.TYPE, AccessLevels.PRIVATE)},
+            {"ctx",     new(0, AssembleTimeTypes.COBJECT, AccessLevels.PRIVATE) },
             
             // arg num 0 => ctx
-            {"0", ("ctx", default, default)},
+            {"0",       new("ctx", default, default)},
             
-            {"args",    (1, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)}
+            {"args",    new(1, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)}
         }, AssembleTimeTypes.FUNCTION, AccessLevels.PUBLIC);
 
-        LabelDataBase["exists"] = (new Dictionary<string, (object? data, AssembleTimeTypes type, AccessLevels access)>() {
-            {"",        (((object data, AssembleTimeTypes type, AccessLevels access) ctx) => {(object _, bool success) = GetObjectFromAlias((string)ctx.data, ActiveScopeBuffer[^1], AccessLevels.PUBLIC); return success; }, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
-            {"ctx",     (null, AssembleTimeTypes.COBJECT, AccessLevels.PRIVATE) },
+        LabelDataBase["exists"] = new(new Dictionary<string, ObjectToken>() {
+            {"",        new ObjectToken((string ctx) => Database.GetObjectFromAlias(ctx, AccessLevels.PUBLIC) is null, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
+            {"ctx",     new ObjectToken(0, AssembleTimeTypes.COBJECT, AccessLevels.PRIVATE) },
             
             // arg num 0 => ctx
-            {"0", ("ctx", default, default)},
+            {"0",       new ObjectToken("ctx", default, default)},
             
-            {"args",    (1, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)}
+            {"args",    new ObjectToken(1, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)}
         }, AssembleTimeTypes.FUNCTION, AccessLevels.PUBLIC);
 
-        ActiveScopeBuffer.Add(LabelDataBase);   // add rs to as, default rs
+        ActiveScopeBuffer.Add(LabelDataBase);   // add rs to 'as', default rs
         ObjectSearchBuffer = [LabelDataBase];   // by default, contains nothing more than this. For each search AS[^1] is added
 
         Assemble([]);
@@ -115,10 +115,10 @@ internal static class Program {
     internal static List<int>           SourceFileLineBuffer  = [];  // Used for ERROR REPORT ONLY
     internal static List<int>           SourceFileStepBuffer  = [];  // Used for ERROR REPORT ONLY
 
-    internal static Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>       LabelDataBase         = [];
-    internal static List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> ActiveScopeBuffer     = [];
-    internal static List<ScopeTypes>                                                                    ActiveScopeTypeBuffer =[];
-    internal static List<Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels level)>> ObjectSearchBuffer    = [];
+    internal static Dictionary<string, ObjectToken>         LabelDataBase         = [];
+    internal static List<Dictionary<string, ObjectToken>>   ActiveScopeBuffer     = [];
+    internal static List<ScopeTypes>                        ActiveScopeTypeBuffer =[];
+    internal static List<Dictionary<string, ObjectToken>>   ObjectSearchBuffer    = [];
 
     internal static List<string> SourceFileSearchPaths = [];
 

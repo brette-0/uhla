@@ -1,1 +1,1 @@
-int foo = 1 + 2 * 3 - (5 * 5)
+#pragma push illegal 0   // disable illegal instruction use

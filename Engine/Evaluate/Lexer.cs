@@ -16,6 +16,21 @@ using static Numinous.Memory;
 
 namespace Numinous.Engine {
     internal static partial class Engine {
+        
+        /// <summary>
+        /// The Lexer takes in the entire source file as byref array of string tokens from a simple regex system.
+        /// It's sole purpose is to check on instruction terminations, which according to it are comprised of:
+        ///     - semicolons outside of strings
+        ///     - ending a line with a value where all containers are closed
+        ///
+        /// Because some systems may break the rules above, sometimes certain processes will NOT invoke the standard lexer.
+        /// </summary>
+        /// <param name="BasicRegexTokens">The source information that has been regex parsed and split into string tokens.</param>
+        /// <param name="SourceTokenIndex">The index of the token we being lexing first.</param>
+        /// <param name="ErrorReportLineNumber">The line the token we are lexing first is on.</param>
+        /// <param name="ErrorReportStepNumber">The count of instructions that have passed on this line + 1</param>
+        /// <param name="SourceFilePath">The file path we obtained the source content from, for debugging information.</param>
+        /// <returns></returns>
         internal static (List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, int Finish, bool Success, bool Continue) Lexer(Memory<string> BasicRegexTokens, ref int SourceTokenIndex, ref int ErrorReportLineNumber, ref int ErrorReportStepNumber, string SourceFilePath) {
             // use BasicRegexTokens => RegexTokens (ref, no cloning?) | Ensures we solve all new defines without mutating the original
             //List<string> RegexTokens = ResolveDefines(BasicRegexTokens);
@@ -108,7 +123,9 @@ namespace Numinous.Engine {
                         ActiveToken.StringIndex       = 0;
                         break;
 
-                    // TODO: Add ++, --, and ~
+                    case "~":   SimpleAddOperator(Operators.BITNOT);        break;
+                    case "++":  SimpleAddOperator(Operators.INC);           break;
+                    case "--":  SimpleAddOperator(Operators.DEC);           break;
                     case "+":   SimpleAddOperator(Operators.ADD);           break;
                     case "-":   SimpleAddOperator(Operators.SUB);           break;
                     case "*":   SimpleAddOperator(Operators.MULT);          break;
@@ -166,6 +183,7 @@ namespace Numinous.Engine {
                             Finish = ActiveToken.StringIndex;
                             CopyDeltaTermTokens();
                             CopyDeltaTokens();
+                            SourceTokenIndex = LocalSourceTokenIndex; ErrorReportLineNumber = LocalErrorReportLineNumber; ErrorReportStepNumber = LocalErrorReportStepNumber;
                             return Success();
                         }
                         break;
@@ -211,6 +229,7 @@ namespace Numinous.Engine {
                 CopyDeltaTermTokens();
                 CopyDeltaTokens();                                                                  // process final TermTokens (valid) to StepTokens end
 
+                SourceTokenIndex = LocalSourceTokenIndex; ErrorReportLineNumber = LocalErrorReportLineNumber; ErrorReportStepNumber = LocalErrorReportStepNumber;
                 return Success();
             }
 
@@ -229,11 +248,11 @@ namespace Numinous.Engine {
 
             void CheckProcessFunctionalDefines() {
                 // very object in DB
-                var FEXP_Queery = GetObjectFromAlias(ActiveToken.ctx, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
-                if (!FEXP_Queery.success || FEXP_Queery.ctx.type != AssembleTimeTypes.FEXP) return;
+                var FEXP_Queery = Database.GetObjectFromAlias(ActiveToken.ctx, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
+                if (FEXP_Queery is null || FEXP_Queery.type != AssembleTimeTypes.FEXP) return;
 
                 // fetch object from DB and capture arguments to invoke it
-                var FEXP_Obj = (Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels accessLevel)>)FEXP_Queery.ctx.data;
+                var FEXP_Obj = (Dictionary<string, ObjectToken>)FEXP_Queery.data;
                 var args_capture = CaptureFEXP((int)FEXP_Obj["args"].data);
 
                 // if capturing was unsuccessful, exit.
@@ -461,14 +480,14 @@ namespace Numinous.Engine {
                 
 
                 List<(string token, int StringIndex, int StringLength)>    Resolved = [(Token, ActiveToken.StringIndex, Token.Length)];
-                (object data, AssembleTimeTypes type, AccessLevels access) ctx;
+                ObjectToken? ctx;
                 bool                                                       success;
                 bool                                                       HadSuccess = false;
 
                 do {
-                    (ctx, success) = Database.GetObjectFromAlias(Resolved[0].token, AccessLevels.PUBLIC);
+                    ctx = Database.GetObjectFromAlias(Resolved[0].token, AccessLevels.PUBLIC);
 
-                    if (success && ctx.type == AssembleTimeTypes.CEXP) {
+                    if (ctx is not null && ctx.type == AssembleTimeTypes.CEXP) {
                         HadSuccess = true;
                         Resolved.RemoveAt(0);
                         
@@ -477,7 +496,7 @@ namespace Numinous.Engine {
                                                 .ToList());
                     }
 
-                } while (success && ctx.type == AssembleTimeTypes.CEXP);
+                } while (ctx is not null && ctx.type == AssembleTimeTypes.CEXP);
 
                 return (Resolved, HadSuccess);
             }
