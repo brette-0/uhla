@@ -164,8 +164,6 @@ namespace Numinous.Engine {
                     case "??":  SimpleAddOperator(Operators.NULL);          break;
                     case ".":   SimpleAddOperator(Operators.PROPERTY);      break;
                     case "?.":  SimpleAddOperator(Operators.NULLPROPERTY);  break;
-                    case "?":   SimpleAddOperator(Operators.CHECK);         break;
-                    case ":":   SimpleAddOperator(Operators.ELSE);          break;
                     case "!":   SimpleAddOperator(Operators.NOT);           break;
 
                     // special case
@@ -177,6 +175,7 @@ namespace Numinous.Engine {
                     // Container Code
                     case "(": OpenContainer(Operators.OPAREN); break;
                     case "[": OpenContainer(Operators.OBRACK); break;
+                    case "?": OpenContainer(Operators.CHECK);  break;
                     case "{":
                         if (ContainerBuffer.Count > 0 && ContainerBuffer[0] == Operators.FSTRING) {
                             // Format String
@@ -203,9 +202,12 @@ namespace Numinous.Engine {
                         OpenContainer(Operators.FSTRING);
                         break;
 
-                    case ")": if (SimpleCloseContainer(Operators.CPAREN)) break; else return default;
-                    case "]": if (SimpleCloseContainer(Operators.CBRACK)) break; else return default;
-                    case "}": if (SimpleCloseContainer(Operators.CBRACE)) break; else return default;
+                    case ")": if (SimpleCloseContainer(Operators.CPAREN)) break; return default;
+                    case "]": if (SimpleCloseContainer(Operators.CBRACK)) break; return default;
+                    case "}": if (SimpleCloseContainer(Operators.CBRACE)) break; return default;
+                    
+                    case ":": if (CloseContainer(Operators.ELSE, 
+                                                 Operators.CHECK))    break;  return default;
 
                     // Term Catching
                     case ",":
