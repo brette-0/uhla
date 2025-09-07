@@ -24,12 +24,6 @@ namespace Numinous.Engine {
         ///     - ending a line with a value where all containers are closed
         ///
         /// Because some systems may break the rules above, sometimes certain processes will NOT invoke the standard lexer.
-        ///
-        /// TODO: Treat ? and : as containers.
-        ///
-        ///     lda foo ? bar
-        ///             : ash
-        /// 
         /// </summary>
         /// <param name="BasicRegexTokens">The source information that has been regex parsed and split into string tokens.</param>
         /// <param name="SourceTokenIndex">The index of the token we being lexing first.</param>
@@ -62,7 +56,7 @@ namespace Numinous.Engine {
 
             Terminal.ErrorContext ErrorContext = new();
 
-            int i = 0, StringIndex = 0, StringLength = 0; (string ctx, int StringIndex, int StringLength) ActiveToken;
+            int i = 0, StringIndex = 0; (string ctx, int StringIndex, int StringLength) ActiveToken;
 
             Step();
 
@@ -71,7 +65,7 @@ namespace Numinous.Engine {
                 if (ActiveToken.ctx[0] == ' ' || ActiveToken.ctx[0] == '\t') continue;                          // do not tokenize whitespace
 
                 if (ContainerBuffer.Count != 0 && ContainerBuffer[^1] == Operators.FSTRING) {
-                    CaptureCSTRING(c => c == '"' || c == '{');
+                    CaptureCSTRING(c => c is '"' or '{');
                     if (ActiveToken.ctx[0] != '{') {
                         if (ActiveToken.ctx[0] == '"') {
                             if (CloseContainer(Operators.STRING, Operators.FSTRING)) continue;
@@ -105,7 +99,7 @@ namespace Numinous.Engine {
                     CheckForTermination:
                         if (ContainerBuffer.Count > 0 && ErrorContext.ErrorLevel == default) {
                             // error, unexpected end of command
-                            ErrorContext = new() {
+                            ErrorContext = new Terminal.ErrorContext {
                                 ErrorLevel      = ErrorLevels.ERROR,
                                 ErrorType       = ErrorTypes.SyntaxError,
                                 DecodingPhase   = DecodingPhases.TOKEN,
@@ -169,7 +163,7 @@ namespace Numinous.Engine {
                     // special case
                     case "\"":
                         i++;
-                        if (CaptureCSTRING(c => c == '"')) break;
+                        if (CaptureCSTRING(c => c is '"')) break;
                         return default;
 
                     // Container Code
@@ -215,10 +209,10 @@ namespace Numinous.Engine {
                         break;
 
                     default:
-                        TermTokens.Add(new(
-                            new ObjectToken( new Dictionary<string, ObjectToken> {
-                                {string.Empty, new (ActiveToken.ctx, AssembleTimeTypes.EXP, AccessLevels.PUBLIC)}
-                            } ,AssembleTimeTypes.EXP, AccessLevels.PUBLIC),              
+                        TermTokens.Add(new LexerToken(
+                            new ObjectToken(new Dictionary<string, ObjectToken> {
+                                { string.Empty, new ObjectToken(ActiveToken.ctx, AssembleTimeTypes.EXP, AccessLevels.PUBLIC) }
+                            }, AssembleTimeTypes.EXP, AccessLevels.PUBLIC),
                             ActiveToken.StringIndex,
                             ActiveToken.StringLength,
                             false
@@ -255,21 +249,21 @@ namespace Numinous.Engine {
 
             void CheckProcessFunctionalDefines() {
                 // very object in DB
-                var FEXP_Queery = Database.GetObjectFromAlias(ActiveToken.ctx, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
-                if (FEXP_Queery is null || FEXP_Queery.type != AssembleTimeTypes.FEXP) return;
+                var FEXPQueery = Database.GetObjectFromAlias(ActiveToken.ctx, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
+                if (FEXPQueery is null || FEXPQueery.type != AssembleTimeTypes.FEXP) return;
 
                 // fetch object from DB and capture arguments to invoke it
-                var FEXP_Obj = (Dictionary<string, ObjectToken>)FEXP_Queery.data;
-                var args_capture = CaptureFEXP((int)FEXP_Obj["args"].data);
+                var FEXPObj = (Dictionary<string, ObjectToken>)FEXPQueery.data;
+                var ArgsCapture = CaptureFEXP((int)FEXPObj["args"].data);
 
                 // if capturing was unsuccessful, exit.
-                if (!args_capture.success) return;
+                if (!ArgsCapture.success) return;
 
                 // execute define
-                var FEXP_Lambda = (Func<List<(string token, int StringIndex, int StringLength)>, List<(string token, int StringIndex, int StringLength)>>)FEXP_Obj[""].data;
+                var FEXP_Lambda = (Func<List<(string token, int StringIndex, int StringLength)>, List<(string token, int StringIndex, int StringLength)>>)FEXPObj[""].data;
                 
                 // store processed result in Lexer buffer
-                DefineResolveBuffer.InsertRange(0, FEXP_Lambda(args_capture.args));
+                DefineResolveBuffer.InsertRange(0, FEXP_Lambda(ArgsCapture.args));
             }
             
             (List<(string token, int StringIndex, int StringLength)> args, bool success) CaptureFEXP(int nArgs) {
@@ -317,16 +311,15 @@ namespace Numinous.Engine {
             
             void Step(bool regexParse = true) {
                 ActiveToken = default;
-                List<(string token, int StringIndex, int StringLength)> ctx;
-                bool success;
 
                 if (DefineResolveBuffer.Count == 0) {                                                   // si to be mutated ONLY by typed tokens
                     CollectiveContext += BasicRegexTokens.Span[i];
-                    StringIndex += BasicRegexTokens.Span[i].Length;      
-                    StringLength = BasicRegexTokens.Span[i].Length;
+                    StringIndex += BasicRegexTokens.Span[i].Length;
                 }
 
                 if (regexParse) {
+                    bool                                                    success;
+                    List<(string token, int StringIndex, int StringLength)> ctx;
                     if (DefineResolveBuffer.Count == 0) {
                         (ctx, success)      = PartialResolveDefine(BasicRegexTokens.Span[i++]);
                         DefineResolveBuffer = ctx;
@@ -348,8 +341,6 @@ namespace Numinous.Engine {
 
             // keep seeking beyond whitespace
             void seek_no_whitespace(bool skip = false, bool regexParse = true) => Steps(() => !CheckLineTerminated() && (ActiveToken.ctx[0] == ' ' || ActiveToken.ctx[0] == '\t'), skip, regexParse);
-
-        
 
             void Steps(Func<bool> seekPredicate, bool skip = false, bool regexParse = true) {
                 if (skip) {
@@ -375,7 +366,7 @@ namespace Numinous.Engine {
 
                 if (i == BasicRegexTokens.Length && ErrorContext.ErrorLevel == default) {
                     // Unterminated String
-                    ErrorContext = new() {
+                    ErrorContext = new Terminal.ErrorContext {
                         ErrorLevel = ErrorLevels.ERROR,
                         ErrorType = ErrorTypes.SyntaxError,
                         DecodingPhase = DecodingPhases.TOKEN,
@@ -388,10 +379,10 @@ namespace Numinous.Engine {
                 }
 
                 if (csi != ActiveToken.StringIndex) {
-                    TermTokens.Add(new(
-                  new Dictionary<string, ObjectToken>() {
-                               {"self",    new(literalCstring,           AssembleTimeTypes.CSTRING,  AccessLevels.PRIVATE) },
-                               {"length",  new(literalCstring.Length,    AssembleTimeTypes.CINT,     AccessLevels.PUBLIC) },
+                    TermTokens.Add(new LexerToken(
+                    new Dictionary<string, ObjectToken>() {
+                           {"self",    new ObjectToken(literalCstring,        AssembleTimeTypes.CSTRING, AccessLevels.PRIVATE) },
+                           {"length",  new ObjectToken(literalCstring.Length, AssembleTimeTypes.CINT,    AccessLevels.PUBLIC) },
                         },
                         csi,
                         csi - ActiveToken.StringIndex,
@@ -404,7 +395,7 @@ namespace Numinous.Engine {
             }
 
             void AddOperator(Operators Operator, int sl) {
-                TermTokens.Add(new(Operator, ActiveToken.StringIndex, sl, true)); LastNonWhiteSpaceIndex = TermTokens.Count - 1; ;
+                TermTokens.Add(new LexerToken(Operator, ActiveToken.StringIndex, sl, true)); LastNonWhiteSpaceIndex = TermTokens.Count - 1; ;
             }
 
             void SimpleAddOperator(Operators Operator) => AddOperator(Operator, 1);
@@ -424,7 +415,7 @@ namespace Numinous.Engine {
                 SimpleAddOperator(CloseOperator);
 
                 if (ContainerBuffer.Count == 0 && ErrorContext.ErrorLevel == default) {
-                    ErrorContext = new() {
+                    ErrorContext = new Terminal.ErrorContext {
                         ErrorLevel = ErrorLevels.ERROR,
                         ErrorType = ErrorTypes.SyntaxError,
                         DecodingPhase = DecodingPhases.TOKEN,
@@ -438,7 +429,7 @@ namespace Numinous.Engine {
                 }
 
                 if (ContainerBuffer[^1] != OpenOperator && ErrorContext.ErrorLevel == default) {
-                    ErrorContext = new() {
+                    ErrorContext = new Terminal.ErrorContext {
                         ErrorLevel = ErrorLevels.ERROR,
                         ErrorType = ErrorTypes.SyntaxError,
                         DecodingPhase = DecodingPhases.TOKEN,

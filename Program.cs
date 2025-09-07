@@ -48,31 +48,31 @@ internal static class Program {
 
         // rs "Root Scope" has itself as key, value and parent - sitting in the root pointing to itself.
         // this is the only way via asm to directly refer to rs. Useful for when you use a 'as' level keyword but desires rs resolve.
-        LabelDataBase["rs"] =  new(new Dictionary<string, ObjectToken>() {
-            {"",        new (LabelDataBase, AssembleTimeTypes.CSCOPE, AccessLevels.PRIVATE)},
+        LabelDataBase["rs"] =  new ObjectToken(new Dictionary<string, ObjectToken>() {
+            {"",        new ObjectToken(LabelDataBase, AssembleTimeTypes.CSCOPE, AccessLevels.PRIVATE)},
         }, AssembleTimeTypes.CSCOPE, AccessLevels.PUBLIC);
 
         // make language a compiler variable
-        LabelDataBase["lang"]   = new(new Dictionary<string, ObjectToken>() {
-            {"",        new($"\"{ActiveLanguage}\"", AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
+        LabelDataBase["lang"]   = new ObjectToken(new Dictionary<string, ObjectToken>() {
+            {"",        new ObjectToken($"\"{ActiveLanguage}\"", AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
         }, AssembleTimeTypes.CSTRING, AccessLevels.PUBLIC);
 
-        LabelDataBase["a"] = new(new Dictionary<string, ObjectToken>() {
-            {"",         new(Numinous.Engine.System.Registers.A, AssembleTimeTypes.CREG, AccessLevels.PRIVATE)},
-            {"indexing", new(0, AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
+        LabelDataBase["a"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
+            {"",         new ObjectToken(Numinous.Engine.System.Registers.A, AssembleTimeTypes.CREG, AccessLevels.PRIVATE)},
+            {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
         }, AssembleTimeTypes.CREG, AccessLevels.PUBLIC);
 
-        LabelDataBase["x"] = new(new Dictionary<string, ObjectToken>() {
-            {"",         new(Numinous.Engine.System.Registers.X, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
-            {"indexing", new(0, AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
+        LabelDataBase["x"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
+            {"",         new ObjectToken(Numinous.Engine.System.Registers.X, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
+            {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
         }, AssembleTimeTypes.CREG, AccessLevels.PUBLIC);
 
-        LabelDataBase["y"] = new(new Dictionary<string, ObjectToken>() {
-            {"",         new(Numinous.Engine.System.Registers.Y, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
-            {"indexing", new(0, AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
+        LabelDataBase["y"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
+            {"",         new ObjectToken(Numinous.Engine.System.Registers.Y, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
+            {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
         }, AssembleTimeTypes.CREG, AccessLevels.PUBLIC);
 
-        LabelDataBase["ToString"] = new(
+        LabelDataBase["ToString"] = new ObjectToken(
             new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
                 {"args", (1, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
                 {"", (GenerateFunctionalDefine("# args", ["args"]), default, default)}
@@ -80,17 +80,17 @@ internal static class Program {
         
         // Functions are just lambdas, 0 refers to arg 0, and so on. They are of type Function returns type of type 'type'
         // The 'self' containing the lambda's type is the return type
-        LabelDataBase["typeof"] = new(new Dictionary<string, ObjectToken>() {
-            {"",        new((ObjectToken ctx) => new ObjectToken(ctx.type, AssembleTimeTypes.TYPE, AccessLevels.PUBLIC), AssembleTimeTypes.TYPE, AccessLevels.PRIVATE)},
-            {"ctx",     new(0, AssembleTimeTypes.COBJECT, AccessLevels.PRIVATE) },
+        LabelDataBase["typeof"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
+            {"",        new ObjectToken((ObjectToken ctx) => new ObjectToken(ctx.type, AssembleTimeTypes.TYPE, AccessLevels.PUBLIC), AssembleTimeTypes.TYPE,    AccessLevels.PRIVATE)},
+            {"ctx",     new ObjectToken(0,                                                                                           AssembleTimeTypes.COBJECT, AccessLevels.PRIVATE) },
             
             // arg num 0 => ctx
-            {"0",       new("ctx", default, default)},
+            {"0",       new ObjectToken("ctx", default, default)},
             
-            {"args",    new(1, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)}
+            {"args",    new ObjectToken(1, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)}
         }, AssembleTimeTypes.FUNCTION, AccessLevels.PUBLIC);
 
-        LabelDataBase["exists"] = new(new Dictionary<string, ObjectToken>() {
+        LabelDataBase["exists"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
             {"",        new ObjectToken((string ctx) => Database.GetObjectFromAlias(ctx, AccessLevels.PUBLIC) is null, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
             {"ctx",     new ObjectToken(0, AssembleTimeTypes.COBJECT, AccessLevels.PRIVATE) },
             

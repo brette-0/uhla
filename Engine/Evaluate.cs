@@ -173,7 +173,7 @@ namespace Numinous {
                         case (AssembleTimeTypes.CINT, AssembleTimeTypes.CINT):
                             switch (OperatorBuffer[ResolveOperationIndex]) {
                                 case Operators.ADD:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                        (int)(Output[""].data) + (int)(Modifier[""].data),
                                        AssembleTimeTypes.CINT,
                                        Output[""].level
@@ -182,7 +182,7 @@ namespace Numinous {
                                 
                                 // polarity matters
                                 case Operators.SUB:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         (int)(Output[""].data) - (int)(Modifier[""].data),
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -190,7 +190,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.MULT:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         (int)(Output[""].data) * (int)(Modifier[""].data),
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -199,7 +199,7 @@ namespace Numinous {
                                 
                                 // polarity matters here on
                                 case Operators.DIV:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         (int)(Output[""].data) / (int)(Modifier[""].data),
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -207,7 +207,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.MOD:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         (int)(Output[""].data) % (int)(Modifier[""].data),
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -215,7 +215,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.RIGHT:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         (int)Output[""].data >>> (int)Modifier[""].data,
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -223,7 +223,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.LEFT:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         (int)Output[""].data << (int)Modifier[""].data,
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -231,7 +231,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.EQUAL:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         Output[""].data == Modifier[""].data ? 1 : 0,
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -239,7 +239,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.INEQUAL:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         Output[""].data != Modifier[""].data ? 1 : 0,
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -247,7 +247,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.NULL:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         Output[""].data ?? Modifier[""].data,  // TODO: Look into why resharper thinks ?? will never trigger.
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -255,7 +255,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.GT:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         (int)Output[""].data > (int)Modifier[""].data ? 1 : 0,
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -263,7 +263,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.LT:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         (int)Output[""].data < (int)Modifier[""].data ? 1 : 0,
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -271,7 +271,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.GOET:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         (int)Output[""].data >= (int)Modifier[""].data ? 1 : 0,
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -279,7 +279,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.LOET:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         (int)Output[""].data <= (int)Modifier[""].data ? 1 : 0,
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -287,7 +287,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.SERIAL:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         Output[""].data == Modifier[""].data ? 0 : (int)Output[""].data < (int)Modifier[""].data ? -1 : 1,
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -295,7 +295,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.BITMASK:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         (int)Output[""].data & (int)Modifier[""].data,
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -303,7 +303,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.BITSET:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         (int)Output[""].data | (int)Modifier[""].data,
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -311,7 +311,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.BITFLIP:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         (int)Output[""].data ^ (int)Modifier[""].data,
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -319,7 +319,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.OR:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         (int)Output[""].data > 0 || (int)Modifier[""].data > 0,
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -327,7 +327,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.AND:
-                                    Output[""] = new(
+                                    Output[""] = new ObjectToken(
                                         (int)Output[""].data > 0 && (int)Modifier[""].data > 0,
                                         AssembleTimeTypes.CINT,
                                         Output[""].level
@@ -348,7 +348,7 @@ namespace Numinous {
                         case (AssembleTimeTypes.STRING, AssembleTimeTypes.CSTRING):
                         case (AssembleTimeTypes.CSTRING, AssembleTimeTypes.CSTRING):
                             if (OperatorBuffer[ResolveOperationIndex] == Operators.ADD)
-                                Output[""] = new(
+                                Output[""] = new ObjectToken(
                                     (string)Output[""].data + (string)Modifier[""].data,
                                     AssembleTimeTypes.CINT,
                                     Output[""].level
@@ -379,7 +379,7 @@ namespace Numinous {
                         case (AssembleTimeTypes.CREG, AssembleTimeTypes.CINT):
                         case (AssembleTimeTypes.REG, AssembleTimeTypes.INT):
                         case (AssembleTimeTypes.REG, AssembleTimeTypes.CINT):
-                            Output[""] = new(
+                            Output[""] = new ObjectToken(
                                 0,
                                 AssembleTimeTypes.CINT,
                                 Output[""].level
@@ -387,7 +387,7 @@ namespace Numinous {
 
                             switch (OperatorBuffer[ResolveOperationIndex]) {
                                 case Operators.ADD:
-                                    Output["coefficient"] = new(
+                                    Output["coefficient"] = new ObjectToken(
                                         (int)Modifier[""].data,
                                         AssembleTimeTypes.CINT,
                                         AccessLevels.PRIVATE
@@ -396,7 +396,7 @@ namespace Numinous {
                                     break;
                                 
                                 case Operators.SUB:
-                                    Output["coefficient"] = new(
+                                    Output["coefficient"] = new ObjectToken(
                                         -(int)Modifier[""].data,
                                         AssembleTimeTypes.CREG,
                                         AccessLevels.PRIVATE
@@ -409,7 +409,7 @@ namespace Numinous {
                                     return false;
                             }
                             
-                            Output["register"] = new(
+                            Output["register"] = new ObjectToken(
                                 (System.Registers)Output[""].data,
                                 AssembleTimeTypes.CREG,
                                 AccessLevels.PRIVATE
@@ -491,8 +491,8 @@ namespace Numinous {
                         case (AssembleTimeTypes.MACRO,  AssembleTimeTypes.CRT):
                         case (AssembleTimeTypes.RT,     AssembleTimeTypes.CRT):
                         case (AssembleTimeTypes.CRT,    AssembleTimeTypes.CRT):
-                            Output = new() {
-                                {"", new((int)Modifier["offset"].data + (int)Output["offset"].data, AssembleTimeTypes.CINT, AccessLevels.PUBLIC)}
+                            Output = new Dictionary<string, ObjectToken> {
+                                {"", new ObjectToken((int)Modifier["offset"].data + (int)Output["offset"].data, AssembleTimeTypes.CINT, AccessLevels.PUBLIC)}
                             };
                             
                             break;
@@ -539,7 +539,7 @@ namespace Numinous {
                     while (ValueMutators.Count > 0) if (!ApplyPreMutation()) return default; // error pass back, process value mutators from back to front
 
                     // New gen tokens must contain object data.
-                    ValueTokenBuffer[LinearTokenIndex] = new(
+                    ValueTokenBuffer[LinearTokenIndex] = new EvaluatedLexerToken(
                         ValueTokenBuffer[LinearTokenIndex].StringIndex,
                         ValueTokenBuffer[LinearTokenIndex].StringLength,
                         resp.data,                                   // inject object reference
@@ -597,7 +597,7 @@ namespace Numinous {
                                     switch (CurrentValue[""].type) {
                                         case AssembleTimeTypes.CINT:
                                         case AssembleTimeTypes.INT:
-                                            LastValue[""] = new(
+                                            LastValue[""] = new ObjectToken(
                                                 ((string)LastValue[""].data)[(int)CurrentValue[""].data],
                                                 AssembleTimeTypes.CSTRING,
                                                 AccessLevels.PUBLIC
@@ -619,7 +619,7 @@ namespace Numinous {
                                         case AssembleTimeTypes.RT:
                                         case AssembleTimeTypes.CRT:
                                             offset += (int)CurrentValue["offset"].data;
-                                            LastValue[""] = new(
+                                            LastValue[""] = new ObjectToken(
                                                 offset,
                                                 AssembleTimeTypes.CINT,
                                                 AccessLevels.PUBLIC
@@ -630,7 +630,7 @@ namespace Numinous {
                                         case AssembleTimeTypes.INT:
                                         case AssembleTimeTypes.CINT:
                                             offset += (int)CurrentValue[""].data;
-                                            LastValue[""] = new(
+                                            LastValue[""] = new ObjectToken(
                                                 offset,
                                                 AssembleTimeTypes.CINT,
                                                 AccessLevels.PUBLIC
@@ -640,20 +640,20 @@ namespace Numinous {
                                         
                                         case AssembleTimeTypes.CREG:
                                         case AssembleTimeTypes.REG:
-                                            LastValue = new() {
-                                                {"",            new(0,                                       AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
-                                                {"coefficient", new((int)LastValue[""].data,                 AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
-                                                {"register",    new((System.Registers)CurrentValue[""].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
+                                            LastValue = new Dictionary<string, ObjectToken> {
+                                                {"",            new ObjectToken(0,                                       AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
+                                                {"coefficient", new ObjectToken((int)LastValue[""].data,                 AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
+                                                {"register",    new ObjectToken((System.Registers)CurrentValue[""].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
                                             };
                                             break;
                                         
                                         case AssembleTimeTypes.ICRWN:
                                         case AssembleTimeTypes.IRWN:
                                             offset += (int)CurrentValue["coefficient"].data;
-                                            LastValue = new() {
-                                                {"",            new(0,                                               AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
-                                                {"coefficient", new(offset,                                          AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
-                                                {"register",    new((System.Registers)CurrentValue["register"].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
+                                            LastValue = new Dictionary<string, ObjectToken> {
+                                                {"",            new ObjectToken(0,                                               AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
+                                                {"coefficient", new ObjectToken(offset,                                          AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
+                                                {"register",    new ObjectToken((System.Registers)CurrentValue["register"].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
                                             };
                                             break;
                                     }
@@ -667,7 +667,7 @@ namespace Numinous {
                                         case AssembleTimeTypes.INT:
                                         case AssembleTimeTypes.CINT:
                                             offset = (int)LastValue["offset"].data + (tRT.endian ? (int)CurrentValue[""].data : (int)(tRT.size - (int)CurrentValue[""].data));
-                                            LastValue[""] = new(
+                                            LastValue[""] = new ObjectToken(
                                                 offset,
                                                 AssembleTimeTypes.CINT,
                                                 AccessLevels.PUBLIC
@@ -676,10 +676,10 @@ namespace Numinous {
                                         
                                         case AssembleTimeTypes.REG:
                                         case AssembleTimeTypes.CREG:
-                                            LastValue = new() {
-                                                {"",            new(0,                                       AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
-                                                {"coefficient", new((int)LastValue["offset"].data,           AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
-                                                {"register",    new((System.Registers)CurrentValue[""].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
+                                            LastValue = new Dictionary<string, ObjectToken> {
+                                                {"",            new ObjectToken(0,                                       AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
+                                                {"coefficient", new ObjectToken((int)LastValue["offset"].data,           AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
+                                                {"register",    new ObjectToken((System.Registers)CurrentValue[""].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
                                             };
                                             break;
                                         
@@ -689,10 +689,10 @@ namespace Numinous {
                                         case AssembleTimeTypes.ICRWN:
                                             // apply immediate to offset based on endian, apply register. New ir objet
                                             offset = (int)LastValue["offset"].data + (tRT.endian ? (int)CurrentValue["coefficient"].data : (int)(tRT.size - (int)CurrentValue["coefficient"].data));
-                                            LastValue = new() {
-                                                {"",            new(0,                                               AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
-                                                {"coefficient", new(offset,                                          AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
-                                                {"register",    new((System.Registers)CurrentValue["register"].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
+                                            LastValue = new Dictionary<string, ObjectToken> {
+                                                {"",            new ObjectToken(0,                                               AssembleTimeTypes.ICRWN, AccessLevels.PRIVATE)},
+                                                {"coefficient", new ObjectToken(offset,                                          AssembleTimeTypes.CINT,  AccessLevels.PRIVATE)},
+                                                {"register",    new ObjectToken((System.Registers)CurrentValue["register"].data, AssembleTimeTypes.CREG,  AccessLevels.PRIVATE)}
                                             };
                                             break;
                                         
@@ -729,7 +729,7 @@ namespace Numinous {
 
                             case (AssembleTimeTypes.INT, Operators.ADD):
                             case (AssembleTimeTypes.CINT, Operators.ADD): // abs
-                                LastValue[""] = new (
+                                LastValue[""] = new ObjectToken(
                                     Math.Abs((int)LastValue[""].data),
                                     LastValue[""].type,
                                     LastValue[""].level
@@ -739,7 +739,7 @@ namespace Numinous {
                             
                             // inc/dec does NOT support constant object references for obvious reasons
                             case (AssembleTimeTypes.INT, Operators.INC): // inc
-                                LastValue[""] = new (
+                                LastValue[""] = new ObjectToken(
                                     Math.Abs((int)LastValue[""].data + 1),
                                     LastValue[""].type,
                                     LastValue[""].level
@@ -748,7 +748,7 @@ namespace Numinous {
                                 break;
                             
                             case (AssembleTimeTypes.INT, Operators.DEC): // dec
-                                LastValue[""] = new (
+                                LastValue[""] = new ObjectToken(
                                     Math.Abs((int)LastValue[""].data - 1),
                                     LastValue[""].type,
                                     LastValue[""].level
@@ -758,7 +758,7 @@ namespace Numinous {
                             
                             case (AssembleTimeTypes.INT, Operators.SUB):
                             case (AssembleTimeTypes.CINT, Operators.SUB):   // neg
-                                LastValue[""] = new (
+                                LastValue[""] = new ObjectToken(
                                     -(int)LastValue[""].data,
                                     LastValue[""].type,
                                     LastValue[""].level
@@ -767,7 +767,7 @@ namespace Numinous {
 
                             case (AssembleTimeTypes.INT, Operators.NOT):
                             case (AssembleTimeTypes.CINT, Operators.NOT):   // == 0
-                                LastValue[""] = new (
+                                LastValue[""] = new ObjectToken(
                                     0 == (int)LastValue[""].data ? 1 : 0,
                                     LastValue[""].type,
                                     LastValue[""].level
@@ -776,7 +776,7 @@ namespace Numinous {
 
                             case (AssembleTimeTypes.INT, Operators.BITNOT):
                             case (AssembleTimeTypes.CINT, Operators.BITNOT):// ^= (uint)-1
-                                LastValue[""] = new (
+                                LastValue[""] = new ObjectToken(
                                     ~(int)LastValue[""].data,
                                     LastValue[""].type,
                                     LastValue[""].level
@@ -785,7 +785,7 @@ namespace Numinous {
 
                             case (AssembleTimeTypes.STRING, Operators.ADD):
                             case (AssembleTimeTypes.CSTRING, Operators.ADD): // upper case
-                                LastValue[""] = new (
+                                LastValue[""] = new ObjectToken(
                                     ((string)LastValue[""].data).ToUpper(),
                                     LastValue[""].type,
                                     LastValue[""].level
@@ -794,7 +794,7 @@ namespace Numinous {
                             
                             case (AssembleTimeTypes.STRING, Operators.SUB):
                             case (AssembleTimeTypes.CSTRING, Operators.SUB): // lower case
-                                LastValue[""] = new (
+                                LastValue[""] = new ObjectToken(
                                     ((string)LastValue[""].data).ToLower(),
                                     LastValue[""].type,
                                     LastValue[""].level
@@ -804,7 +804,7 @@ namespace Numinous {
                                 
                             case (AssembleTimeTypes.STRING, Operators.NOT):
                             case (AssembleTimeTypes.CSTRING, Operators.NOT): // turn into spaces
-                                LastValue[""] = new (
+                                LastValue[""] = new ObjectToken(
                                     new string(' ', ((string)LastValue[""].data).Length),
                                     LastValue[""].type,
                                     LastValue[""].level
@@ -813,7 +813,7 @@ namespace Numinous {
 
                             case (AssembleTimeTypes.STRING, Operators.BITNOT):
                             case (AssembleTimeTypes.CSTRING, Operators.BITNOT):  // length of
-                                LastValue[""] = new (
+                                LastValue[""] = new ObjectToken(
                                     ((string)LastValue[""].data).Length,
                                     LastValue[""].type,
                                     LastValue[""].level
@@ -903,7 +903,7 @@ namespace Numinous {
                         var index = Tokens.IndexOf((delta, MaxHierachy));
                         DeletionSchedule.Add(index);
                         
-                        Tokens[index - 1].DeltaTokens[^1].Add(new(args[0].StringIndex, args[^1].StringIndex + args[^1].StringLength, args, AssembleTimeTypes.TUPLE, AccessLevels.PRIVATE, false));
+                        Tokens[index - 1].DeltaTokens[^1].Add(new EvaluatedLexerToken(args[0].StringIndex, args[^1].StringIndex + args[^1].StringLength, args, AssembleTimeTypes.TUPLE, AccessLevels.PRIVATE, false));
                         Tokens[index - 1].DeltaTokens.AddRange(Tokens[index + 1].DeltaTokens);
                         Tokens[index - 1] = (Tokens[index - 1].DeltaTokens, MaxHierachy - 1);
                     }
