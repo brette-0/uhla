@@ -1,6 +1,6 @@
 ﻿using System.Security.AccessControl;
 using System.Text.RegularExpressions;
-
+using Antlr4.Runtime;
 /*  TODO: change lexer define processing to return if define was succesful, determines if tokenising yields a new si/sl
          its imperative that a line such as '1 + lang' does not become reported as '1 + English_UK'
          furthermore FEXP (functional defines) must report on their parameters not on the results -> garbelling possible
@@ -24,6 +24,12 @@ namespace Numinous.Engine {
         ///     - ending a line with a value where all containers are closed
         ///
         /// Because some systems may break the rules above, sometimes certain processes will NOT invoke the standard lexer.
+        ///
+        /// TODO: Treat ? and : as containers.
+        ///
+        ///     lda foo ? bar
+        ///             : ash
+        /// 
         /// </summary>
         /// <param name="BasicRegexTokens">The source information that has been regex parsed and split into string tokens.</param>
         /// <param name="SourceTokenIndex">The index of the token we being lexing first.</param>
@@ -31,14 +37,14 @@ namespace Numinous.Engine {
         /// <param name="ErrorReportStepNumber">The count of instructions that have passed on this line + 1</param>
         /// <param name="SourceFilePath">The file path we obtained the source content from, for debugging information.</param>
         /// <returns></returns>
-        internal static (List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, int Finish, bool Success, bool Continue) Lexer(Memory<string> BasicRegexTokens, ref int SourceTokenIndex, ref int ErrorReportLineNumber, ref int ErrorReportStepNumber, string SourceFilePath) {
+        internal static (List<(List<List<LexerToken>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, int Finish, bool Success, bool Continue) Lexer(Memory<string> BasicRegexTokens, ref int SourceTokenIndex, ref int ErrorReportLineNumber, ref int ErrorReportStepNumber, string SourceFilePath) {
             // use BasicRegexTokens => RegexTokens (ref, no cloning?) | Ensures we solve all new defines without mutating the original
             //List<string> RegexTokens = ResolveDefines(BasicRegexTokens);
             var CollectiveContext = "";
 
-            List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens = [];
-            List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens = [];
-            List<(int StringOffset, int StringLength, object data, bool IsOperator)> TermTokens = [];
+            List<(List<List<LexerToken>> DeltaTokens, int Hierachy, string Representation)> Tokens = [];
+            List<List<LexerToken>> DeltaTokens = [];
+            List<LexerToken> TermTokens = [];
             List<Operators> ContainerBuffer = [];
 
             List<(string token, int StringIndex, int StringLength)> DefineResolveBuffer = [];
@@ -207,13 +213,12 @@ namespace Numinous.Engine {
                         break;
 
                     default:
-                        TermTokens.Add((
+                        TermTokens.Add(new(
+                            new ObjectToken( new Dictionary<string, ObjectToken> {
+                                {string.Empty, new (ActiveToken.ctx, AssembleTimeTypes.EXP, AccessLevels.PUBLIC)}
+                            } ,AssembleTimeTypes.EXP, AccessLevels.PUBLIC),              
                             ActiveToken.StringIndex,
                             ActiveToken.StringLength,
-                            new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels)> {
-                                    // private for now, but once its determined to be something then it will change accordingly
-                                    { "self", (ActiveToken, AssembleTimeTypes.CEXP, AccessLevels.PRIVATE) },
-                            },
                             false
                         ));
                         LastNonWhiteSpaceIndex = TermTokens.Count - 1;
@@ -306,7 +311,7 @@ namespace Numinous.Engine {
                 return (args, true);
             }
             
-            (List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, int Finish, bool Success, bool Continue) Success() => (Tokens, MaxHierarchy, Finish, true, false);
+            (List<(List<List<LexerToken>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, int Finish, bool Success, bool Continue) Success() => (Tokens, MaxHierarchy, Finish, true, false);
             
             void Step(bool regexParse = true) {
                 ActiveToken = default;
@@ -381,13 +386,13 @@ namespace Numinous.Engine {
                 }
 
                 if (csi != ActiveToken.StringIndex) {
-                    TermTokens.Add((
+                    TermTokens.Add(new(
+                  new Dictionary<string, ObjectToken>() {
+                               {"self",    new(literalCstring,           AssembleTimeTypes.CSTRING,  AccessLevels.PRIVATE) },
+                               {"length",  new(literalCstring.Length,    AssembleTimeTypes.CINT,     AccessLevels.PUBLIC) },
+                        },
                         csi,
                         csi - ActiveToken.StringIndex,
-                        new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
-                            {"self",    (literalCstring,           AssembleTimeTypes.CSTRING,  AccessLevels.PRIVATE) },
-                            {"length",  (literalCstring.Length,    AssembleTimeTypes.CINT,     AccessLevels.PUBLIC) },
-                        },
                         false
                     ));
 
@@ -397,7 +402,7 @@ namespace Numinous.Engine {
             }
 
             void AddOperator(Operators Operator, int sl) {
-                TermTokens.Add((ActiveToken.StringIndex, sl, Operator, true)); LastNonWhiteSpaceIndex = TermTokens.Count - 1; ;
+                TermTokens.Add(new(Operator, ActiveToken.StringIndex, sl, true)); LastNonWhiteSpaceIndex = TermTokens.Count - 1; ;
             }
 
             void SimpleAddOperator(Operators Operator) => AddOperator(Operator, 1);
@@ -463,12 +468,12 @@ namespace Numinous.Engine {
 
                 // Clone Delta Tokens thus far
                 var StepDeltaTokenShallowCopy = TermTokens
-                .Select(t => (
-                    t.StringOffset,
-                    t.StringLength,
-                    t.IsOperator
+                .Select(t => new LexerToken(
+                    t.isOperator
                         ? t.data
                         : Clone((Dictionary<string, (object, AssembleTimeTypes, AccessLevels)>)t.data),
+                    t.StringIndex,
+                    t.StringLength,
                     t.IsOperator
                 )).ToList();
 
@@ -477,8 +482,6 @@ namespace Numinous.Engine {
             }
           
             (List<(string token, int StringIndex, int StringLength)> ctx, bool success) PartialResolveDefine(string Token) {
-                
-
                 List<(string token, int StringIndex, int StringLength)>    Resolved = [(Token, ActiveToken.StringIndex, Token.Length)];
                 ObjectToken? ctx;
                 bool                                                       success;

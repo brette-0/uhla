@@ -24,7 +24,21 @@ namespace Numinous {
 
     namespace Engine {
 
-        internal class ObjectToken {
+        
+        internal interface IObjectToken {
+            object            Data  { get; }
+            AssembleTimeTypes Type  { get; }
+            AccessLevels      Level { get; }
+        }
+
+        internal interface ILexerToken {
+            int    StringIndex  { get; }
+            int    StringLength { get; }
+            object Data         { get; }
+            bool   IsOperator   { get; }
+        }
+        
+        internal class ObjectToken : IObjectToken {
             internal ObjectToken(object pData, AssembleTimeTypes pType, AccessLevels pLevel) {
                 data         = pData;
                 type         = pType;
@@ -36,12 +50,34 @@ namespace Numinous {
                 return obj.GetValueOrDefault(name);
             }
             
+            public object            Data  => data;
+            public AssembleTimeTypes Type  => type;
+            public AccessLevels      Level => level;
+            
             internal  object           data;  // contains members
             internal AssembleTimeTypes type;  // type of object
             internal AccessLevels      level; // access level
         }
 
-        internal class EvaluatedLexerToken : ObjectToken {
+        internal class LexerToken : ILexerToken {
+            public object Data         => data;
+            public int    StringIndex  => stringIndex;
+            public int    StringLength => stringLength;
+            public bool   IsOperator   => isOperator;
+
+            internal LexerToken(object pData, int pStringIndex, int pStringLength, bool pIsOperator) {
+                data         = pData;
+                stringIndex  = pStringIndex;
+                stringLength = pStringLength;
+                isOperator   = pIsOperator;
+            }
+            
+            internal object data;                      // contains either object alias or bytesize operator enum
+            internal int    stringIndex, stringLength; // debugging indexes
+            internal bool   isOperator;                // if its an operator or a value
+        }
+
+        internal class EvaluatedLexerToken : ObjectToken, ILexerToken {
             internal EvaluatedLexerToken(
                 int               pStringIndex,
                 int               pStringLength,
@@ -50,13 +86,17 @@ namespace Numinous {
                 AccessLevels      pLevel,
                 bool              pIsOperator
             ) : base(pData, pType, pLevel) {
-                StringIndex  = pStringIndex;
-                StringLength = pStringLength;
-                IsOperator   = pIsOperator;
+                stringIndex     = pStringIndex;
+                stringLength    = pStringLength;
+                isOperator      = pIsOperator;
             }
+            
+            public int  StringIndex  => stringIndex;
+            public int  StringLength => stringLength;
+            public bool IsOperator   => isOperator;
 
-            internal int               StringIndex, StringLength; // debugging indexes
-            internal bool              IsOperator;                // if its an operator or a value
+            internal int               stringIndex, stringLength; // debugging indexes
+            internal bool              isOperator;                // if its an operator or a value
         }
         
         
