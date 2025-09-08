@@ -1,7 +1,4 @@
-﻿using System.Security.AccessControl;
-using System.Text.RegularExpressions;
-using Antlr4.Runtime;
-/*  TODO: change lexer define processing to return if define was succesful, determines if tokenising yields a new si/sl
+﻿/*  TODO: change lexer define processing to return if define was succesful, determines if tokenising yields a new si/sl
          its imperative that a line such as '1 + lang' does not become reported as '1 + English_UK'
          furthermore FEXP (functional defines) must report on their parameters not on the results -> garbelling possible
           
@@ -12,10 +9,17 @@ using Antlr4.Runtime;
           On error report, refer to RegexParsed[0].ctx, index, length etc...
 */
 
-using static Numinous.Memory;
+using static Numinous.Engine.Engine;
 
-namespace Numinous.Engine {
+namespace Numinous.Engine.Evaluate {
     internal static partial class Engine {
+
+        internal enum LexerModes {
+            STANDARD,
+            HEADER,
+            OPERAND,
+            LABEL,                  // looks something like 'foo:' ... uses AngoriMath
+        }
         
         /// <summary>
         /// The Lexer takes in the entire source file as byref array of string tokens from a simple regex system.
@@ -31,27 +35,19 @@ namespace Numinous.Engine {
         /// <param name="ErrorReportStepNumber">The count of instructions that have passed on this line + 1</param>
         /// <param name="SourceFilePath">The file path we obtained the source content from, for debugging information.</param>
         /// <returns></returns>
-        internal static (List<(List<List<EvalToken>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, bool Success) Lexer(Memory<string> BasicRegexTokens, ref int SourceTokenIndex, ref int ErrorReportLineNumber, ref int ErrorReportStepNumber, string SourceFilePath) {
+        internal static (List<HierarchyTokens> Tokens, int MaxHierachy, bool Success) Lexer(Memory<string> BasicRegexTokens, ref int SourceTokenIndex, ref int ErrorReportLineNumber, ref int ErrorReportStepNumber, string SourceFilePath, LexerModes LexerMode = LexerModes.STANDARD) {
             // use BasicRegexTokens => RegexTokens (ref, no cloning?) | Ensures we solve all new defines without mutating the original
             //List<string> RegexTokens = ResolveDefines(BasicRegexTokens);
-            var CollectiveContext = "";
+            var CollectiveContext = string.Empty;
 
-            List<(List<List<EvalToken>> DeltaTokens, int Hierachy, string Representation)> Tokens          = [];
-            List<List<EvalToken>>                                                          DeltaTokens     = [];
-            List<EvalToken>                                                                TermTokens      = [];
-            List<Operators>                                                                ContainerBuffer = [];
-
+            List<HierarchyTokens> Tokens          = [];
+            List<Operators>       ContainerBuffer = [];
             List<(string token, int StringIndex, int StringLength)> DefineResolveBuffer = [];
 
             int LocalSourceTokenIndex = SourceTokenIndex, LocalErrorReportLineNumber = ErrorReportLineNumber, LocalErrorReportStepNumber = ErrorReportStepNumber;
+            int MaxHierarchy = 0, LastNonWhiteSpaceIndex = -1, LastOpenContainerOperatorStringIndex = -1;
 
-            var Finish = -1;
-            var MaxHierarchy = 0;
-            var LastNonWhiteSpaceIndex = -1;
-            var LastOpenContainerOperatorStringIndex = -1;
-
-            var literalCstring = "";
-
+            var literalCstring = string.Empty;
             var IsLastOperator = false;
 
             Terminal.ErrorContext ErrorContext = new();
@@ -61,28 +57,26 @@ namespace Numinous.Engine {
             Step();
 
             for (; DefineResolveBuffer.Count > 0 && i < BasicRegexTokens.Length; Step()) {
-
-                if (ActiveToken.ctx[0] == ' ' || ActiveToken.ctx[0] == '\t') continue;                          // do not tokenize whitespace
-
+                if (ActiveToken.ctx[0] == ' ' || ActiveToken.ctx[0] == '\t') continue;                          // do not tokenize whitespace TODO: check redundant
+                
+                // capture interpolated string
                 if (ContainerBuffer.Count != 0 && ContainerBuffer[^1] == Operators.FSTRING) {
                     CaptureCSTRING(c => c is '"' or '{');
-                    if (ActiveToken.ctx[0] != '{') {
-                        if (ActiveToken.ctx[0] == '"') {
-                            if (CloseContainer(Operators.STRING, Operators.FSTRING)) continue;
-                            else return default;
-                        }
+                    if (ActiveToken.ctx[0] is '"') {
+                        if (CloseContainer(Operators.STRING, Operators.FSTRING)) continue;
+                        return default;
                     }
                 }
 
                 // handle tokens
                 switch (ActiveToken.ctx) {
                     case "//":
-                        // marks the end of this tasks ctx
+                        // marks the end of this task's ctx
                         Steps(() => ActiveToken.ctx[0] != '\n');
                         break;
 
                     case "/*":
-                        // marks the end of this tasks ctx
+                        // marks the end of this task's ctx
                         while (ActiveToken.ctx != "*/") {
                             Steps(() => ActiveToken.ctx[0] != '\n' || ActiveToken.ctx != "*/");
                             ErrorReportLineNumber++;
@@ -116,7 +110,7 @@ namespace Numinous.Engine {
                             return default;
                         }
 
-                        CopyDeltaTokens();
+                        Tokens.Add(new HierarchyTokens([], 0, string.Empty));
                     
                         i                 = 0;
                         CollectiveContext = CollectiveContext[(ActiveToken.StringIndex + ActiveToken.StringLength)..];
@@ -171,19 +165,20 @@ namespace Numinous.Engine {
                     case "[": OpenContainer(Operators.OBRACK); break;
                     case "?": OpenContainer(Operators.CHECK);  break;
                     case "{":
-                        if (ContainerBuffer.Count > 0 && ContainerBuffer[0] == Operators.FSTRING) {
-                            // Format String
-                            OpenContainer(Operators.OBRACE);
-                        } else if (ContainerBuffer.Count > 0) {
-                            // error, codeblock in erroneous location
-                            return default;
-                        } else {
-                            // Early return, this is a code block. Do not context fetch this
-                            Finish = ActiveToken.StringIndex;
-                            CopyDeltaTermTokens();
-                            CopyDeltaTokens();
-                            SourceTokenIndex = LocalSourceTokenIndex; ErrorReportLineNumber = LocalErrorReportLineNumber; ErrorReportStepNumber = LocalErrorReportStepNumber;
-                            return Success();
+                        switch (ContainerBuffer.Count, LexerMode) {
+                            case (> 0, _) when ContainerBuffer[^1] == Operators.FSTRING:
+                                // Format String
+                                OpenContainer(Operators.OBRACE);
+                                break;
+                            
+                            case (0, LexerModes.HEADER):
+                                // header lexing is complete
+                                SourceTokenIndex = LocalSourceTokenIndex; ErrorReportLineNumber = LocalErrorReportLineNumber; ErrorReportStepNumber = LocalErrorReportStepNumber;
+                                return Success();
+
+                            default:
+                                // error, codeblock in erroneous location
+                                return default;
                         }
                         break;
 
@@ -198,18 +193,25 @@ namespace Numinous.Engine {
 
                     case ")": if (SimpleCloseContainer(Operators.CPAREN)) break; return default;
                     case "]": if (SimpleCloseContainer(Operators.CBRACK)) break; return default;
-                    case "}": if (SimpleCloseContainer(Operators.CBRACE)) break; return default;
+                    case "}":
+                        if (ContainerBuffer.Count == 0) return Success();   // generally means we are terminating a code block
+                        if (SimpleCloseContainer(Operators.CBRACE))       break; return default;
+                        
                     
-                    case ":": if (CloseContainer(Operators.ELSE, 
-                                                 Operators.CHECK))    break;  return default;
+                    case ":":
+                        if (ContainerBuffer.Count > 0) {
+                            if (CloseContainer(Operators.ELSE, Operators.CHECK)) break; return default;
+                        } 
+                        SourceTokenIndex = LocalSourceTokenIndex; ErrorReportLineNumber = LocalErrorReportLineNumber; ErrorReportStepNumber = LocalErrorReportStepNumber;
+                        return Success();
 
                     // Term Catching
                     case ",":
-                        CopyDeltaTermTokens();
+                        Tokens[^1].DeltaTokens.Add([]);
                         break;
 
                     default:
-                        TermTokens.Add(new EvalToken(
+                        Tokens[^1].DeltaTokens[^1].Add(new EvalToken(
                             ActiveToken.StringIndex,
                             ActiveToken.StringLength,
                             new ObjectToken(new Dictionary<string, ObjectToken> {
@@ -217,19 +219,15 @@ namespace Numinous.Engine {
                             }, AssembleTimeTypes.EXP, AccessLevels.PUBLIC),
                             false
                         ));
-                        LastNonWhiteSpaceIndex = TermTokens.Count - 1;
+                        LastNonWhiteSpaceIndex = Tokens[^1].DeltaTokens[^1].Count - 1;
                         break;
 
                 }
             }
 
-            IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : TermTokens.Count != 0 && TermTokens[LastNonWhiteSpaceIndex].IsOperator;
+            IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : Tokens[^1].DeltaTokens[^1].Count != 0 && Tokens[^1].DeltaTokens[^1][LastNonWhiteSpaceIndex].IsOperator;
             if (ContainerBuffer.Count == 0 && !IsLastOperator) {
                 // final steps
-
-                CopyDeltaTermTokens();
-                CopyDeltaTokens();                                                                  // process final TermTokens (valid) to StepTokens end
-
                 SourceTokenIndex = LocalSourceTokenIndex; ErrorReportLineNumber = LocalErrorReportLineNumber; ErrorReportStepNumber = LocalErrorReportStepNumber;
                 return Success();
             }
@@ -307,7 +305,7 @@ namespace Numinous.Engine {
                 return (args, true);
             }
             
-            (List<(List<List<EvalToken>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, bool Success) Success() => (Tokens, MaxHierarchy, true);
+            (List<HierarchyTokens> Tokens, int MaxHierachy, bool Success) Success() => (Tokens, MaxHierarchy, true);
             
             void Step(bool regexParse = true) {
                 ActiveToken = default;
@@ -379,7 +377,7 @@ namespace Numinous.Engine {
                 }
 
                 if (csi != ActiveToken.StringIndex) {
-                    TermTokens.Add(new EvalToken(
+                    Tokens[^1].DeltaTokens[^1].Add(new EvalToken(
                     csi,
                     csi - ActiveToken.StringIndex,
                     new ObjectToken(
@@ -395,14 +393,16 @@ namespace Numinous.Engine {
                 return true;
             }
 
+            // Tokens[^1] contains tokens per term for last delta. DeltaTokens[^1] is the last term's tokens.
             void AddOperator(Operators Operator, int sl) {
-                TermTokens.Add(new EvalToken(ActiveToken.StringIndex, sl, new ObjectToken(Operator, AssembleTimeTypes.OPERATOR, AccessLevels.PRIVATE), true)); LastNonWhiteSpaceIndex = TermTokens.Count - 1; ;
-            }
-
+                Tokens[^1].DeltaTokens[^1].Add(new EvalToken(ActiveToken.StringIndex, sl, new ObjectToken(Operator, AssembleTimeTypes.OPERATOR, AccessLevels.PRIVATE), true));
+                LastNonWhiteSpaceIndex = Tokens[^1].DeltaTokens[^1].Count - 1;
+            } 
+            
             void SimpleAddOperator(Operators Operator) => AddOperator(Operator, 1);
 
             void ComplexOpenContainer(int sl, Operators Operator) {
-                CopyDeltaTokens();
+                Tokens.Add(new HierarchyTokens([], 0, string.Empty));
                 ContainerBuffer.Add(Operator);                                  // register container type
 
                 AddOperator(Operator, sl);
@@ -417,13 +417,13 @@ namespace Numinous.Engine {
 
                 if (ContainerBuffer.Count == 0 && ErrorContext.ErrorLevel == default) {
                     ErrorContext = new Terminal.ErrorContext {
-                        ErrorLevel = ErrorLevels.ERROR,
-                        ErrorType = ErrorTypes.SyntaxError,
+                        ErrorLevel    = ErrorLevels.ERROR,
+                        ErrorType     = ErrorTypes.SyntaxError,
                         DecodingPhase = DecodingPhases.TOKEN,
-                        Message = "No Open Container before Close Container.",
-                        LineNumber = LocalErrorReportLineNumber,
-                        StepNumber = LocalErrorReportStepNumber,
-                        Context = () => ApplyWiggle(CollectiveContext, 0, LastNonWhiteSpaceIndex + 1)
+                        Message       = "No Open Container before Close Container.",
+                        LineNumber    = LocalErrorReportLineNumber,
+                        StepNumber    = LocalErrorReportStepNumber,
+                        Context       = () => ApplyWiggle(CollectiveContext, 0, LastNonWhiteSpaceIndex + 1)
                     };
 
                     return false;
@@ -443,37 +443,13 @@ namespace Numinous.Engine {
                     return false;
                 }
 
-                CopyDeltaTokens();
+                Tokens.Add(new HierarchyTokens([], 0, string.Empty));
                 ContainerBuffer.RemoveAt(ContainerBuffer.Count - 1);
 
                 return true;
             }
 
             bool SimpleCloseContainer(Operators Operator) => CloseContainer(Operator, Operator - 1);
-
-            void CopyDeltaTokens() {
-                CopyDeltaTermTokens();
-                var DeltaTokensShallowCopy = DeltaTokens.Select(t => t).ToList();
-                Tokens.Add((DeltaTokensShallowCopy, ContainerBuffer.Count, CollectiveContext));
-            }
-
-            void CopyDeltaTermTokens() {
-                if (LastNonWhiteSpaceIndex == -1) return;   // Do not copy whitespace
-
-                // Clone Delta Tokens thus far
-                var StepDeltaTokenShallowCopy = TermTokens
-                .Select(t => new EvalToken(
-                    t.StringIndex,
-                    t.StringLength,
-                    t.IsOperator
-                        ? t.Data
-                        : new ObjectToken(t.Data),
-                    t.IsOperator
-                )).ToList();
-
-                TermTokens = [];                       // wipe delta tokens for next operation
-                DeltaTokens.Add(StepDeltaTokenShallowCopy);
-            }
           
             (List<(string token, int StringIndex, int StringLength)> ctx, bool success) PartialResolveDefine(string Token) {
                 List<(string token, int StringIndex, int StringLength)>    Resolved = [(Token, ActiveToken.StringIndex, Token.Length)];
@@ -489,8 +465,8 @@ namespace Numinous.Engine {
                         Resolved.RemoveAt(0);
                         
                         Resolved.InsertRange(0, RegexTokenize((string)((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)ctx.data)[""].data)
-                                                .Select(token => (token, ActiveToken.StringIndex, token.Length))
-                                                .ToList());
+                                                        .Select(token => (token, ActiveToken.StringIndex, token.Length))
+                                                        .ToList());
                     }
 
                 } while (ctx is not null && ctx.type == AssembleTimeTypes.CEXP);

@@ -50,7 +50,7 @@ namespace Numinous {
             internal AssembleTimeTypes type;  // type of object
             internal AccessLevels      level; // access level
         }
-
+        
         internal class EvalToken {
             internal EvalToken(
                 int               pStringIndex,
@@ -72,12 +72,16 @@ namespace Numinous {
                 StringLength = pET.StringLength;
                 IsOperator   = pET.IsOperator;
             }
+            
+            
+            internal object            ObjectData  => Data.data;
+            internal AssembleTimeTypes ObjectType  => Data.type;
+            internal AccessLevels      ObjectLevel => Data.level;
 
             internal ObjectToken       Data;
             internal int               StringIndex, StringLength; // debugging indexes
             internal bool              IsOperator;                // if its an operator or a value
         }
-        
         
         namespace System {
             internal enum Registers { A, X, Y }
