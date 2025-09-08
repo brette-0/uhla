@@ -23,26 +23,22 @@ namespace Numinous {
     }
 
     namespace Engine {
-
-        
-        internal interface IObjectToken {
-            object            Data  { get; }
-            AssembleTimeTypes Type  { get; }
-            AccessLevels      Level { get; }
-        }
-
-        internal interface ILexerToken {
-            int    StringIndex  { get; }
-            int    StringLength { get; }
-            object Data         { get; }
-            bool   IsOperator   { get; }
-        }
-        
-        internal class ObjectToken : IObjectToken {
-            internal ObjectToken(object pData, AssembleTimeTypes pType, AccessLevels pLevel) {
+        internal class ObjectToken {
+            internal ObjectToken (object pData, AssembleTimeTypes pType, AccessLevels pLevel) {
                 data         = pData;
                 type         = pType;
                 level        = pLevel;
+            }
+            
+            /// <summary>
+            /// Cloning Constructor.
+            /// </summary>
+            /// <param name="pOT">Token to be cloned</param>
+            internal ObjectToken(ObjectToken pOT) {
+                data  = Engine.Clone((Dictionary<string, ObjectToken>)pOT.data);    // recursively clone contents
+                data  = pOT.data;
+                type  = pOT.type;
+                level = pOT.level;
             }
 
             ObjectToken? GetMember(string name) {
@@ -50,53 +46,36 @@ namespace Numinous {
                 return obj.GetValueOrDefault(name);
             }
             
-            public object            Data  => data;
-            public AssembleTimeTypes Type  => type;
-            public AccessLevels      Level => level;
-            
             internal  object           data;  // contains members
             internal AssembleTimeTypes type;  // type of object
             internal AccessLevels      level; // access level
         }
 
-        internal class LexerToken : ILexerToken {
-            public object Data         => data;
-            public int    StringIndex  => stringIndex;
-            public int    StringLength => stringLength;
-            public bool   IsOperator   => isOperator;
-
-            internal LexerToken(object pData, int pStringIndex, int pStringLength, bool pIsOperator) {
-                data         = pData;
-                stringIndex  = pStringIndex;
-                stringLength = pStringLength;
-                isOperator   = pIsOperator;
-            }
-            
-            internal object data;                      // contains either object alias or bytesize operator enum
-            internal int    stringIndex, stringLength; // debugging indexes
-            internal bool   isOperator;                // if its an operator or a value
-        }
-
-        internal class EvaluatedLexerToken : ObjectToken, ILexerToken {
-            internal EvaluatedLexerToken(
+        internal class EvalToken {
+            internal EvalToken(
                 int               pStringIndex,
                 int               pStringLength,
-                object            pData,
-                AssembleTimeTypes pType,
-                AccessLevels      pLevel,
+                ObjectToken       pData,
                 bool              pIsOperator
-            ) : base(pData, pType, pLevel) {
-                stringIndex     = pStringIndex;
-                stringLength    = pStringLength;
-                isOperator      = pIsOperator;
+            ) {
+                Data         = pData;
+                StringIndex  = pStringIndex;
+                StringLength = pStringLength;
+                IsOperator   = pIsOperator;
             }
             
-            public int  StringIndex  => stringIndex;
-            public int  StringLength => stringLength;
-            public bool IsOperator   => isOperator;
+            internal EvalToken(
+                EvalToken pET
+            ) {
+                Data         = pET.Data;
+                StringIndex  = pET.StringIndex;
+                StringLength = pET.StringLength;
+                IsOperator   = pET.IsOperator;
+            }
 
-            internal int               stringIndex, stringLength; // debugging indexes
-            internal bool              isOperator;                // if its an operator or a value
+            internal ObjectToken       Data;
+            internal int               StringIndex, StringLength; // debugging indexes
+            internal bool              IsOperator;                // if its an operator or a value
         }
         
         
@@ -464,7 +443,7 @@ namespace Numinous {
             
             TUPLE,   // elems = List<Object>    types = List<AssembleTimeTypes>
             
-            TOKENS,  // for unresolved but declared expressions
+            OPERATOR,  // for unresolved but declared expressions
         }
 
         internal enum AccessLevels : byte {
@@ -753,6 +732,27 @@ namespace Numinous {
                     return value;
                 }
             }
+            
+            // Generated Function | However I do find that this function is how I would code and meets criteria
+            internal static Dictionary<TKey, TValue> Clone<TKey, TValue>(Dictionary<TKey, TValue> Source) where TKey : notnull {
+                var clone = new Dictionary<TKey, TValue>(Source.Count);
+                foreach (var kv in Source) {
+                    var keyClone   = Clone(kv.Key);
+                    var valueClone = Clone(kv.Value);
+                    clone[keyClone] = valueClone;
+                }
+                return clone;
+            }
+
+            internal static T Clone<T>(T ctx) => ctx switch {
+                ICloneable c        => (T)c.Clone(),
+                string or ValueType => ctx,
+                #if DEBUG
+                _ => throw new NotSupportedException($"Cannot clone type {ctx?.GetType()}")
+                #else
+                _ => throw new NotSupportedException($"FATAL ERROR :: (REPORT THIS ON THE GITHUB) CANNOT CLONE TYPE {ctx?.GetType()}")
+                #endif
+            };
             
             internal static (object Return, AssembleTimeTypes Type, bool Success) Assemble(Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> args) {
 
@@ -1125,6 +1125,10 @@ namespace Numinous {
                 }
                 
                 // TODO: Function to capture requested task
+
+                EvalToken? ProcessRValue() {
+                    return null;
+                }
                 
                 void Step(bool regexParse = true) {
                     ActiveToken = default;
@@ -2332,27 +2336,6 @@ namespace Numinous {
                 Program.SourceFileIndexBuffer.Add(0);
             }
 
-
-            // Generated Function | However I do find that this function is how I would code and meets criteria
-            internal static Dictionary<TKey, TValue> Clone<TKey, TValue>(Dictionary<TKey, TValue> Source) where TKey : notnull {
-                var clone = new Dictionary<TKey, TValue>(Source.Count);
-                foreach (var kv in Source) {
-                    var keyClone   = Clone(kv.Key);
-                    var valueClone = Clone(kv.Value);
-                    clone[keyClone] = valueClone;
-                }
-                return clone;
-            }
-
-            internal static T Clone<T>(T ctx) => ctx switch {
-                ICloneable c        => (T)c.Clone(),
-                string or ValueType => ctx,
-                #if DEBUG
-                _ => throw new NotSupportedException($"Cannot clone type {ctx?.GetType()}")
-                #else
-                _ => throw new NotSupportedException($"FATAL ERROR :: (REPORT THIS ON THE GITHUB) CANNOT CLONE TYPE {ctx?.GetType()}")
-                #endif
-            };
             internal enum Unary : byte {
                 INC,
                 DEC,
