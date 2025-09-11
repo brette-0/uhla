@@ -758,21 +758,10 @@ namespace Numinous {
                             // directives
                             
                             case "pragma":
-                                Step();
-                                if (ActiveToken.ctx[0] is not ' ') {
-                                    // error, a space had to follow this part.
-                                    return default;
-                                }
-
-                                Step();
+                                seek_no_whitespace();
                                 switch (ActiveToken.ctx) {
                                     case "push":
-                                        Step();
-                                        if (ActiveToken.ctx[0] is not ' ') {
-                                            // error, a space had to follow this part.
-                                            return default;
-                                        }
-                                        Step();
+                                        seek_no_whitespace();
                                         switch (ActiveToken.ctx) {
                                             case "illegal":
                                             case "cpu":
@@ -802,7 +791,7 @@ namespace Numinous {
                                         continue;
                                     
                                     case "pop":
-                                        Step();
+                                        seek_no_whitespace();
                                         switch (ActiveToken.ctx) {
                                             case "illegal": {
                                                 if (Program.PragmaIllegalBuffer.Count == 1) {
@@ -977,7 +966,7 @@ namespace Numinous {
                                     // error, cant set mapper twice
                                     return default;
                                 }
-                                Step();
+                                seek_no_whitespace();
                                 var MapperNumber = ActiveToken.ctx switch {
                                     "nrom" => 0,
                                     _ => -1
