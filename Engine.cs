@@ -732,10 +732,7 @@ namespace Numinous {
             };
             
             internal static (object Return, AssembleTimeTypes Type, bool Success) Assemble(Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> args) {
-
-                Span<List<string>>  SourceFileContentBufferSpan = CollectionsMarshal.AsSpan(Program.SourceFileContentBuffer);
-                Span<string>        SourceFileNameBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileNameBuffer);
-                Span<int>           SourceTokenIndexBufferSpan   = CollectionsMarshal.AsSpan(Program.SourceFileIndexBuffer);
+                Span<int>           SourceFileIndexBufferSpan   = CollectionsMarshal.AsSpan(Program.SourceFileIndexBuffer);
                 Span<int>           SourceFileLineBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
                 Span<int>           SourceFileStepBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
                 
@@ -762,32 +759,46 @@ namespace Numinous {
                             
                             case "pragma":
                                 Step();
+                                if (ActiveToken.ctx[0] is not ' ') {
+                                    // error, a space had to follow this part.
+                                    return default;
+                                }
+
+                                Step();
                                 switch (ActiveToken.ctx) {
                                     case "push":
                                         Step();
+                                        if (ActiveToken.ctx[0] is not ' ') {
+                                            // error, a space had to follow this part.
+                                            return default;
+                                        }
+                                        Step();
                                         switch (ActiveToken.ctx) {
                                             case "illegal":
-                                                // lexer parse
-                                                // evaluate parse
-                                                // Add to buffer
                                             case "cpu":
-                                                // lexer parse
-                                                // evaluate parse
-                                                // Add to buffer
                                             case "gpr":
-                                                // lexer parse
-                                                // evaluate parse
-                                                // Add to buffer
                                             case "memory":    
-                                                // lexer parse
-                                                // evaluate parse
-                                                // Add to buffer
                                                 break;
                                             
                                             default:
                                                 // error malformed pragma
                                                 return default;
                                         }
+
+                                        var pragma = ActiveToken.ctx;
+                                        
+                                        // lexer parse
+                                        // evaluate parse
+                                        // Add to buffer
+
+                                        var (Tokens, MaxHierarchy, Status) = Lexer(
+                                            Program.SourceFileContentBuffer[^1].ToArray(),
+                                            ref SourceFileIndexBufferSpan[^1],
+                                            ref SourceFileLineBufferSpan[^1],
+                                            ref SourceFileStepBufferSpan[^1],
+                                            Program.SourceFileNameBuffer[^1]
+                                        );
+                                        
                                         continue;
                                     
                                     case "pop":
