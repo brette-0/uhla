@@ -1,0 +1,27 @@
+﻿[Required]
+nProgramROM             = 32
+nCharacterROM           = 8
+nProgramRAM             = 0
+nMapperRAM              = 0x0000
+CPUWriteRules           = []
+CPUWriteRuleDeterminers = []
+CPUReadRules            = []
+CPUReadRuleDeterminers  = []
+
+[Registers]
+
+[Additional]
+IRQ                                  = 0b00                                     #d0 => Timer, d1 => Scanline
+BusConflicts                         = 0
+NameTableMirroning                   = ["H", "V"]
+ProgramRAMWindowPatterns             = []
+ProgramRAMWindowPatternsConstantness = []
+ProgramWindowPatterns                = []
+ProgramWindowPatternsConstantness    = []
+CharacterWindowPatterns              = []
+CharacterWindowPatternsConstantness  = []
+CharacterWindowPatterns              = []
+
+Audio                                = ""
+GoodName                             = "NROM"
+Pinout                               = 0

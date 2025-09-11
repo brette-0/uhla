@@ -1,0 +1,35 @@
+﻿[Required]
+nProgramROM             = 512
+nCharacterROM           = 256
+nProgramRAM             = 8
+nMapperRAM              = 0x0000
+CPUWriteRules           = [[0x6000, 0x2000], [0x6000, 0x8000]]                            #all of non-sys region
+CPUWriteRuleDeterminers = ["nProgramRAM > 0", "1"]
+CPUReadRules            = [[0x6000, 0x2000]]
+CPUReadRuleDeterminers  = ["nProgramRAM > 0"]
+
+[Registers]
+BankSelect    = 0x8000
+BankData      = 0x8001
+NTArrangement = 0xa000
+PRGRAMProtect = 0xa001
+IRQLatch      = 0xc000
+IRQReload     = 0xc001
+IRQDisable    = 0xe000
+IRQEnable     = 0xe001
+
+[Additional]
+IRQ                                  = 0b10                                     #d0 => Timer, d1 => Scanline
+BusConflicts                         = 0
+NameTableMirroning                   = ["HV", "4"]
+ProgramRAMWindowPatterns             = [[8]]
+ProgramRAMWindowPatternsConstantness = [[1]]
+ProgramWindowPatterns                = [[8, 8, 16]]
+ProgramWindowPatternsConstantness    = [[0, 0, 1]]
+CharacterWindowPatterns              = [[2, 2, 1, 1, 1, 1], [1, 1, 1, 1, 2, 2]]
+CharacterWindowPatternsConstantness  = [[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]]
+CharacterWindowPatterns              = [[1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]]
+
+Audio                                = ""
+GoodName                             = "MMC3"
+Pinout                               = 4
