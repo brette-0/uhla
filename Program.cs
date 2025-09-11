@@ -1,5 +1,4 @@
-﻿using System.Runtime.InteropServices;
-using Numinous;
+﻿using Numinous;
 using Numinous.Engine;
 using Numinous.Language;
 
@@ -33,18 +32,27 @@ internal static class Program {
             return (int)ErrorTypes.ParsingError;
         }
 
+        if (!File.Exists(InputPath)) {
+            // error, path does not exist
+            Terminal.Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"Input path {Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, InputPath))} does not exist.",
+                -1, default, null, null);
+            return (int)ErrorTypes.ParsingError;
+        }
+        
         var InputFile = File.ReadAllText(InputPath);
         if (InputFile.Length == 0) {
             Terminal.Error(ErrorTypes.NothingToDo, DecodingPhases.TOKEN, $"{Language.Connectives[(ActiveLanguage, "Source file")]} {InputPath} {Language.Connectives[(ActiveLanguage, "has no contents")]}", -1, 0, null, null);
             return (int)ErrorTypes.NothingToDo;
         }
-        SourceFileNameBuffer.Add(InputPath!);
+        SourceFileNameBuffer   .Add(InputPath!);
         SourceFileContentBuffer.Add(RegexTokenize(InputFile));
-        SourceFileIndexBuffer.Add(0);       // begin from "main.s" (CONTENTS) : (0)
-        SourceTokenIndexBuffer.Add(0);      // begin from char 0
-        SourceFileLineBuffer.Add(0);        // debug line, naturally 0
-        SourceFileStepBuffer.Add(0);        // debug step, naturally 0
+        SourceFileIndexBuffer  .Add(0);         // begin from char 0
+        SourceFileLineBuffer   .Add(0);         // debug line, naturally 0
+        SourceFileStepBuffer   .Add(0);         // debug step, naturally 0
 
+        LabelDataBase["type"] =  new ObjectToken(new Dictionary<string, ObjectToken>() {
+            {"",        new ObjectToken(ScopeTypes.Root, AssembleTimeTypes.CEXP, AccessLevels.PRIVATE)},
+        }, AssembleTimeTypes.CEXP, AccessLevels.PRIVATE);
 
         // rs "Root Scope" has itself as key, value and parent - sitting in the root pointing to itself.
         // this is the only way via asm to directly refer to rs. Useful for when you use a 'as' level keyword but desires rs resolve.
@@ -110,14 +118,12 @@ internal static class Program {
 
     internal static List<List<string>>  SourceFileContentBuffer = [];
     internal static List<int>           SourceFileIndexBuffer = [];
-    internal static List<int>           SourceTokenIndexBuffer = [];
     internal static List<string>        SourceFileNameBuffer  = [];
     internal static List<int>           SourceFileLineBuffer  = [];  // Used for ERROR REPORT ONLY
     internal static List<int>           SourceFileStepBuffer  = [];  // Used for ERROR REPORT ONLY
 
     internal static Dictionary<string, ObjectToken>         LabelDataBase         = [];
     internal static List<Dictionary<string, ObjectToken>>   ActiveScopeBuffer     = [];
-    internal static List<ScopeTypes>                        ActiveScopeTypeBuffer =[];
     internal static List<Dictionary<string, ObjectToken>>   ObjectSearchBuffer    = [];
 
     internal static List<string> SourceFileSearchPaths = [];
@@ -134,5 +140,5 @@ internal static class Program {
     internal static Languages ActiveLanguage;
     internal static WarningLevels WarningLevel;
     
-    internal static Numinous.Modes Mode; 
+    internal static Modes Mode; 
 }
