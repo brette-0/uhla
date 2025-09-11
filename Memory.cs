@@ -1,4 +1,7 @@
-﻿namespace Numinous;
+﻿using Numinous.Engine;
+using static Numinous.Engine.Engine;
+
+namespace Numinous;
 
 using Bitfield;
 
@@ -26,6 +29,39 @@ internal static class Memory {
         
         MAPPER,
         PROGRAM
+    }
+
+    internal static MemoryModes? GetDefaultMemoryMode() {
+        var ScopeTypeMember = Database.GetObjectFromAlias("type", AccessLevels.PUBLIC);
+        if (ScopeTypeMember is null) {
+            // Major error, we don't even know this is possible. This was written, however, to suppress a warning.
+            return null;
+        }
+
+        switch ((ScopeTypes?)ScopeTypeMember.GetMember(string.Empty, AccessLevels.PRIVATE)?.data) {
+            case ScopeTypes.Bank:
+            case ScopeTypes.Root:
+                return MemoryModes.SYSTEM;
+
+            case ScopeTypes.Namespace:
+            case ScopeTypes.Procedure:
+                return MemoryModes.SLOW;
+
+            case ScopeTypes.Macro:
+                return MemoryModes.FAST;
+
+            case ScopeTypes.Interrupt:
+                // error : may not reserve memory within an interrupt!
+                return null;
+
+            case null:
+                // FATAL : could not get local scopes 'type' member's content member.
+                throw new ArgumentOutOfRangeException();
+
+            default:
+                // FATAL : out of range value obtained getting local scopes 'type' member's content member.
+                throw new ArgumentOutOfRangeException();
+        }
     }
 
     internal static bool TryReserve(MemoryModes MemoryMode, int bytes, int offset = -1) {
