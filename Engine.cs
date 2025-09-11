@@ -41,9 +41,11 @@ namespace Numinous {
                 level = pOT.level;
             }
 
-            ObjectToken? GetMember(string name) {
+            internal ObjectToken? GetMember(string name, AccessLevels pLevel) {
                 var obj = (Dictionary<string, ObjectToken>)data;
-                return obj.GetValueOrDefault(name);
+                var ctx = obj.GetValueOrDefault(name);
+
+                return ctx is null || (byte)pLevel < (byte)ctx.level ? ctx : null;
             }
             
             internal  object           data;  // contains members
@@ -455,18 +457,6 @@ namespace Numinous {
             PRIVATE = 1
         }
 
-        internal enum AssembleTimeValueStatus : byte {
-            DECLARED, // int foo;
-            PARTIAL,  // int foo = defined_later;
-            OK        // int foo = 2;
-        }
-
-        internal enum ContextFetcherEnums : byte {
-            OK,
-            MALFORMED,
-            UNTERMINATED
-        }
-
         internal struct RunTimeVariableFilterType {
             internal uint? size;
             internal bool? signed;
@@ -490,24 +480,7 @@ namespace Numinous {
         internal enum DecodingPhases : byte {
             TERMINAL, TOKEN, EVALUATION
         }
-
-        internal enum Expectations : byte {
-            VALUE,
-            OPERATOR
-        }
         
-        internal enum OperationTypes : byte {
-            FAIL,
-            DIRECTIVE,   // eg.. #include
-            INSTRUCTION, // eg.. lda foo
-            EVALUATE,    // function, macros, RODATA writes
-            KEYWORD,     // int foo = bar, return
-            RUNTIME,     // u8 foo       : is a keyword BUT returns different ctx
-
-            ANON_REL_BRANCH,    // +: and -:
-        }
-
-
         internal static partial class Engine {
             internal static bool Permits(RunTimeVariableFilterType filter, RunTimeVariableType variable) =>
                        filter.size   == null || filter.size   == variable.size   &&
@@ -762,7 +735,7 @@ namespace Numinous {
 
                 Span<List<string>>  SourceFileContentBufferSpan = CollectionsMarshal.AsSpan(Program.SourceFileContentBuffer);
                 Span<string>        SourceFileNameBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileNameBuffer);
-                Span<int>           SourceTokenIndexBufferSpan   = CollectionsMarshal.AsSpan(Program.SourceTokenIndexBuffer);
+                Span<int>           SourceTokenIndexBufferSpan   = CollectionsMarshal.AsSpan(Program.SourceFileIndexBuffer);
                 Span<int>           SourceFileLineBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
                 Span<int>           SourceFileStepBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
                 
@@ -1028,12 +1001,6 @@ namespace Numinous {
 
                         continue;
                     }
-
-                    var MemoryMode = Program.ActiveScopeTypeBuffer[^1] switch {
-                        ScopeTypes.Macro => Memory.MemoryModes.FAST,
-                        ScopeTypes.Root or ScopeTypes.Bank => Memory.MemoryModes.SYSTEM,
-                        _ => Memory.MemoryModes.SLOW
-                    };
 
                     switch (ActiveToken.ctx) {
                         case "if":
@@ -2336,7 +2303,7 @@ namespace Numinous {
             internal static void AddSourceContext(string FilePath) {
                 Program.SourceFileNameBuffer.Add(FilePath);
                 Program.SourceFileContentBuffer.Add(RegexTokenize(File.ReadAllText(FilePath)));
-                Program.SourceTokenIndexBuffer.Add(0);
+                Program.SourceFileIndexBuffer.Add(0);
                 Program.SourceFileIndexBuffer.Add(0);
             }
 
