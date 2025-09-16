@@ -700,7 +700,7 @@ namespace UHLA {
                         case "reset":
                             // interupt => reset (if reset isn't parameterised already), second level only
                         case "table" :
-                            // typless table declare, just raw const rodata here.
+                            // typeless table declare, just raw const rodata here.
                         
                         case "const":
                             // const int, const string etc..
@@ -715,15 +715,6 @@ namespace UHLA {
                         
                         case "register": 
                         case "flag":
-                            
-                        // rt variable contextualisation
-                        case "direct":
-                        case "system":
-                        case "mapper":
-                        case "program":
-                        case "fast":
-                        case "slow":
-                            break;
                         
                         case "del":
                             seek_no_whitespace();
@@ -747,19 +738,11 @@ namespace UHLA {
 
                             Program.ActiveScopeBuffer[^1].Remove(ActiveToken.ctx);
                             continue;
-                        
-                        
-                        case "extern":
-                            // declare but dont define
-                            break;
                     }
                     
                     // check if memory mode implicit variable reserve
-                    
                     // check if function call
-                    
-                    // evaluate for RODATA
-                    // if specified lvalue, then an assigning operator DO NOT WRITE DATA
+                    // evaluate if performing macro
                 }
                 
                 // TODO: Function to capture requested task
