@@ -3,10 +3,10 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
-using Numinous.Language;
+using UHLA.Language;
 using Tomlyn;
 
-namespace Numinous {
+namespace UHLA {
     internal enum ScopeTypes {
         Root      = 0,
         Namespace = 1,
@@ -2497,7 +2497,7 @@ namespace Numinous {
                                     // generic help message
                                     Log(ErrorTypes.None, DecodingPhases.TERMINAL,
                                         $"""
-                                         Numinous 2a03 - GPL V2 Brette Allen 2026
+                                         UHLA 2a03 - GPL V2 Brette Allen 2026
 
                                          -i | --input        | [path]    | {(Language.Language.Connectives[(Program.ActiveLanguage, "Entrypoint Source Assembly File")])}
                                          -o | --output       | [path]    | {(Language.Language.Connectives[(Program.ActiveLanguage, "Output ROM/Disk Binary Output")])}
@@ -2551,7 +2551,7 @@ Svenska           ""-l sw""
                                             // warnings specific help message
                                             Log(ErrorTypes.None, DecodingPhases.TERMINAL,
                                                 $"""
-                                                 Numinous Warning Types and how they work
+                                                 UHLA Warning Types and how they work
 
                                                  ignore      : Will not display any warnings, but track the quantity for after completion.
                                                  default     : Will warn the user about potential issues with their code.
@@ -2567,7 +2567,7 @@ Svenska           ""-l sw""
                                         case "input":
                                             Log(ErrorTypes.None, DecodingPhases.TERMINAL,
                                                 $"""
-                                                 Numinous Input File
+                                                 UHLA Input File
 
                                                  The input file argument (-i or --input) should be followed by a valid file path to a source assembly file. 
                                                  If the file is empty you will receive an error, you may only pass one file here as the entry point file.
@@ -2580,7 +2580,7 @@ Svenska           ""-l sw""
                                         case "output":
                                             Log(ErrorTypes.None, DecodingPhases.TERMINAL,
                                                 $"""
-                                                 Numinous Output File
+                                                 UHLA Output File
 
                                                  The output file argument (-o or --output) should be followed by a path pointing to a file to generate.
                                                  The file name must comply with the limits of your Operating System.
@@ -2588,7 +2588,7 @@ Svenska           ""-l sw""
                                                  If you wish to create an FDS Disk image, you must use the FDS Header variant as using the *.fds file extension
                                                  will not affect the kind of build produced. 
 
-                                                 Numinous WILL overwrite a file existing with the same name at the output path if found.
+                                                 UHLA WILL overwrite a file existing with the same name at the output path if found.
                                                         
                                                  """,                                                             -1, default, null, null);
                                             break;
@@ -2655,8 +2655,8 @@ Svenska           ""-l sw""
                         #else
                         path ??= AppContext.BaseDirectory;
                         #endif
-                        if (!File.Exists($"{path}/Numinous.toml")) {
-                            File.WriteAllText($"{path}/Numinous.toml", """
+                        if (!File.Exists($"{path}/UHLA.toml")) {
+                            File.WriteAllText($"{path}/UHLA.toml", """
                                                                        [Defaults]
                                                                        DefaultLanguage             = "System"
                                                                        DefaultWarningLevel         = "Default"
@@ -2666,8 +2666,8 @@ Svenska           ""-l sw""
                                                                        """);
                         }
 
-                        var Config = Toml.ToModel<NuminousConfigTomlTemplate>(
-                                                                              File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Numinous.toml")),
+                        var Config = Toml.ToModel<UHLAConfigTomlTemplate>(
+                                                                              File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "UHLA.toml")),
                                                                               null,
                                                                               new TomlModelOptions { ConvertPropertyName = name => name }
                                                                              );
@@ -2686,7 +2686,7 @@ Svenska           ""-l sw""
                        
                         if (Program.WarningLevel == WarningLevels.NONE) {
                             Warn(ErrorTypes.SyntaxError, DecodingPhases.TERMINAL, $"""
-                                      The config file (at {AppContext.BaseDirectory}/Numinous.toml) is malformed! 
+                                      The config file (at {AppContext.BaseDirectory}/UHLA.toml) is malformed! 
                                       Ensure that it contains the key 'DefaultWarningLevel' under 'Defaults' table. The data may be any of the following:
 
                                       Ignore                  : By default will ignore all warnings, great for sloppy vibe coding with minimal output.
@@ -2696,7 +2696,7 @@ Svenska           ""-l sw""
                                       Strict                  : Shows more warnings as errors, not recommended but does enforce clean code.
                                       Controlled              : Functions like Strict but prevents use of overrides. 
 
-                                      Project Numinous will NOT continue until you fix this or manually specify your Warning Level!
+                                      Project UHLA will NOT continue until you fix this or manually specify your Warning Level!
                                       """, default, default, default, null);
                             return false;
                         }
@@ -2732,7 +2732,7 @@ Svenska           ""-l sw""
 
                         if (Program.ActiveLanguage == Language.Languages.Null) {
                             Warn(ErrorTypes.SyntaxError, DecodingPhases.TERMINAL, $"""
-                                      The config file (at {AppContext.BaseDirectory}/Numinous.toml) is malformed! 
+                                      The config file (at {AppContext.BaseDirectory}/UHLA.toml) is malformed! 
                                       Ensure that it contains the key 'DefaultLanguage' under 'Defaults' table. The data may be any of the following:
 
                                       English UK
@@ -2757,7 +2757,7 @@ Svenska           ""-l sw""
                                       Persian
                                       Chinese
 
-                                      Project Numinous will NOT continue until you fix this or manually specify your language!
+                                      Project UHLA will NOT continue until you fix this or manually specify your language!
                                       """, default, default, default, null);
                             return false;
                         }
@@ -2774,7 +2774,7 @@ Svenska           ""-l sw""
                     }
                 }
 
-                internal class NuminousConfigTomlTemplate {
+                internal class UHLAConfigTomlTemplate {
                     public class DefaultsBlock {
                         public string DefaultWarningLevel { get; set; } = "DefaultWarningLevel";
                         public string DefaultLanguage     { get; set; } = "DefaultLanguage";

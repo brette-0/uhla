@@ -3,7 +3,7 @@
           On error report, refer to RegexParsed[0].ctx, index, length etc...
 */
 
-namespace Numinous.Engine {
+namespace UHLA.Engine {
     internal static partial class Engine {
 
         internal enum LexerModes {

@@ -1,8 +1,8 @@
-﻿using Numinous;
-using Numinous.Engine;
-using Numinous.Language;
+﻿using UHLA;
+using UHLA.Engine;
+using UHLA.Language;
 
-using static Numinous.Engine.Engine;
+using static UHLA.Engine.Engine;
 
 internal static class Program {
     internal static int Main(string[] args) {
@@ -66,17 +66,17 @@ internal static class Program {
         }, AssembleTimeTypes.CSTRING, AccessLevels.PUBLIC);
 
         LabelDataBase["a"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"",         new ObjectToken(Numinous.Engine.System.Registers.A, AssembleTimeTypes.CREG, AccessLevels.PRIVATE)},
+            {"",         new ObjectToken(UHLA.Engine.System.Registers.A, AssembleTimeTypes.CREG, AccessLevels.PRIVATE)},
             {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
         }, AssembleTimeTypes.CREG, AccessLevels.PUBLIC);
 
         LabelDataBase["x"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"",         new ObjectToken(Numinous.Engine.System.Registers.X, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
+            {"",         new ObjectToken(UHLA.Engine.System.Registers.X, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
             {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
         }, AssembleTimeTypes.CREG, AccessLevels.PUBLIC);
 
         LabelDataBase["y"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"",         new ObjectToken(Numinous.Engine.System.Registers.Y, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
+            {"",         new ObjectToken(UHLA.Engine.System.Registers.Y, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
             {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
         }, AssembleTimeTypes.CREG, AccessLevels.PUBLIC);
 

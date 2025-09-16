@@ -1,7 +1,7 @@
-﻿using Numinous.Engine;
-using static Numinous.Engine.Engine;
+﻿using UHLA.Engine;
+using static UHLA.Engine.Engine;
 
-namespace Numinous;
+namespace UHLA;
 
 using Bitfield;
 

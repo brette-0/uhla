@@ -2,11 +2,11 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
-using Numinous.Engine;
+using UHLA.Engine;
 
 // Convert typical interpolated strings to use composite formatting for better language accuracy.
 
-namespace Numinous {
+namespace UHLA {
     namespace Language {
         internal enum Languages {
             Null,               // Used for unrecognized language specify from terminal

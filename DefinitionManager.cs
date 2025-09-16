@@ -1,6 +1,6 @@
-﻿using Numinous.Engine;
+﻿using UHLA.Engine;
 
-namespace Numinous;
+namespace UHLA;
 
 internal static class DefinitionManager {
     

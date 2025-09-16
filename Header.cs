@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
-using Numinous.Engine;
+using UHLA.Engine;
 
-namespace Numinous;
+namespace UHLA;
 
 public enum Mappers {
     UNSPECIFIED = -1,
@@ -9,7 +9,7 @@ public enum Mappers {
 }
 
 public static class Header {
-    // invoked by the header() function in Numinous
+    // invoked by the header() function in UHLA
     
     public static bool NESHeaderFunction(List<string> args) {
         

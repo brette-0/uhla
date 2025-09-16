@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace Numinous.Engine {
+namespace UHLA.Engine {
     internal struct HierarchyTokens {
         internal HierarchyTokens(List<List<EvalToken>> pDeltaTokens, int pHierachy, string pRepresentation) {
             DeltaTokens    = pDeltaTokens;
