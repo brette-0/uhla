@@ -1,4 +1,5 @@
-﻿using UHLA;
+﻿using Architectures;
+using UHLA;
 using UHLA.Engine;
 using UHLA.Language;
 
@@ -64,22 +65,7 @@ internal static class Program {
         LabelDataBase["lang"]   = new ObjectToken(new Dictionary<string, ObjectToken>() {
             {"",        new ObjectToken($"\"{ActiveLanguage}\"", AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
         }, AssembleTimeTypes.CSTRING, AccessLevels.PUBLIC);
-
-        LabelDataBase["a"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"",         new ObjectToken(UHLA.Engine.System.Registers.A, AssembleTimeTypes.CREG, AccessLevels.PRIVATE)},
-            {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
-        }, AssembleTimeTypes.CREG, AccessLevels.PUBLIC);
-
-        LabelDataBase["x"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"",         new ObjectToken(UHLA.Engine.System.Registers.X, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
-            {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
-        }, AssembleTimeTypes.CREG, AccessLevels.PUBLIC);
-
-        LabelDataBase["y"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"",         new ObjectToken(UHLA.Engine.System.Registers.Y, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
-            {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.CINT, AccessLevels.PUBLIC) }
-        }, AssembleTimeTypes.CREG, AccessLevels.PUBLIC);
-
+        
         LabelDataBase["ToString"] = new ObjectToken(
             new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
                 {"args", (1, AssembleTimeTypes.CINT, AccessLevels.PRIVATE)},
@@ -111,6 +97,17 @@ internal static class Program {
         ActiveScopeBuffer.Add(LabelDataBase);   // add rs to 'as', default rs
         ObjectSearchBuffer = [LabelDataBase];   // by default, contains nothing more than this. For each search AS[^1] is added
 
+        ArchitectureInterface = Architecture switch {
+            UHLA.Architectures.NMOS_6502  => new NMOS_6502(),
+            UHLA.Architectures.NMOS_6507  => throw new NotImplementedException(),
+            UHLA.Architectures.RICOH_2A03 => new Ricoh_2a03(),
+            
+            
+            UHLA.Architectures.None => throw new NotImplementedException(),
+            _                       => throw new NotImplementedException()
+        };
+
+        ArchitectureInterface.Initalize();
         Assemble([]);
         
         return 0;
@@ -128,17 +125,9 @@ internal static class Program {
 
     internal static List<string> SourceFileSearchPaths = [];
 
-    internal static List<bool>          PragmaIllegalBuffer     = [];
-    internal static List<bool>          PragmaCPUAwareBuffer    = [];
-    internal static List<bool>          PragmaGPRAwareBuffer    = [];
-    internal static List<bool>          PragmaRAMAwareBuffer    = [];
-
-    internal static Func<int, bool>     ReadPermitted;
-    internal static Func<int, bool>     WritePermitted;
-    internal static Func<int, bool>     CallPermitted;
-
-    internal static Languages ActiveLanguage;
+    internal static Languages     ActiveLanguage;
     internal static WarningLevels WarningLevel;
-    
-    internal static Modes Mode; 
+
+    internal static UHLA.Architectures Architecture;
+    internal static UHLA.InterfaceProtocol.IArchitecture      ArchitectureInterface;
 }

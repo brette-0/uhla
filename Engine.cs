@@ -5,8 +5,62 @@ using System.Text;
 using System.Text.RegularExpressions;
 using UHLA.Language;
 using Tomlyn;
+using UHLA.Engine;
 
 namespace UHLA {
+    namespace InterfaceProtocol {
+        internal interface IArchitecture {
+            /// <summary>
+            /// Returns 'true' is the string represents a mnemonic for the target architecture.
+            /// This includes implicits, synthetics and illegals. 
+            /// </summary>
+            /// <param name="mnemonic">the string to be checked if it is mnemonic.</param>
+            /// <returns></returns>
+            bool    IsMnemonic(string mnemonic);
+        
+            /// <summary>
+            /// Reads ahead to confirm any information that the engine will not be able to handle.
+            /// For example, 6502 targets include 'a:', 'z:' and '!' as 'operand decorators'.
+            /// </summary>
+            /// <returns></returns>
+            object? GatherAdditionalMnemonicContext();
+
+            /// <summary>
+            /// Leaves the implementation to decide if the request is possible based on intense validation.
+            /// Mnemonic should be verified at this point and therefore should not be validated further.
+            /// Returns the index of the problematic component or null if completely successful.
+            /// </summary>
+            /// <param name="mnemonic">The instruction attempting to encode</param>
+            /// <param name="modifiers">The context that modified the encoding</param>
+            /// <returns></returns>
+            int? TryCompleteInstruction(string mnemonic, ref List<EvalToken> args);
+
+            void Initalize();
+
+            CheckDirectiveStatus CheckDirective(ref List<EvalToken>                                         args,
+                                                ref List<(string token, int StringIndex, int StringLength)> DefineResolveBuffer,
+                                                ref int                                                     pStringIndex, ref int pTokenIndex,
+                                                ref (string ctx, int StringIndex, int StringLength)         pActiveToken,
+                                                ref string                                                  pRepresentation);
+        }
+
+        internal enum CheckDirectiveStatus {
+            None,
+            Success,
+            Error
+        }
+    }
+    
+
+    internal enum Architectures {
+        None,
+        
+        NMOS_6502,
+        NMOS_6507,                      // 6502 syntax, but limited address range.  '6502'
+
+        RICOH_2A03,                     // NES/Famicom                              '2a03', 'nes', 'fds'
+    }
+    
     internal enum ScopeTypes {
         Root      = 0,
         Namespace = 1,
@@ -14,12 +68,6 @@ namespace UHLA {
         Bank      = 3,
         Procedure = 4,
         Interrupt = 5
-    }
-    
-    internal enum Modes {
-        None,
-        Cartridge,
-        Disk
     }
 
     namespace Engine {
@@ -98,213 +146,6 @@ namespace UHLA {
                 //  None (1)    = 0x20,
                 Overflow = 0x40,
                 Negative = 0x80
-            }
-
-            [Flags]
-            internal enum AddressModeFlags : ushort {
-                Implied     = 1 << 0,
-                Immediate   = 1 << 1,
-                ZeroPage    = 1 << 2,
-                ZeroPageX   = 1 << 3,
-                ZeroPageY   = 1 << 4,
-                Absolute    = 1 << 5,
-                AbsoluteX   = 1 << 6,
-                AbsoluteY   = 1 << 7,
-                Indirect    = 1 << 8,
-                IndirectX   = 1 << 9,
-                IndirectY   = 1 << 10,
-                Accumulator = 1 << 11,
-                A           = 1 << 12,
-                X           = 1 << 13,
-                Y           = 1 << 14,
-                Relative    = 1 << 15,
-            }
-
-            internal static class System {
-                readonly static internal Dictionary<string, AddressModeFlags> InstructionAddressModes = new() {
-                    { "adc", adc }, { "and", and }, { "cmp", cmp }, { "eor", eor },
-                    { "lda", lda }, { "ora", ora }, { "sta", sta },
-
-                    { "bcc", bcc }, { "bcs", bcs }, { "bnc", bnc }, { "bns", bns },
-                    { "bvc", bvc }, { "bvs", bvs }, { "bzc", bzc }, { "bzs", bzs },
-
-                    { "bit", bit }, { "brk", brk },
-
-                    { "clc", clc }, { "clv", clv }, { "sec", sec },
-                    { "tax", tax }, { "tay", tay }, { "tsx", tsx },
-                    { "txa", txa }, { "txs", txs }, { "txy", txy },
-
-                    { "cpx", cpx }, { "cpy", cpy },
-
-                    { "dec", dec }, { "inc", inc },
-
-                    { "dex", dex }, { "dey", dey }, { "inx", inx }, { "iny", iny },
-                    { "pha", pha }, { "php", php }, { "pla", pla }, { "plp", plp },
-                    { "sei", sei }, { "rti", rti }, { "rts", rts },
-
-                    { "jmp", jmp }, { "jsr", jsr },
-
-                    { "ldx", ldx }, { "ldy", ldy },
-
-                    { "asl", asl }, { "lsr", lsr }, { "rol", rol }, { "ror", ror },
-
-                    { "nop", nop },
-
-                    { "stx", stx }, { "sty", sty }
-                };
-
-                readonly internal static AddressModeFlags[] MemoryAddressModeInstructionTypes = [
-                    // adc and cmp eor lda ora sta
-                    AddressModeFlags.Immediate |
-                    AddressModeFlags.ZeroPageX | 
-                    AddressModeFlags.ZeroPageY |
-                    AddressModeFlags.Absolute  | 
-                    AddressModeFlags.AbsoluteX |
-                    AddressModeFlags.AbsoluteY | 
-                    AddressModeFlags.IndirectX | 
-                    AddressModeFlags.IndirectY  ,
-
-                    // bzc bzs bns bnc bvs bvc bcs bcc
-                    AddressModeFlags.Relative   ,
-
-                    // bit
-                    AddressModeFlags.Immediate | 
-                    AddressModeFlags.ZeroPage  |
-                    AddressModeFlags.Absolute   ,
-
-                    // brk
-                    AddressModeFlags.Implied    | 
-                    AddressModeFlags.Immediate  ,
-
-                    // clc clv sec tax tay tsx txa txs txy
-                    AddressModeFlags.Implied    ,
-
-                    // cpx cpy
-                    AddressModeFlags.Immediate | 
-                    AddressModeFlags.ZeroPage  |
-                    AddressModeFlags.Absolute   ,
-
-                    // dec inc
-                    AddressModeFlags.ZeroPage  |
-                    AddressModeFlags.ZeroPageX |
-                    AddressModeFlags.Absolute  |
-                    AddressModeFlags.AbsoluteX  ,
-
-                    // dex dey inx iny pha php pla plp rti rts sei 
-                    AddressModeFlags.Implied    ,
-
-                    // jmp
-                    AddressModeFlags.Absolute   | 
-                    AddressModeFlags.Indirect   ,
-
-                    // jsr 
-                    AddressModeFlags.Absolute   ,
-
-                    // ldx
-                    AddressModeFlags.Immediate |
-                    AddressModeFlags.ZeroPage  |
-                    AddressModeFlags.ZeroPageY |
-                    AddressModeFlags.Absolute  |
-                    AddressModeFlags.AbsoluteY  ,
-
-                    // ldy
-                    AddressModeFlags.Immediate |
-                    AddressModeFlags.ZeroPage  |
-                    AddressModeFlags.ZeroPageX |
-                    AddressModeFlags.Absolute  |
-                    AddressModeFlags.AbsoluteX  ,
-
-                    // asl lsr rol ror
-                    AddressModeFlags.Implied   | 
-                    AddressModeFlags.A         |
-                    AddressModeFlags.ZeroPage  |
-                    AddressModeFlags.ZeroPageX |
-                    AddressModeFlags.Absolute  |
-                    AddressModeFlags.AbsoluteX  ,
-
-                    // nop
-                    AddressModeFlags.Implied   | 
-                    AddressModeFlags.Immediate | 
-                    AddressModeFlags.ZeroPage  | 
-                    AddressModeFlags.ZeroPageX | 
-                    AddressModeFlags.Absolute  | 
-                    AddressModeFlags.AbsoluteX  ,
-
-                    // stx
-                    AddressModeFlags.ZeroPage  |
-                    AddressModeFlags.ZeroPageY |
-                    AddressModeFlags.Absolute   ,
-
-                    // sty
-                    AddressModeFlags.ZeroPage  |
-                    AddressModeFlags.ZeroPageX |
-                    AddressModeFlags.Absolute   ,
-                ];
-
-                readonly internal static AddressModeFlags adc = MemoryAddressModeInstructionTypes[0],
-                                                          and = MemoryAddressModeInstructionTypes[0],
-                                                          cmp = MemoryAddressModeInstructionTypes[0],
-                                                          eor = MemoryAddressModeInstructionTypes[0],
-                                                          lda = MemoryAddressModeInstructionTypes[0],
-                                                          ora = MemoryAddressModeInstructionTypes[0],
-                                                          sta = MemoryAddressModeInstructionTypes[0];
-
-                readonly internal static  AddressModeFlags bcc = MemoryAddressModeInstructionTypes[1],
-                                                           bcs = MemoryAddressModeInstructionTypes[1],
-                                                           bnc = MemoryAddressModeInstructionTypes[1],
-                                                           bns = MemoryAddressModeInstructionTypes[1],
-                                                           bvc = MemoryAddressModeInstructionTypes[1],
-                                                           bvs = MemoryAddressModeInstructionTypes[1],
-                                                           bzc = MemoryAddressModeInstructionTypes[1],
-                                                           bzs = MemoryAddressModeInstructionTypes[1];
-
-                readonly internal static AddressModeFlags bit = MemoryAddressModeInstructionTypes[2];
-                readonly internal static AddressModeFlags brk = MemoryAddressModeInstructionTypes[3];
-
-                readonly internal static AddressModeFlags clc = MemoryAddressModeInstructionTypes[4],
-                                                          clv = MemoryAddressModeInstructionTypes[4],
-                                                          sec = MemoryAddressModeInstructionTypes[4],
-                                                          tax = MemoryAddressModeInstructionTypes[4],
-                                                          tay = MemoryAddressModeInstructionTypes[4],
-                                                          tsx = MemoryAddressModeInstructionTypes[4],
-                                                          txa = MemoryAddressModeInstructionTypes[4],
-                                                          txs = MemoryAddressModeInstructionTypes[4],
-                                                          txy = MemoryAddressModeInstructionTypes[4];
-
-                readonly internal static AddressModeFlags cpx = MemoryAddressModeInstructionTypes[5],
-                                                          cpy = MemoryAddressModeInstructionTypes[5];
-
-                readonly internal static AddressModeFlags dec = MemoryAddressModeInstructionTypes[6],
-                                                          inc = MemoryAddressModeInstructionTypes[6];
-
-                readonly internal static AddressModeFlags dex = MemoryAddressModeInstructionTypes[7],
-                                                          dey = MemoryAddressModeInstructionTypes[7],
-                                                          inx = MemoryAddressModeInstructionTypes[7],
-                                                          iny = MemoryAddressModeInstructionTypes[7],
-                                                          pha = MemoryAddressModeInstructionTypes[7],
-                                                          php = MemoryAddressModeInstructionTypes[7],
-                                                          pla = MemoryAddressModeInstructionTypes[7],
-                                                          plp = MemoryAddressModeInstructionTypes[7],
-                                                          sei = MemoryAddressModeInstructionTypes[7],
-                                                          rti = MemoryAddressModeInstructionTypes[7],
-                                                          rts = MemoryAddressModeInstructionTypes[7];
-
-                readonly internal static AddressModeFlags jmp = MemoryAddressModeInstructionTypes[8];
-                readonly internal static AddressModeFlags jsr = MemoryAddressModeInstructionTypes[9];
-
-                readonly internal static AddressModeFlags ldx = MemoryAddressModeInstructionTypes[10];
-                readonly internal static AddressModeFlags ldy = MemoryAddressModeInstructionTypes[11];
-
-                readonly internal static AddressModeFlags asl = MemoryAddressModeInstructionTypes[12],
-                                                          lsr = MemoryAddressModeInstructionTypes[12],
-                                                          rol = MemoryAddressModeInstructionTypes[12],
-                                                          ror = MemoryAddressModeInstructionTypes[12];
-
-                readonly internal static AddressModeFlags nop = MemoryAddressModeInstructionTypes[13];
-
-                readonly internal static AddressModeFlags stx = MemoryAddressModeInstructionTypes[14];
-                readonly internal static AddressModeFlags sty = MemoryAddressModeInstructionTypes[15];
-
             }
         }
 
@@ -731,19 +572,19 @@ namespace UHLA {
                 #endif
             };
             
-            internal static (object Return, AssembleTimeTypes Type, bool Success) Assemble(Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)> args) {
+            internal static (object Return, AssembleTimeTypes Type, bool Success) Assemble(List<EvalToken> args) {
                 Span<int>           SourceFileIndexBufferSpan   = CollectionsMarshal.AsSpan(Program.SourceFileIndexBuffer);
                 Span<int>           SourceFileLineBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
                 Span<int>           SourceFileStepBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
                 
-                var                                                     CollectiveContext = "";
+                var                                                     Representation = "";
                 (string ctx, int StringIndex, int StringLength)         ActiveToken;
                 List<(string token, int StringIndex, int StringLength)> DefineResolveBuffer = [];
 
-                var BasicRegexTokens = new global::System.Memory<string>(Program.SourceFileContentBuffer[^1].ToArray());
+                var BasicRegexTokens = new Memory<string>(Program.SourceFileContentBuffer[^1].ToArray());
 
                 var StringIndex = 0;
-                var TokenIndex  = 0;
+                var TokenIndex  = SourceFileIndexBufferSpan[^1];
                 
                 (List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, int Finish, bool Success, bool Continue) lexer_resp; 
                 (List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> result, bool Success, bool Unevaluable)                                              evaluate_resp;
@@ -754,214 +595,23 @@ namespace UHLA {
                         // parse as directive
                         Step();
 
+                        var cActiveToken         = ActiveToken;
+                        var cStringIndex         = StringIndex;
+                        var cTokenIndex          = TokenIndex;
+                        var cDefineResolveBuffer = new List<(string ctx, int StringIndex, int StringLength)>(DefineResolveBuffer);
+                        var cRepresentation      = Representation;
+                        
                         switch (ActiveToken.ctx) {
-                            // directives
-                            
-                            case "pragma":
-                                seek_no_whitespace();
-                                switch (ActiveToken.ctx) {
-                                    case "push":
-                                        seek_no_whitespace();
-                                        switch (ActiveToken.ctx) {
-                                            case "illegal":
-                                            case "cpu":
-                                            case "gpr":
-                                            case "memory":    
-                                                break;
-                                            
-                                            default:
-                                                // error malformed pragma
-                                                return default;
-                                        }
-
-                                        var pragma = ActiveToken.ctx;
-                                        
-                                        // lexer parse
-                                        // evaluate parse
-                                        // Add to buffer
-
-                                        var (Tokens, MaxHierarchy, Status) = Lexer(
-                                            Program.SourceFileContentBuffer[^1].ToArray(),
-                                            ref SourceFileIndexBufferSpan[^1],
-                                            ref SourceFileLineBufferSpan[^1],
-                                            ref SourceFileStepBufferSpan[^1],
-                                            Program.SourceFileNameBuffer[^1]
-                                        );
-                                        
-                                        continue;
-                                    
-                                    case "pop":
-                                        seek_no_whitespace();
-                                        switch (ActiveToken.ctx) {
-                                            case "illegal": {
-                                                if (Program.PragmaIllegalBuffer.Count == 1) {
-                                                    // unable to pop, stack clear. Stack ends at 1 == Default Settings
-                                                    return default;
-                                                }
-                                                
-                                                Program.PragmaIllegalBuffer .RemoveAt(Program.PragmaIllegalBuffer .Count - 1); 
-                                                break;
-                                            }
-                                            case "cpu":     
-                                                if (Program.PragmaIllegalBuffer.Count == 1) {
-                                                    // unable to pop, stack clear. Stack ends at 1 == Default Settings
-                                                    return default;
-                                                }
-                                                
-                                                Program.PragmaCPUAwareBuffer.RemoveAt(Program.PragmaCPUAwareBuffer.Count - 1); 
-                                                break;
-                                            
-                                            case "gpr":     
-                                                if (Program.PragmaIllegalBuffer.Count == 1) {
-                                                    // unable to pop, stack clear. Stack ends at 1 == Default Settings
-                                                    return default;
-                                                }
-                                                
-                                                Program.PragmaGPRAwareBuffer.RemoveAt(Program.PragmaGPRAwareBuffer.Count - 1); 
-                                                break;
-                                            
-                                            case "memory":                                                  
-                                                if (Program.PragmaIllegalBuffer.Count == 1) {
-                                                    // unable to pop, stack clear. Stack ends at 1 == Default Settings
-                                                    return default;
-                                                }
-                                                
-                                                Program.PragmaRAMAwareBuffer.RemoveAt(Program.PragmaRAMAwareBuffer.Count - 1); 
-                                                break;
-                                            default:
-                                                // error malformed pragma
-                                                return default;
-                                        }
-                                        continue;
-                                    
-                                    default:
-                                        // error, pragma follows malfrormed syntax.
-                                        return default;
-                                }
-
-                                break;
-                            
-                            case "assert":
-                                // lexer the rightside
-                                // evaluate the rightside
-                                // if clear : error
-                                break;
+                            // core directives
                             
                             case "include":
-                                var    Binary = false;
-                                var    fp     = string.Empty;
-
-                                Step();
-
-                                if (ActiveToken.ctx[0] is not (' ' or '\t')) {
-                                    // error, malformed include
-                                }
-                                
-                                seek_no_whitespace();
-                                if (ActiveToken.ctx == "bin") {
-                                    if (Binary) {
-                                        // error, binary already set
-                                        return default;
-                                    }
-
-                                    Binary = true;
-                                    seek_no_whitespace();
-                                }
-
-                                ProcessPath();
-                                
-                                if (fp == string.Empty) {
-                                    // error, no lib
-                                    return default;
-                                }
-
-                                if (Binary) {
-                                    // include as anonymous table
-                                } else {
-                                    (fp, var success) = CheckInclude(fp);
-                                    if (!success) {
-                                        // lib does not exist
-                                        return default;
-                                    }
-                                    
-                                    // recurse now
-                                    AddSourceContext(fp);
-                                    Assemble([]);
-                                }
-                                continue;
-
-                                void ProcessPath() {
-                                    if (ActiveToken.ctx[0] == '<') {
-                                        Step();
-                                        fp = LibGetPathFromContext();
-                                        // manual parsing
-                                    } else {
-                                        // else lexer -> evaluate
-                                    }
-                                
-                                    // include from path, (IncludePath)
-
-                                    return;
-                                    
-                                    string LibGetPathFromContext() {
-                                        var fp                    = string.Empty;
-                                        var InitialCharacterCount = 0u;
-
-                                        for (; !CheckLineTerminated(); Step()) {
-                                            fp += ActiveToken;
-                                            switch (ActiveToken.ctx[0]) {
-                                                case '<':
-                                                    InitialCharacterCount++;
-                                                    continue;
-                            
-                                                case '>':
-                                                    if (--InitialCharacterCount == 0) break;
-                                                    continue;
-                            
-                                                default: continue;
-                                            }
-                        
-                                            break;
-                                        }
-
-                                        if (!TryNormalizeSafePath($"{fp}.s", out fp)) {
-                                            // error, malformed path
-                                            return string.Empty;
-                                        }
-
-                                        if (ActiveToken.ctx[0] != '>') {
-                                            // error, malformed lib
-                                            return string.Empty;
-                                        } else {
-                                            return InitialCharacterCount == 0 ? fp : string.Empty;   
-                                        }
-                                    }
-                                }
-                            
-                            case "undef":
-                                seek_no_whitespace();
-                                var resp = Database.GetObjectFromAlias(ActiveToken.ctx, Program.ActiveScopeBuffer[^1],
-                                                              AccessLevels.PUBLIC);
-                                if (resp is null) {
-                                    // error, could not find
-                                    return default;
-                                } else if (resp.type is AssembleTimeTypes.EXP 
-                                                         or AssembleTimeTypes.FEXP
-                                                         or AssembleTimeTypes.CEXP) {
-                                    Program.ActiveScopeBuffer[^1].Remove(ActiveToken.ctx);
-                                } else {
-                                    // target is not define type, cannot undefine.
-                                    return default;
-                                }
+                            case "define": 
+                            case "undefine": 
+                            case "assert":
+                                throw new NotImplementedException();
                                 continue;
                             
-                            case "define":
-                                // special manual parsing
-                                continue;
-                            
-                            case "rom": // evaluate => set rom
-                            case "cpu": // evaluate => set cpu
-                            case "mapper":
+                            /*case "mapper":
                                 if (Header.Mapper != Mappers.UNSPECIFIED) {
                                     // error, cant set mapper twice
                                     return default;
@@ -996,10 +646,27 @@ namespace UHLA {
                             case "ectype":
                             case "miscroms":
                             case "dexpd":    
+                                break;*/
+                            
+                            default:
+                                ActiveToken         = cActiveToken;
+                                StringIndex         = cStringIndex;
+                                TokenIndex          = cTokenIndex;
+                                DefineResolveBuffer = cDefineResolveBuffer;
+                                Representation      = cRepresentation;
                                 break;
                         }
+                        
+                        // if we have reached here, core does not provide a directive for our context
+                       
+                        switch (Program.ArchitectureInterface.CheckDirective(ref args, ref DefineResolveBuffer, ref StringIndex, ref TokenIndex, ref ActiveToken, ref Representation)) {
+                            case InterfaceProtocol.CheckDirectiveStatus.Error:   
+                            case InterfaceProtocol.CheckDirectiveStatus.None:    return default;
+                            case InterfaceProtocol.CheckDirectiveStatus.Success: continue;
 
-                        continue;
+                            default:
+                                throw new ArgumentOutOfRangeException();
+                        }
                     }
 
                     switch (ActiveToken.ctx) {
@@ -1104,7 +771,7 @@ namespace UHLA {
                 void Step(bool regexParse = true) {
                     ActiveToken = default;
                     if (DefineResolveBuffer.Count == 0) {                                                   // si to be mutated ONLY by typed tokens
-                        CollectiveContext += BasicRegexTokens.Span[TokenIndex];
+                        Representation += BasicRegexTokens.Span[TokenIndex];
                         StringIndex       += BasicRegexTokens.Span[TokenIndex].Length;
                     }
 
@@ -2393,6 +2060,33 @@ namespace UHLA {
                         StringIndex += args[i].Length;
 
                         switch (args[i]) {
+                            case "-t":
+                            case "--target":
+                                if (i == args.Length - 1) {
+                                    // error, no target provided
+                                    return default;
+                                }
+
+                                if (Program.Architecture != Architectures.None) {
+                                    // error, architecture has been set already
+                                    return default;
+                                }
+
+                                Program.Architecture = args[++i] switch {
+                                    "nes" or "fds" or "famicom" or "2a03" => Architectures.RICOH_2A03,
+                                    "6502" => Architectures.NMOS_6502,
+                                    "6507" => Architectures.NMOS_6507,
+                                    
+                                    _ => Architectures.None
+                                };
+
+                                if (Program.Architecture == Architectures.None) {
+                                    // error, specified architecture is not supported.
+                                    return default;
+                                }
+                                
+                                break;
+                            
                             case "-i":
                             case "--input":
                                 if (i == args.Length - 1) {
@@ -2499,6 +2193,7 @@ namespace UHLA {
                                         $"""
                                          UHLA 2a03 - GPL V2 Brette Allen 2026
 
+                                         -t | --target       | [arg]     | TODO: WRITE 'SET TARGET' INFO HERE.
                                          -i | --input        | [path]    | {(Language.Language.Connectives[(Program.ActiveLanguage, "Entrypoint Source Assembly File")])}
                                          -o | --output       | [path]    | {(Language.Language.Connectives[(Program.ActiveLanguage, "Output ROM/Disk Binary Output")])}
                                          -h | --help         |           | {(Language.Language.Connectives[(Program.ActiveLanguage, "Display the help string (you did that)")])}
@@ -2585,11 +2280,8 @@ Svenska           ""-l sw""
                                                  The output file argument (-o or --output) should be followed by a path pointing to a file to generate.
                                                  The file name must comply with the limits of your Operating System.
                                                  The directory the output file lives in must also already exist. 
-                                                 If you wish to create an FDS Disk image, you must use the FDS Header variant as using the *.fds file extension
-                                                 will not affect the kind of build produced. 
-
-                                                 UHLA WILL overwrite a file existing with the same name at the output path if found.
-                                                        
+                                                 
+                                                 UHLA will overwrite a file existing with the same name at the output path if found.
                                                  """,                                                             -1, default, null, null);
                                             break;
                                     }
