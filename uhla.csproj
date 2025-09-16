@@ -10,7 +10,7 @@
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <Copyright>GPL V2</Copyright>
     <PackageProjectUrl></PackageProjectUrl>
-    <RepositoryUrl>https://github.com/brette-0/Numinous</RepositoryUrl>
+    <RepositoryUrl>https://github.com/brette-0/uhla</RepositoryUrl>
     <RunWorkingDirectory>$(MSBuildThisFileDirectory)</RunWorkingDirectory>
   </PropertyGroup>
 
@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="boards\" />
+    <Folder Include="Architectures\2a03\boards\" />
     <Folder Include="Properties\" />
   </ItemGroup>
 
