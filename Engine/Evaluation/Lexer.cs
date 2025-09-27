@@ -17,7 +17,8 @@ namespace UHLA.Engine {
             FAIL,
             
             OK,                     // generic success
-            INIT_ANGORI             // use angori math
+            INIT_ANGORI,            // use angori math
+            CLOSE_BLOCK             // close code block :: found terminating '}'
         }
         
         /// <summary>
@@ -193,7 +194,10 @@ namespace UHLA.Engine {
                     case ")": if (SimpleCloseContainer(Operators.CPAREN)) break; return default;
                     case "]": if (SimpleCloseContainer(Operators.CBRACK)) break; return default;
                     case "}":
-                        if (ContainerBuffer.Count == 0) return Success();   // generally means we are terminating a code block
+                        if (ContainerBuffer.Count == 0) {
+                            SourceTokenIndex = LocalSourceTokenIndex; ErrorReportLineNumber = LocalErrorReportLineNumber; ErrorReportStepNumber = LocalErrorReportStepNumber;
+                            return Success(LexerStatuses.CLOSE_BLOCK);
+                        }
                         if (SimpleCloseContainer(Operators.CBRACE))       break; return default;
                         
                     

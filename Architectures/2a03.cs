@@ -2,7 +2,7 @@ using UHLA.Engine;
 using UHLA.InterfaceProtocol;
 
 namespace Architectures {
-    internal class Ricoh_2a03 : NMOS_6502, IArchitecture {
+    internal class Ricoh_2a03 : NMOS_6502  {
         public override bool    IsMnemonic(string mnemonic) {
             throw new NotImplementedException();
         }
@@ -24,6 +24,10 @@ namespace Architectures {
                                             ref string                                              pRepresentation) {
             
             // check 2a03 directives: mapper setup, memory related 
+
+            switch (pActiveToken.ctx) {
+                // nes targets '.mapper' '.pragma illegal push 1'
+            }
             
             throw new NotImplementedException();
             return base.CheckDirective(ref args, ref DefineResolveBuffer, ref pStringIndex, ref pTokenIndex, ref pActiveToken, ref pRepresentation);

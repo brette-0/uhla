@@ -591,82 +591,36 @@ namespace UHLA {
 
                 while (true) {
                     Step();
-                    if (ActiveToken.ctx[0] == '#') {
-                        // parse as directive
-                        Step();
-
-                        var cActiveToken         = ActiveToken;
-                        var cStringIndex         = StringIndex;
-                        var cTokenIndex          = TokenIndex;
-                        var cDefineResolveBuffer = new List<(string ctx, int StringIndex, int StringLength)>(DefineResolveBuffer);
-                        var cRepresentation      = Representation;
-                        
-                        switch (ActiveToken.ctx) {
-                            // core directives
+                    switch (ActiveToken.ctx[0]) {
+                        case '#': {
+                            // parse as directive
+                            Step();
                             
-                            case "include":
-                            case "define": 
-                            case "undefine": 
-                            case "assert":
-                                throw new NotImplementedException();
-                                continue;
+                            switch (ActiveToken.ctx) {
+                                // core directives
                             
-                            /*case "mapper":
-                                if (Header.Mapper != Mappers.UNSPECIFIED) {
-                                    // error, cant set mapper twice
+                                case "include":
+                                case "define": 
+                                case "undefine": 
+                                case "assert":
+                                    throw new NotImplementedException();
+                            
+                                default:
+                                    // error : is not a core provided directive
                                     return default;
-                                }
-                                seek_no_whitespace();
-                                var MapperNumber = ActiveToken.ctx switch {
-                                    "nrom" => 0,
-                                    _ => -1
-                                };
+                            }
 
-                                if (MapperNumber == -1) {
-                                    // evaluate the information
-                                }
-                                
-                                // set up mapper
-                                continue;
-                            
-                            // all below only take numbers, because nomenclature sucks.
-                            case "prgrom":
-                            case "chrrom":
-                            case "mirror":
-                            case "battery":
-                            case "trainer":
-                            case "altnt":
-                            case "console":
-                            case "prgram":
-                            case "chrram":
-                            case "eeprom":
-                            case "chrnvram":
-                            case "vstype":
-                            case "vsppu":
-                            case "ectype":
-                            case "miscroms":
-                            case "dexpd":    
-                                break;*/
-                            
-                            default:
-                                ActiveToken         = cActiveToken;
-                                StringIndex         = cStringIndex;
-                                TokenIndex          = cTokenIndex;
-                                DefineResolveBuffer = cDefineResolveBuffer;
-                                Representation      = cRepresentation;
-                                break;
                         }
-                        
-                        // if we have reached here, core does not provide a directive for our context
-                       
-                        switch (Program.ArchitectureInterface.CheckDirective(ref args, ref DefineResolveBuffer, ref StringIndex, ref TokenIndex, ref ActiveToken, ref Representation)) {
-                            case InterfaceProtocol.CheckDirectiveStatus.Error:   
-                            case InterfaceProtocol.CheckDirectiveStatus.None:    return default;
-                            case InterfaceProtocol.CheckDirectiveStatus.Success: continue;
 
-                            default:
-                                throw new ArgumentOutOfRangeException();
-                        }
+                        case '.':
+                            switch (Program.ArchitectureInterface.CheckDirective(ref args, ref DefineResolveBuffer, ref StringIndex, ref TokenIndex, ref ActiveToken, ref Representation)) {
+                                case InterfaceProtocol.CheckDirectiveStatus.Error:   
+                                case InterfaceProtocol.CheckDirectiveStatus.None:    return default;    // error, not architecture provided :: pass back
+                                case InterfaceProtocol.CheckDirectiveStatus.Success: continue;
+
+                                default:
+                                    throw new ArgumentOutOfRangeException();
+                            }
                     }
 
                     switch (ActiveToken.ctx) {
@@ -691,20 +645,10 @@ namespace UHLA {
                             // bank declare, top level only
                         case "proc":
                             // proc declare, second level only.
-                        case "interrupt":
-                            // interrupt handler declare, second level only
-                        case "nmi":
-                            // interupt => nmi (if nmi isn't parameterised already), second level only
-                        case "irq":
-                            // interupt => irq (if irq isn't parameterised already), second level only
-                        case "reset":
-                            // interupt => reset (if reset isn't parameterised already), second level only
                         case "table" :
                             // typeless table declare, just raw const rodata here.
-                        
                         case "const":
                             // const int, const string etc..
-                        
                         case "void":
                             // void foo(args)
                         case "int":
