@@ -13,7 +13,7 @@ Supporting over 20 languages, anyone can easily get started on their Windows, Li
 
 ### Extensions:
 - [Jetbrains Rider]()
--[Visual Studio]()
+- [Visual Studio]()
 - [Visual Studio Code]()
 
 ### Documents:
