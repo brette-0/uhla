@@ -72,10 +72,11 @@ namespace UHLA {
 
     namespace Engine {
         internal class ObjectToken {
-            internal ObjectToken (object pData, AssembleTimeTypes pType, AccessLevels pLevel) {
+            internal ObjectToken (object pData, AssembleTimeTypes pType, AccessLevels pLevel, bool pDefined = true) {
                 data         = pData;
                 type         = pType;
                 level        = pLevel;
+                defined      = pDefined;
             }
             
             /// <summary>
@@ -83,10 +84,26 @@ namespace UHLA {
             /// </summary>
             /// <param name="pOT">Token to be cloned</param>
             internal ObjectToken(ObjectToken pOT) {
-                data  = Engine.Clone((Dictionary<string, ObjectToken>)pOT.data);    // recursively clone contents
-                data  = pOT.data;
-                type  = pOT.type;
-                level = pOT.level;
+                data    = Engine.Clone((Dictionary<string, ObjectToken>)pOT.data);    // recursively clone contents
+                type    = pOT.type;
+                level   = pOT.level;
+                defined = pOT.defined;
+            }
+
+            /// <summary>
+            /// 'undefined' constructor.
+            /// </summary>
+            /// <param name="ctx"></param>
+            /// <param name="pType"></param>
+            /// <param name="pLevel"></param>
+            internal ObjectToken((List<HierarchyTokens_t>? Tokens, int MaxHierarchy, string Representation) ctx, AccessLevels pLevel, AssembleTimeTypes pType = AssembleTimeTypes.UNDEFINED) {
+                data = new Dictionary<string, ObjectToken>{
+                    {string.Empty, new ObjectToken(ctx, AssembleTimeTypes.UNDEFINED, AccessLevels.PRIVATE)},
+                    {"dependants", new ObjectToken(new List<ObjectToken>(), AssembleTimeTypes.UNDEFINED, AccessLevels.PRIVATE)}
+                };
+                type    = pType;
+                level   = pLevel;
+                defined = false;
             }
 
             internal ObjectToken? GetMember(string name, AccessLevels pLevel) {
@@ -96,9 +113,10 @@ namespace UHLA {
                 return ctx is null || (byte)pLevel < (byte)ctx.level ? ctx : null;
             }
             
-            internal  object           data;  // contains members
-            internal AssembleTimeTypes type;  // type of object
-            internal AccessLevels      level; // access level
+            internal object            data;    // contains members
+            internal AssembleTimeTypes type;    // type of object
+            internal AccessLevels      level;   // access level
+            internal bool              defined; // is defined or not
         }
         
         internal class EvalToken {
@@ -242,6 +260,7 @@ namespace UHLA {
             NONE = 255
         }
 
+        [Flags]
         internal enum AssembleTimeTypes : byte {
             INT,    // assemble time integer
             STRING, // assemble time string
@@ -291,6 +310,7 @@ namespace UHLA {
             TUPLE,   // elems = List<Object>    types = List<AssembleTimeTypes>
             
             OPERATOR,  // for unresolved but declared expressions
+            UNDEFINED,
         }
 
         internal enum AccessLevels : byte {
@@ -651,6 +671,8 @@ namespace UHLA {
                             // const int, const string etc..
                         case "void":
                             // void foo(args)
+                        case "macro":
+                            // macro foo {code; return}
                         case "int":
                             // int foo = 5 OR int foo(args)
                         case "string":    
@@ -2564,6 +2586,51 @@ Svenska           ""-l sw""
             /// Database methods
             /// </summary>
             internal static class Database {
+
+                internal static bool ProvideDefinition(ref ObjectToken ctx, ObjectToken New) {
+                    List<ObjectToken> Dependants;
+                    
+                    if (ctx.defined) {
+                        if (ctx.type == New.type || (ctx.type | AssembleTimeTypes.CONSTANT) == New.type) {
+                            if (New.level < ctx.level) ctx.level = New.level;
+                            
+                            // definition is revocable
+                            ctx.defined = New.defined;
+                            ctx.data    = Clone(New.data);
+                        } else {
+                            // error : can't change type
+                            return false;
+                        }
+                    } else {
+                        var resp = ctx.GetMember("dependants", default);
+                        if (resp is null) {
+                            // malformed
+                            throw new Exception();
+                        }
+
+                        Dependants = Clone((List<ObjectToken>)resp.data);
+                        
+                        ctx.type  = New.type;
+                        if (New.level < ctx.level) ctx.level = New.level;
+                        ctx.data    = Clone(New.data); // fix cloning
+                        ctx.defined = New.defined;
+
+                        foreach (var dependant in Dependants) {
+                            if (dependant.defined) {
+                                // dependants may have since defined themselves.
+                                // pedantic warning
+                                continue;
+                            }
+                            
+                            // prompt to attempt to evaluate
+                            
+                        }
+                    }
+
+                    return true;
+                }
+                
+                
                 /// <summary>
                 /// Get without specifying target scope.
                 /// 

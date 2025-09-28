@@ -35,12 +35,12 @@ namespace UHLA.Engine {
         /// <param name="ErrorReportStepNumber">The count of instructions that have passed on this line + 1</param>
         /// <param name="SourceFilePath">The file path we obtained the source content from, for debugging information.</param>
         /// <returns></returns>
-        internal static (List<HierarchyTokens> Tokens, int MaxHierarchy, LexerStatuses Status) Lexer(Memory<string> BasicRegexTokens, ref int SourceTokenIndex, ref int ErrorReportLineNumber, ref int ErrorReportStepNumber, string SourceFilePath, LexerModes LexerMode = LexerModes.STANDARD) {
+        internal static (List<HierarchyTokens_t> Tokens, int MaxHierarchy, LexerStatuses Status) Lexer(Memory<string> BasicRegexTokens, ref int SourceTokenIndex, ref int ErrorReportLineNumber, ref int ErrorReportStepNumber, string SourceFilePath, LexerModes LexerMode = LexerModes.STANDARD) {
             // use BasicRegexTokens => RegexTokens (ref, no cloning?) | Ensures we solve all new defines without mutating the original
             //List<string> RegexTokens = ResolveDefines(BasicRegexTokens);
             var Representation = string.Empty;
 
-            List<HierarchyTokens> Tokens          = [];
+            List<HierarchyTokens_t> Tokens          = [];
             List<Operators>       ContainerBuffer = [];
             List<(string token, int StringIndex, int StringLength)> DefineResolveBuffer = [];
 
@@ -110,7 +110,7 @@ namespace UHLA.Engine {
                             return default;
                         }
 
-                        Tokens.Add(new HierarchyTokens([], 0, string.Empty));
+                        Tokens.Add(new HierarchyTokens_t([], 0, string.Empty));
                     
                         i                 = 0;
                         Representation = Representation[(ActiveToken.StringIndex + ActiveToken.StringLength)..];
@@ -204,7 +204,9 @@ namespace UHLA.Engine {
                     case ":":
                         if (ContainerBuffer.Count > 0) {
                             if (CloseContainer(Operators.ELSE, Operators.CHECK)) break; return default;
-                        } 
+                        }
+
+                        Step(); // We don't include the colon, it's a lexer flag if anything. If it was typed will still appear in the error report.
                         SourceTokenIndex = LocalSourceTokenIndex; ErrorReportLineNumber = LocalErrorReportLineNumber; ErrorReportStepNumber = LocalErrorReportStepNumber;
                         return Success(LexerStatuses.INIT_ANGORI);
 
@@ -308,7 +310,7 @@ namespace UHLA.Engine {
                 return (args, true);
             }
             
-            (List<HierarchyTokens> Tokens, int MaxHierachy, LexerStatuses Status) Success(LexerStatuses status = LexerStatuses.OK) => (Tokens, MaxHierarchy, status);
+            (List<HierarchyTokens_t> Tokens, int MaxHierachy, LexerStatuses Status) Success(LexerStatuses status = LexerStatuses.OK) => (Tokens, MaxHierarchy, status);
             
             void Step(bool regexParse = true) {
                 ActiveToken = default;
@@ -405,7 +407,7 @@ namespace UHLA.Engine {
             void SimpleAddOperator(Operators Operator) => AddOperator(Operator, 1);
 
             void ComplexOpenContainer(int sl, Operators Operator) {
-                Tokens.Add(new HierarchyTokens([], 0, string.Empty));
+                Tokens.Add(new HierarchyTokens_t([], 0, string.Empty));
                 ContainerBuffer.Add(Operator);                                  // register container type
 
                 AddOperator(Operator, sl);
@@ -446,7 +448,7 @@ namespace UHLA.Engine {
                     return false;
                 }
 
-                Tokens.Add(new HierarchyTokens([], 0, string.Empty));
+                Tokens.Add(new HierarchyTokens_t([], 0, string.Empty));
                 ContainerBuffer.RemoveAt(ContainerBuffer.Count - 1);
 
                 return true;
