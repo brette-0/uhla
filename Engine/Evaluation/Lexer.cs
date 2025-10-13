@@ -387,9 +387,9 @@ namespace UHLA.Engine {
                     csi - ActiveToken.StringIndex,
                     new ObjectToken(
                         new Dictionary<string, ObjectToken>() {
-                           {"self",    new ObjectToken(literalCstring,        AssembleTimeTypes.CSTRING, AccessLevels.PRIVATE) },
-                           {"length",  new ObjectToken(literalCstring.Length, AssembleTimeTypes.CINT,    AccessLevels.PUBLIC) },
-                        },AssembleTimeTypes.CSTRING, AccessLevels.PRIVATE),
+                           {"self",    new ObjectToken(literalCstring,        AssembleTimeTypes.STRING, AccessLevels.PRIVATE) },
+                           {"length",  new ObjectToken(literalCstring.Length, AssembleTimeTypes.INT,    AccessLevels.PUBLIC) },
+                        },AssembleTimeTypes.STRING, AccessLevels.PRIVATE),
                         false
                     ));
 
@@ -465,7 +465,7 @@ namespace UHLA.Engine {
                 do {
                     ctx = Database.GetObjectFromAlias(Resolved[0].token, AccessLevels.PUBLIC);
 
-                    if (ctx is not null && ctx.type == AssembleTimeTypes.CEXP) {
+                    if (ctx is not null && ctx.type == AssembleTimeTypes.EXP) {
                         HadSuccess = true;
                         Resolved.RemoveAt(0);
                         
@@ -474,7 +474,7 @@ namespace UHLA.Engine {
                                                         .ToList());
                     }
 
-                } while (ctx is not null && ctx.type == AssembleTimeTypes.CEXP);
+                } while (ctx is not null && ctx.type == AssembleTimeTypes.EXP);
 
                 return (Resolved, HadSuccess);
             }

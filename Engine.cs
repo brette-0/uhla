@@ -72,11 +72,20 @@ namespace UHLA {
 
     namespace Engine {
         internal class ObjectToken {
-            internal ObjectToken (object pData, AssembleTimeTypes pType, AccessLevels pLevel, bool pDefined = true) {
-                data         = pData;
-                type         = pType;
-                level        = pLevel;
-                defined      = pDefined;
+            [Flags]
+            internal enum ObjectTokenFlags : byte {
+                declared = 0x01,
+                defined  = 0x02,
+                constant = 0x04
+            }
+            
+            
+            internal ObjectToken (object pData, AssembleTimeTypes pType, AccessLevels pLevel, bool pDefined = true, bool pConstant = false) {
+                data     = pData;
+                type     = pType;
+                level    = pLevel;
+                defined  = pDefined;
+                constant = pConstant;
             }
             
             /// <summary>
@@ -84,10 +93,26 @@ namespace UHLA {
             /// </summary>
             /// <param name="pOT">Token to be cloned</param>
             internal ObjectToken(ObjectToken pOT) {
-                data    = Engine.Clone((Dictionary<string, ObjectToken>)pOT.data);    // recursively clone contents
-                type    = pOT.type;
-                level   = pOT.level;
-                defined = pOT.defined;
+                data     = Engine.Clone((Dictionary<string, ObjectToken>)pOT.data);    // recursively clone contents
+                type     = pOT.type > type ? pOT.type : type;
+                level    = pOT.level;
+                defined  = pOT.defined;
+                constant = pOT.constant;
+
+                if (!defined) {
+                    var members = (Dictionary<string, ObjectToken>)data;
+                    #if DEBUG
+                    if (!members.Remove(Engine.dependants)) {
+                        // error, should have dependants key if undefined
+                        throw new Exception("error, should have dependants key if undefined");
+                    }
+                    #else
+                    members.Remove(Engine.dependants);
+                    #endif
+                    
+                    members = (Dictionary<string, ObjectToken>)pOT.data;
+                    members.Add("this", this);  // entirely broken!! TODO: immediate fix required!
+                }
             }
 
             /// <summary>
@@ -99,11 +124,12 @@ namespace UHLA {
             internal ObjectToken((List<HierarchyTokens_t>? Tokens, int MaxHierarchy, string Representation) ctx, AccessLevels pLevel, AssembleTimeTypes pType = AssembleTimeTypes.UNDEFINED) {
                 data = new Dictionary<string, ObjectToken>{
                     {string.Empty, new ObjectToken(ctx, AssembleTimeTypes.UNDEFINED, AccessLevels.PRIVATE)},
-                    {"dependants", new ObjectToken(new List<ObjectToken>(), AssembleTimeTypes.UNDEFINED, AccessLevels.PRIVATE)}
+                    {Engine.dependants, new ObjectToken(new List<ObjectToken>(), AssembleTimeTypes.UNDEFINED, AccessLevels.PRIVATE)}
                 };
-                type    = pType;
-                level   = pLevel;
-                defined = false;
+                type     = pType;
+                level    = pLevel;
+                defined  = false;
+                constant = false;
             }
 
             internal ObjectToken? GetMember(string name, AccessLevels pLevel) {
@@ -112,11 +138,26 @@ namespace UHLA {
 
                 return ctx is null || (byte)pLevel < (byte)ctx.level ? ctx : null;
             }
+
+            internal bool constant {
+                get => flags.HasFlag(ObjectTokenFlags.constant);
+                set => flags |= value ? ObjectTokenFlags.constant : 0;
+            }
+
+            internal bool defined {
+                get => flags.HasFlag(ObjectTokenFlags.defined);
+                set => flags |= value ? ObjectTokenFlags.defined : 0;
+            }
             
-            internal object            data;    // contains members
-            internal AssembleTimeTypes type;    // type of object
-            internal AccessLevels      level;   // access level
-            internal bool              defined; // is defined or not
+            internal bool declared {
+                get => flags.HasFlag(ObjectTokenFlags.declared);
+                set => flags |= value ? ObjectTokenFlags.declared : 0;
+            }
+
+            internal AccessLevels      level;
+            private ObjectTokenFlags   flags;
+            internal object            data; // contains members
+            internal AssembleTimeTypes type; // type of object
         }
         
         internal class EvalToken {
@@ -262,6 +303,7 @@ namespace UHLA {
 
         [Flags]
         internal enum AssembleTimeTypes : byte {
+            UNDEFINED,  // default
             INT,    // assemble time integer
             STRING, // assemble time string
             
@@ -274,23 +316,8 @@ namespace UHLA {
             BANK,  // Bank
             EXP,   // Expression
 
-            OBJECT,  // The Boxed 'AnyType' such as long as its not constant      | Cast Exclusive Type
-            
-            CONSTANT = 0x040,
+            OBJECT, // The Boxed 'AnyType' such as long as its not constant      | Cast Exclusive Type
 
-            CINT = CONSTANT, // Constant int
-            CSTRING,         // Constant string
-            
-            CSCOPE,  // Constant Scope reference
-            CRT,     // Constant runtime reference
-            CREG,    // Constant register reference
-            CFLAG,   // Constant flag reference
-            CPROC,   // Constant procedure reference
-            CINTER,  // Constant interrupt reference
-            CBANK,   // Constant bank reference
-            CEXP,    // Constant Expression
-            COBJECT, // The Boxed 'AnyType' clearing object reference from object, or a constant object      | Cast Exclusive Type
-            
             FEXP,    // Functional Expression
 
             IRWN,  // Indexing Register with N             foo[i + 2] situations
@@ -310,8 +337,7 @@ namespace UHLA {
             TUPLE,   // elems = List<Object>    types = List<AssembleTimeTypes>
             
             OPERATOR,  // for unresolved but declared expressions
-            UNDEFINED,
-        }
+            }
 
         internal enum AccessLevels : byte {
             PUBLIC  = 0,
@@ -343,6 +369,10 @@ namespace UHLA {
         }
         
         internal static partial class Engine {
+            internal const string dependants = "dependants";
+            
+            
+            
             internal static bool Permits(RunTimeVariableFilterType filter, RunTimeVariableType variable) =>
                        filter.size   == null || filter.size   == variable.size   &&
                        filter.endian == null || filter.endian == variable.endian &&
@@ -697,7 +727,7 @@ namespace UHLA {
                                 // error : not a deletable type
                             }
 
-                            if (!resp.type.HasFlag(AssembleTimeTypes.CONSTANT)) {
+                            if (!resp.constant) {
                                 // error : cannot delete constant objects :: TODO: drop them a link to the wiki explaining the backwards definition mutation problem
                                 return default;
                             }
@@ -768,7 +798,7 @@ namespace UHLA {
                     do {
                         ctx = Database.GetObjectFromAlias(Resolved[0].token, AccessLevels.PUBLIC);
 
-                        if (ctx is not null && ctx.type == AssembleTimeTypes.CEXP) {
+                        if (ctx is not null && ctx.type == AssembleTimeTypes.EXP) {
                             HadSuccess = true;
                             Resolved.RemoveAt(0);
                         
@@ -777,7 +807,7 @@ namespace UHLA {
                                                    .ToList());
                         }
 
-                    } while (ctx is not null && ctx.type == AssembleTimeTypes.CEXP);
+                    } while (ctx is not null && ctx.type == AssembleTimeTypes.EXP);
 
                     return (Resolved, HadSuccess);
                 }
@@ -2587,46 +2617,17 @@ Svenska           ""-l sw""
             /// </summary>
             internal static class Database {
 
-                internal static bool ProvideDefinition(ref ObjectToken ctx, ObjectToken New) {
-                    List<ObjectToken> Dependants;
-                    
+                /// <summary>
+                /// origin of pROM 'pointer ROM' must be from rodata allocation
+                /// </summary>
+                /// <param name="ctx"></param>
+                /// <param name="pROM"></param>
+                internal static bool LazilyDefineConstant(ref ObjectToken ctx, int pROM) {
                     if (ctx.defined) {
-                        if (ctx.type == New.type || (ctx.type | AssembleTimeTypes.CONSTANT) == New.type) {
-                            if (New.level < ctx.level) ctx.level = New.level;
-                            
-                            // definition is revocable
-                            ctx.defined = New.defined;
-                            ctx.data    = Clone(New.data);
-                        } else {
-                            // error : can't change type
-                            return false;
-                        }
-                    } else {
-                        var resp = ctx.GetMember("dependants", default);
-                        if (resp is null) {
-                            // malformed
-                            throw new Exception();
-                        }
-
-                        Dependants = Clone((List<ObjectToken>)resp.data);
-                        
-                        ctx.type  = New.type;
-                        if (New.level < ctx.level) ctx.level = New.level;
-                        ctx.data    = Clone(New.data); // fix cloning
-                        ctx.defined = New.defined;
-
-                        foreach (var dependant in Dependants) {
-                            if (dependant.defined) {
-                                // dependants may have since defined themselves.
-                                // pedantic warning
-                                continue;
-                            }
-                            
-                            // prompt to attempt to evaluate
-                            
-                        }
+                        // error, already defined
+                        return false;
                     }
-
+                    ctx.GetMember(string.Empty, default)!.data = pROM;
                     return true;
                 }
                 
