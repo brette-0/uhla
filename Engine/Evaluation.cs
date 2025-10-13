@@ -7,7 +7,38 @@ namespace UHLA.Engine {
             Hierarchy      = pHierachy;
             Representation = pRepresentation;
         }
-    
+
+        /// <summary>
+        /// Converts all members within a hierarchy into a tuple object.
+        ///
+        /// TODO: Check ref/weak/copy philosophy
+        /// TODO: Ensure UNDEFINED porting
+        /// 
+        /// </summary>
+        /// <param name="index"></param>
+        internal EvalToken ToTuple() {
+            Dictionary<string, EvalToken> Mapping = [];
+            for (var i = 0; i < Mapping.Count; i++) {
+                #if DEBUG
+                if (DeltaTokens[i].Count > 0) {
+                    // error, cannot Tuplicate this!
+                    throw new Exception("Cannot Tuplicate this!");
+                }
+                #endif
+                Mapping[$"{i}"] = DeltaTokens[i][0];
+            }
+
+            return new EvalToken(
+                Mapping["0"].StringIndex,
+                Mapping[$"{Mapping.Count - 1}"].StringIndex + Mapping[$"{Mapping.Count - 1}"].StringLength,
+                new ObjectToken(
+                    Mapping,
+                    AssembleTimeTypes.TUPLE,
+                    AccessLevels.PRIVATE
+                ),
+                false
+            );
+        }
     
         internal List<List<EvalToken>> DeltaTokens;
         internal int                   Hierarchy;
@@ -111,6 +142,58 @@ namespace UHLA.Engine {
                 return default;
             }
         }
+
+        private static (LE_Relationship ctx, EvaluationStatus status) LinearEvaluate(HierarchyTokens_t Tokens) {
+            return default;
+        }
+
+        private static EvalToken? DeltaEvaluate(List<HierarchyTokens_t>? Tokens, int MaxHierarchy, LexerStatuses Status) {
+            while (MaxHierarchy > 0) {
+                var Targets = Tokens.Where(t => t.Hierarchy == MaxHierarchy);
+                foreach (var Target in Targets) {
+                    var (ctx, status) = LinearEvaluate(Target); switch (status) {
+                        case EvaluationStatus.ERROR:            return null; // error pass back
+                        case EvaluationStatus.OK:               break;
+                        case EvaluationStatus.SYMBOL_UNDEFINED: 
+                            // accept 'reshape' return
+                            return null;    // return definition issue
+
+                        default:
+                            throw new ArgumentOutOfRangeException();
+                    }
+
+                    // inject ctx where appropriate
+                    var Offset = Tokens.IndexOf(Target);
+
+                    Tokens[Offset - 1].DeltaTokens[^1].Add((EvalToken)ctx.ctx);
+                    Tokens[Offset - 1].DeltaTokens.AddRange(Tokens[Offset + 1].DeltaTokens);
+                            
+                    Tokens[Offset - 1] = new HierarchyTokens_t() {
+                        DeltaTokens = Tokens[Offset - 1].DeltaTokens,
+                        Hierarchy   = Tokens[Offset - 1].Hierarchy,
+                        Representation = Tokens[Offset - 1].Representation + Tokens[Offset].Representation + Tokens[Offset + 1].Representation
+                    };
+
+                    Tokens.RemoveAt(Offset);
+                    Tokens.RemoveAt(Offset);    // remove at n, and n + 1
+                }
+
+                MaxHierarchy--;
+            }
+
+            return null;
+        }
     }
+    
+    
+    /*
+     *
+     * The Evaluation pipeline requires that:
+     *  - tokens can invoke Delta Evaluate
+     *  - DE requests Database.ProvideDefinition, and Database.Declare
+     *  - LE reshapes to prevent evaluation latency based over-invocation
+     *
+     * 
+     */
 }
 
