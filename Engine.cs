@@ -1,15 +1,19 @@
-﻿using System;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
-using UHLA.Language;
 using Tomlyn;
+
 using UHLA.Engine;
 
 namespace UHLA {
     namespace InterfaceProtocol {
         internal interface IArchitecture {
+
+            bool MemoryReserve(ref RunTimeVariableType ctx);
+            bool MemoryFree(ref RunTimeVariableType ctx);
+            
+            
             /// <summary>
             /// Returns 'true' is the string represents a mnemonic for the target architecture.
             /// This includes implicits, synthetics and illegals. 
@@ -31,7 +35,7 @@ namespace UHLA {
             /// Returns the index of the problematic component or null if completely successful.
             /// </summary>
             /// <param name="mnemonic">The instruction attempting to encode</param>
-            /// <param name="modifiers">The context that modified the encoding</param>
+            /// <param name="args">The context that modified the encoding</param>
             /// <returns></returns>
             int? TryCompleteInstruction(string mnemonic, ref List<EvalToken> args);
 
@@ -74,9 +78,8 @@ namespace UHLA {
         internal class ObjectToken {
             [Flags]
             internal enum ObjectTokenFlags : byte {
-                declared = 0x01,
-                defined  = 0x02,
-                constant = 0x04
+                defined  = 0x01,
+                constant = 0x02
             }
             
             
@@ -147,11 +150,6 @@ namespace UHLA {
             internal bool defined {
                 get => flags.HasFlag(ObjectTokenFlags.defined);
                 set => flags |= value ? ObjectTokenFlags.defined : 0;
-            }
-            
-            internal bool declared {
-                get => flags.HasFlag(ObjectTokenFlags.declared);
-                set => flags |= value ? ObjectTokenFlags.declared : 0;
             }
 
             internal AccessLevels      level;
@@ -344,13 +342,14 @@ namespace UHLA {
             PRIVATE = 1
         }
 
-        internal struct RunTimeVariableFilterType {
+        // TODO: create constructors for all structs
+        internal record struct RunTimeVariableFilterType {
             internal uint? size;
             internal bool? signed;
             internal bool? endian;
         }
-
-        internal struct RunTimeVariableType {
+        
+        internal record struct RunTimeVariableType {
             internal uint size;   // in bytes
             internal bool signed; // false => unsigned
             internal bool endian; // false => little
@@ -663,7 +662,7 @@ namespace UHLA {
                         }
 
                         case '.':
-                            switch (Program.ArchitectureInterface.CheckDirective(ref args, ref DefineResolveBuffer, ref StringIndex, ref TokenIndex, ref ActiveToken, ref Representation)) {
+                            switch (Program.Architecture.CheckDirective(ref args, ref DefineResolveBuffer, ref StringIndex, ref TokenIndex, ref ActiveToken, ref Representation)) {
                                 case InterfaceProtocol.CheckDirectiveStatus.Error:   
                                 case InterfaceProtocol.CheckDirectiveStatus.None:    return default;    // error, not architecture provided :: pass back
                                 case InterfaceProtocol.CheckDirectiveStatus.Success: continue;
@@ -2046,12 +2045,12 @@ namespace UHLA {
                                     return default;
                                 }
 
-                                if (Program.Architecture != Architectures.None) {
+                                if (Program.EArchitecture != Architectures.None) {
                                     // error, architecture has been set already
                                     return default;
                                 }
 
-                                Program.Architecture = args[++i] switch {
+                                Program.EArchitecture = args[++i] switch {
                                     "nes" or "fds" or "famicom" or "2a03" => Architectures.RICOH_2A03,
                                     "6502" => Architectures.NMOS_6502,
                                     "6507" => Architectures.NMOS_6507,
@@ -2059,7 +2058,7 @@ namespace UHLA {
                                     _ => Architectures.None
                                 };
 
-                                if (Program.Architecture == Architectures.None) {
+                                if (Program.EArchitecture == Architectures.None) {
                                     // error, specified architecture is not supported.
                                     return default;
                                 }
@@ -2459,7 +2458,7 @@ Svenska           ""-l sw""
                     public DefaultsBlock Defaults { get; set; } = new();
                 }
 
-                internal struct ErrorContext {
+                internal record struct ErrorContext {
                     internal ErrorLevels    ErrorLevel;
                     internal ErrorTypes     ErrorType;
                     internal DecodingPhases DecodingPhase;
@@ -2616,22 +2615,6 @@ Svenska           ""-l sw""
             /// Database methods
             /// </summary>
             internal static class Database {
-
-                /// <summary>
-                /// origin of pROM 'pointer ROM' must be from rodata allocation
-                /// </summary>
-                /// <param name="ctx"></param>
-                /// <param name="pROM"></param>
-                internal static bool LazilyDefineConstant(ref ObjectToken ctx, int pROM) {
-                    if (ctx.defined) {
-                        // error, already defined
-                        return false;
-                    }
-                    ctx.GetMember(string.Empty, default)!.data = pROM;
-                    return true;
-                }
-                
-                
                 /// <summary>
                 /// Get without specifying target scope.
                 /// 
@@ -2676,6 +2659,130 @@ Svenska           ""-l sw""
                     }
 
                     return default;
+                }
+
+
+                /// <summary>
+                /// Declare member responds to code like 'u8 foo' or 'int bar' or 'const string ash'
+                /// it creates an ObjectToken for the member with total emptiness on the stack
+                ///     definition will provide it the value it needs
+                /// </summary>
+                /// <param name="alias">name of the object token</param>
+                /// <param name="type">the type of the object token</param>
+                /// <param name="constant">its 'constant-ness'</param>
+                /// <returns></returns>
+                internal static bool DeclareScriptingOrReadOnlyMember(string alias, AssembleTimeTypes type, bool constant = false) {
+                    if (Program.ActiveScopeBuffer[^1].ContainsKey(alias)) {
+                        // error, already declared member
+                        return false;
+                    }
+                    
+                    Program.ActiveScopeBuffer[^1].Add(alias, new ObjectToken(
+                        new Dictionary<string, ObjectToken>(),
+                        type,
+                        AccessLevels.PUBLIC,
+                        false,
+                        constant
+                    ));
+                    
+                    return true;
+                }
+
+                internal static bool DeclareRuntimeVariable(string alias, RunTimeVariableType rtv) {
+                    if (Program.ActiveScopeBuffer[^1].ContainsKey(alias)) {
+                        // error, already declared member
+                        return false;
+                    }
+
+                    if (!Program.Architecture.MemoryReserve(ref rtv)) {
+                        // pass back error
+                        return false;
+                    }
+                    
+                    Program.ActiveScopeBuffer[^1].Add(alias, new ObjectToken(
+                        new Dictionary<string, ObjectToken>() {
+                            {string.Empty, new ObjectToken(rtv, default, default)}
+                        },
+                        AssembleTimeTypes.RT,
+                        AccessLevels.PUBLIC,
+                        false,
+                        false
+                    ));
+                    
+                    return true;   
+                }
+
+                /// <summary>
+                /// Invoked from 'del foo'
+                /// </summary>
+                /// <param name="alias"></param>
+                /// <param name="access"></param>
+                /// <returns></returns>
+                internal static bool DeleteMember(string alias, AccessLevels access) {
+                    var ctx = GetObjectFromAlias(alias, access);
+                    if (ctx is null) {
+                        // error, does not exist
+                        return false;
+                    }
+
+                    if (ctx.type is AssembleTimeTypes.RT) {
+                        // return based on Memory.Remove?
+                        var rtv = (RunTimeVariableType)ctx.GetMember(string.Empty, default)!.data;
+                        Program.Architecture.MemoryFree(ref rtv);
+                    } else {
+                        Program.ActiveScopeBuffer[^1].Remove(alias);
+                    }
+
+                    return true;
+                }
+                
+                /// <summary>
+                /// filter for accepting new definitions
+                ///     even natives require a target of an object type
+                ///     constants cannot be defined if already defined
+                /// </summary>
+                /// <param name="ctx"></param>
+                /// <param name="tar"></param>
+                /// <returns></returns>
+                internal static bool ProvideDefinition(ref ObjectToken ctx, ref ObjectToken tar) {
+                    if (ctx.constant) {
+                        if (ctx.defined) {
+                            // error, cannot redefine
+                            return false;
+                        }
+
+                        // if ctx is declared lazily-defined constant, target must be undefined unless runtime located
+                        if (tar.defined) {
+                            var rt_ptr = tar.GetMember("rt_ptr", default);
+                            if (rt_ptr is null) {
+                                // target is not a runtime member but is defined, we forbid this code practice
+                                return false;
+                            }
+
+                            // never declared as a const int with runtime pointer component
+                            if (ctx.type is AssembleTimeTypes.UNDEFINED) {
+                                ctx = new(tar);         // this is our definition for this member
+                            } else if (ctx is {type: AssembleTimeTypes.INT, constant: true, defined: false}){
+                                
+                            }
+                        } else {
+                            ctx = new(tar);
+                        }
+                    }
+                    
+                    
+                    if (ctx is {constant: true, defined: true}) {
+                        // error, cannot redefine
+                        return false;
+                    }
+
+                    if (tar.type != ctx.type) {
+                        // error, type mismatch
+                        return false;
+                    }
+
+                    ctx = new(tar);                 // weak clone allocation
+                    return true;
                 }
             }
 

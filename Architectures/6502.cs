@@ -4,6 +4,16 @@ using UHLA.InterfaceProtocol;
 
 namespace Architectures {
     internal class NMOS_6502 : IArchitecture {
+        
+        // TODO: The memory instructions for 6502 either don't care ever or ask for a 'map file' for memory
+        
+        public bool MemoryReserve(ref RunTimeVariableType ctx) {
+            throw new NotImplementedException();
+        }
+        public bool MemoryFree(ref    RunTimeVariableType ctx) {
+            throw new NotImplementedException();
+        }
+
         public virtual bool    IsMnemonic(string mnemonic) {
             throw new NotImplementedException();
         }
@@ -49,6 +59,8 @@ namespace Architectures {
             var DefineResolveBuffer = new List<(string token, int StringIndex, int StringLength)>(pStringIndex);
 
             throw new NotImplementedException();
+            
+            // add a 'set ram offset' and 'set rom offset' pragmas
             return success;
 
             void Step(bool regexParse = true) {
