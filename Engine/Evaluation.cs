@@ -1,7 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 
 namespace UHLA.Engine {
-    internal struct HierarchyTokens_t {
+    internal record struct HierarchyTokens_t {
         internal HierarchyTokens_t(List<List<EvalToken>> pDeltaTokens, int pHierachy, string pRepresentation) {
             DeltaTokens    = pDeltaTokens;
             Hierarchy      = pHierachy;
@@ -48,7 +48,7 @@ namespace UHLA.Engine {
     /// <summary>
     /// Handed back from LE, might be a request for more context, term collection or an EvalToken 
     /// </summary>
-    internal struct LE_Relationship {
+    internal record struct LE_Relationship {
         internal object            ctx;
         internal AssembleTimeTypes type;
     }
@@ -119,8 +119,8 @@ namespace UHLA.Engine {
                             Tokens[Offset - 1].DeltaTokens.AddRange(Tokens[Offset + 1].DeltaTokens);
                             
                             Tokens[Offset - 1] = new HierarchyTokens_t() {
-                                DeltaTokens = Tokens[Offset - 1].DeltaTokens,
-                                Hierarchy   = Tokens[Offset - 1].Hierarchy,
+                                DeltaTokens    = Tokens[Offset - 1].DeltaTokens,
+                                Hierarchy      = Tokens[Offset - 1].Hierarchy,
                                 Representation = Tokens[Offset - 1].Representation + Tokens[Offset].Representation + Tokens[Offset + 1].Representation
                             };
 
@@ -143,6 +143,13 @@ namespace UHLA.Engine {
             }
         }
 
+        /// <summary>
+        /// LE must replace invocations with constant copy-of object result in-place, replace non-constant object
+        /// references with temporary const byval clone. Use of undeclared objects are declared as const int and tested
+        /// for compatibility for selected paths.
+        /// </summary>
+        /// <param name="Tokens"></param>
+        /// <returns></returns>
         private static (LE_Relationship ctx, EvaluationStatus status) LinearEvaluate(HierarchyTokens_t Tokens) {
             return default;
         }

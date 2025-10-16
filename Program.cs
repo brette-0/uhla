@@ -97,7 +97,7 @@ internal static class Program {
         ActiveScopeBuffer.Add(LabelDataBase);   // add rs to 'as', default rs
         ObjectSearchBuffer = [LabelDataBase];   // by default, contains nothing more than this. For each search AS[^1] is added
 
-        ArchitectureInterface = Architecture switch {
+        Architecture = EArchitecture switch {
             UHLA.Architectures.NMOS_6502  => new NMOS_6502(),
             UHLA.Architectures.NMOS_6507  => throw new NotImplementedException(),
             UHLA.Architectures.RICOH_2A03 => new Ricoh_2a03(),
@@ -107,7 +107,7 @@ internal static class Program {
             _                       => throw new NotImplementedException()
         };
 
-        ArchitectureInterface.Initalize();
+        Architecture.Initalize();
         Assemble([]);
         
         return 0;
@@ -128,6 +128,6 @@ internal static class Program {
     internal static Languages     ActiveLanguage;
     internal static WarningLevels WarningLevel;
 
-    internal static UHLA.Architectures Architecture;
-    internal static UHLA.InterfaceProtocol.IArchitecture      ArchitectureInterface;
+    internal static UHLA.Architectures EArchitecture;
+    internal static UHLA.InterfaceProtocol.IArchitecture      Architecture;
 }
