@@ -220,8 +220,8 @@ namespace UHLA.Engine {
                             ActiveToken.StringIndex,
                             ActiveToken.StringLength,
                             new ObjectToken(new Dictionary<string, ObjectToken> {
-                                { string.Empty, new ObjectToken(ActiveToken.ctx, AssembleTimeTypes.EXP, AccessLevels.PUBLIC) }
-                            }, AssembleTimeTypes.EXP, AccessLevels.PUBLIC),
+                                { "#self", new ObjectToken(ActiveToken.ctx, AssembleTimeTypes.EXP) }
+                            }, AssembleTimeTypes.EXP),
                             false
                         ));
                         LastNonWhiteSpaceIndex = Tokens[^1].DeltaTokens[^1].Count - 1;
@@ -252,7 +252,7 @@ namespace UHLA.Engine {
 
             void CheckProcessFunctionalDefines() {
                 // very object in DB
-                var FEXPQueery = Database.GetObjectFromAlias(ActiveToken.ctx, Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
+                var FEXPQueery = Database.GetObjectFromAlias(ActiveToken.ctx, Program.ActiveScopeBuffer[^1]);
                 if (FEXPQueery is null || FEXPQueery.type != AssembleTimeTypes.FEXP) return;
 
                 // fetch object from DB and capture arguments to invoke it
@@ -387,9 +387,9 @@ namespace UHLA.Engine {
                     csi - ActiveToken.StringIndex,
                     new ObjectToken(
                         new Dictionary<string, ObjectToken>() {
-                           {"self",    new ObjectToken(literalCstring,        AssembleTimeTypes.STRING, AccessLevels.PRIVATE) },
-                           {"length",  new ObjectToken(literalCstring.Length, AssembleTimeTypes.INT,    AccessLevels.PUBLIC) },
-                        },AssembleTimeTypes.STRING, AccessLevels.PRIVATE),
+                           {"self",    new ObjectToken(literalCstring,        AssembleTimeTypes.STRING) },
+                           {"length",  new ObjectToken(literalCstring.Length, AssembleTimeTypes.INT) },
+                        },AssembleTimeTypes.STRING),
                         false
                     ));
 
@@ -400,7 +400,7 @@ namespace UHLA.Engine {
 
             // Tokens[^1] contains tokens per term for last delta. DeltaTokens[^1] is the last term's tokens.
             void AddOperator(Operators Operator, int sl) {
-                Tokens[^1].DeltaTokens[^1].Add(new EvalToken(ActiveToken.StringIndex, sl, new ObjectToken(Operator, AssembleTimeTypes.OPERATOR, AccessLevels.PRIVATE), true));
+                Tokens[^1].DeltaTokens[^1].Add(new EvalToken(ActiveToken.StringIndex, sl, new ObjectToken(Operator, AssembleTimeTypes.OPERATOR), true));
                 LastNonWhiteSpaceIndex = Tokens[^1].DeltaTokens[^1].Count - 1;
             } 
             
@@ -463,13 +463,13 @@ namespace UHLA.Engine {
                 bool                                                       HadSuccess = false;
 
                 do {
-                    ctx = Database.GetObjectFromAlias(Resolved[0].token, AccessLevels.PUBLIC);
+                    ctx = Database.GetObjectFromAlias(Resolved[0].token);
 
                     if (ctx is not null && ctx.type == AssembleTimeTypes.EXP) {
                         HadSuccess = true;
                         Resolved.RemoveAt(0);
                         
-                        Resolved.InsertRange(0, RegexTokenize((string)((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)ctx.data)[""].data)
+                        Resolved.InsertRange(0, RegexTokenize((string)((Dictionary<string, (object data, AssembleTimeTypes type)>)ctx.data)[""].data)
                                                         .Select(token => (token, ActiveToken.StringIndex, token.Length))
                                                         .ToList());
                     }

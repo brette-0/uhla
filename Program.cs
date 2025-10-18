@@ -52,47 +52,47 @@ internal static class Program {
         SourceFileStepBuffer   .Add(0);         // debug step, naturally 0
 
         LabelDataBase["type"] =  new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"",        new ObjectToken(ScopeTypes.Root, AssembleTimeTypes.EXP, AccessLevels.PRIVATE)},
-        }, AssembleTimeTypes.EXP, AccessLevels.PRIVATE);
+            {"",        new ObjectToken(ScopeTypes.Root, AssembleTimeTypes.EXP)},
+        }, AssembleTimeTypes.EXP);
 
         // rs "Root Scope" has itself as key, value and parent - sitting in the root pointing to itself.
         // this is the only way via asm to directly refer to rs. Useful for when you use a 'as' level keyword but desires rs resolve.
         LabelDataBase["rs"] =  new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"",        new ObjectToken(LabelDataBase, AssembleTimeTypes.SCOPE, AccessLevels.PRIVATE)},
-        }, AssembleTimeTypes.SCOPE, AccessLevels.PUBLIC);
+            {"",        new ObjectToken(LabelDataBase, AssembleTimeTypes.SCOPE)},
+        }, AssembleTimeTypes.SCOPE);
 
         // make language a compiler variable
         LabelDataBase["lang"]   = new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"",        new ObjectToken($"\"{ActiveLanguage}\"", AssembleTimeTypes.INT, AccessLevels.PRIVATE)},
-        }, AssembleTimeTypes.STRING, AccessLevels.PUBLIC);
+            {"",        new ObjectToken($"\"{ActiveLanguage}\"", AssembleTimeTypes.INT)},
+        }, AssembleTimeTypes.STRING);
         
         LabelDataBase["ToString"] = new ObjectToken(
-            new Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>() {
-                {"args", (1, AssembleTimeTypes.INT, AccessLevels.PRIVATE)},
-                {"", (GenerateFunctionalDefine("# args", ["args"]), default, default)}
-            }, AssembleTimeTypes.FEXP , AccessLevels.PUBLIC);
+            new Dictionary<string, (object data, AssembleTimeTypes type)>() {
+                {"args", (1, AssembleTimeTypes.INT)},
+                {"", (GenerateFunctionalDefine("# args", ["args"]), default)}
+            }, AssembleTimeTypes.FEXP);
         
         // Functions are just lambdas, 0 refers to arg 0, and so on. They are of type Function returns type of type 'type'
         // The 'self' containing the lambda's type is the return type
         LabelDataBase["typeof"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"",        new ObjectToken((ObjectToken ctx) => new ObjectToken(ctx.type, AssembleTimeTypes.TYPE, AccessLevels.PUBLIC), AssembleTimeTypes.TYPE,    AccessLevels.PRIVATE)},
-            {"ctx",     new ObjectToken(0,                                                                                           AssembleTimeTypes.OBJECT, AccessLevels.PRIVATE) },
+            {"",        new ObjectToken((ObjectToken ctx) => new ObjectToken(ctx.type, AssembleTimeTypes.TYPE), AssembleTimeTypes.TYPE)},
+            {"ctx",     new ObjectToken(0, AssembleTimeTypes.OBJECT) },
             
             // arg num 0 => ctx
             {"0",       new ObjectToken("ctx", default, default)},
             
-            {"args",    new ObjectToken(1, AssembleTimeTypes.INT, AccessLevels.PRIVATE)}
-        }, AssembleTimeTypes.FUNCTION, AccessLevels.PUBLIC);
+            {"args",    new ObjectToken(1, AssembleTimeTypes.INT)}
+        }, AssembleTimeTypes.FUNCTION);
 
         LabelDataBase["exists"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"",        new ObjectToken((string ctx) => Database.GetObjectFromAlias(ctx, AccessLevels.PUBLIC) is null, AssembleTimeTypes.INT, AccessLevels.PRIVATE)},
-            {"ctx",     new ObjectToken(0, AssembleTimeTypes.OBJECT, AccessLevels.PRIVATE) },
+            {"",        new ObjectToken((string ctx) => Database.GetObjectFromAlias(ctx) is null, AssembleTimeTypes.INT)},
+            {"ctx",     new ObjectToken(0, AssembleTimeTypes.OBJECT) },
             
             // arg num 0 => ctx
             {"0",       new ObjectToken("ctx", default, default)},
             
-            {"args",    new ObjectToken(1, AssembleTimeTypes.INT, AccessLevels.PRIVATE)}
-        }, AssembleTimeTypes.FUNCTION, AccessLevels.PUBLIC);
+            {"args",    new ObjectToken(1, AssembleTimeTypes.INT)}
+        }, AssembleTimeTypes.FUNCTION);
 
         ActiveScopeBuffer.Add(LabelDataBase);   // add rs to 'as', default rs
         ObjectSearchBuffer = [LabelDataBase];   // by default, contains nothing more than this. For each search AS[^1] is added

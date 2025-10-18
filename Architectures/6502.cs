@@ -25,19 +25,19 @@ namespace Architectures {
         }
         public virtual void Initalize() {
             Program.LabelDataBase["a"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",         new ObjectToken(UHLA.Engine.System.Registers.A, AssembleTimeTypes.REG, AccessLevels.PRIVATE)},
-                {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.INT, AccessLevels.PUBLIC) }
-            }, AssembleTimeTypes.REG, AccessLevels.PUBLIC);
+                {"",         new ObjectToken(UHLA.Engine.System.Registers.A, AssembleTimeTypes.REG)},
+                {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.INT) }
+            }, AssembleTimeTypes.REG);
 
             Program.LabelDataBase["x"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",         new ObjectToken(UHLA.Engine.System.Registers.X, AssembleTimeTypes.INT, AccessLevels.PRIVATE)},
-                {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.INT, AccessLevels.PUBLIC) }
-            }, AssembleTimeTypes.REG, AccessLevels.PUBLIC);
+                {"",         new ObjectToken(UHLA.Engine.System.Registers.X, AssembleTimeTypes.INT)},
+                {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.INT) }
+            }, AssembleTimeTypes.REG);
 
             Program.LabelDataBase["y"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",         new ObjectToken(UHLA.Engine.System.Registers.Y, AssembleTimeTypes.INT, AccessLevels.PRIVATE)},
-                {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.INT, AccessLevels.PUBLIC) }
-            }, AssembleTimeTypes.REG, AccessLevels.PUBLIC);
+                {"",         new ObjectToken(UHLA.Engine.System.Registers.Y, AssembleTimeTypes.INT)},
+                {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.INT) }
+            }, AssembleTimeTypes.REG);
         }
 
         public virtual CheckDirectiveStatus CheckDirective(ref List<EvalToken> args,
@@ -115,7 +115,7 @@ namespace Architectures {
                 bool         HadSuccess = false;
 
                 do {
-                    ctx = Engine.Database.GetObjectFromAlias(Resolved[0].token, AccessLevels.PUBLIC);
+                    ctx = Engine.Database.GetObjectFromAlias(Resolved[0].token);
 
                     if (ctx is not null && ctx.type == AssembleTimeTypes.EXP) {
                         HadSuccess = true;
@@ -123,8 +123,7 @@ namespace Architectures {
 
                         Resolved.InsertRange(0,
                             Engine.RegexTokenize(
-                                       (string)((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels
-                                           access)>)ctx.data)[""].data)
+                                       (string)((Dictionary<string, (object data, AssembleTimeTypes type)>)ctx.data)[""].data)
                                   .Select(token => (token, ActiveToken.StringIndex, token.Length))
                                   .ToList());
                     }

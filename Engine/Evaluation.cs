@@ -33,8 +33,7 @@ namespace UHLA.Engine {
                 Mapping[$"{Mapping.Count - 1}"].StringIndex + Mapping[$"{Mapping.Count - 1}"].StringLength,
                 new ObjectToken(
                     Mapping,
-                    AssembleTimeTypes.TUPLE,
-                    AccessLevels.PRIVATE
+                    AssembleTimeTypes.TUPLE
                 ),
                 false
             );

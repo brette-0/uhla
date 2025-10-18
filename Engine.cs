@@ -81,16 +81,10 @@ namespace UHLA {
                 defined  = 0x01,
                 constant = 0x02
             }
-
-            internal enum UniqueMembers : ushort {
-                Dependencies = '\x01',
-                Dependants   = '\x02'
-            }
             
-            internal ObjectToken (object pData, AssembleTimeTypes pType, AccessLevels pLevel, bool pDefined = true, bool pConstant = false) {
+            internal ObjectToken (object pData, AssembleTimeTypes pType, bool pDefined = true, bool pConstant = false) {
                 data     = pData;
                 type     = pType;
-                level    = pLevel;
                 defined  = pDefined;
                 constant = pConstant;
             }
@@ -102,19 +96,18 @@ namespace UHLA {
             internal ObjectToken(ObjectToken pOT) {
                 data     = Engine.Clone((Dictionary<string, ObjectToken>)pOT.data);    // recursively clone contents
                 type     = pOT.type > type ? pOT.type : type;
-                level    = pOT.level;
                 defined  = pOT.defined;
                 constant = pOT.constant;
 
                 if (!defined) {
                     var members = (Dictionary<string, ObjectToken>)data;
                     #if DEBUG
-                    if (!members.Remove($"{UniqueMembers.Dependants}")) {
-                        // error, should have dependants key if undefined
+                    if (!members.Remove("#dependants")) {
+                        // error, should have the "dependants" key if undefined
                         throw new Exception("error, should have dependants key if undefined");
                     }
                     #else
-                    members.Remove(Engine.dependants);
+                    members.Remove("#dependants");
                     #endif
                     
                     members = (Dictionary<string, ObjectToken>)pOT.data;
@@ -128,25 +121,19 @@ namespace UHLA {
             /// <param name="ctx"></param>
             /// <param name="pType"></param>
             /// <param name="pLevel"></param>
-            internal ObjectToken((List<HierarchyTokens_t>? Tokens, int MaxHierarchy, string Representation) ctx, AccessLevels pLevel, AssembleTimeTypes pType = AssembleTimeTypes.UNDEFINED) {
+            internal ObjectToken((List<HierarchyTokens_t>? Tokens, int MaxHierarchy, string Representation) ctx, AssembleTimeTypes pType = AssembleTimeTypes.UNDEFINED) {
                 data = new Dictionary<string, ObjectToken>{
-                    {string.Empty, new ObjectToken(ctx, AssembleTimeTypes.UNDEFINED, AccessLevels.PRIVATE)},
-                    {$"{UniqueMembers.Dependants}", new ObjectToken(new List<ObjectToken>(), AssembleTimeTypes.UNDEFINED, AccessLevels.PRIVATE)}
+                    {"#self",       new ObjectToken(ctx, AssembleTimeTypes.UNDEFINED)},
+                    {"#dependants", new ObjectToken(new List<ObjectToken>(), AssembleTimeTypes.UNDEFINED)}
                 };
                 type     = pType;
-                level    = pLevel;
                 defined  = false;
                 constant = false;
             }
 
-            internal ObjectToken? GetMember(string name, AccessLevels pLevel = default) {
-                var obj = (Dictionary<string, ObjectToken>)data;
-                var ctx = obj.GetValueOrDefault(name);
-
-                return ctx is null || (byte)pLevel < (byte)ctx.level ? ctx : null;
-            }
-
-            internal bool GetMember(string name, out ObjectToken? ctx, AccessLevels pLevel = default) {
+            internal ObjectToken? GetMember(string name) => ((Dictionary<string, ObjectToken>)data).GetValueOrDefault(name);
+            
+            internal bool GetMember(string name, out ObjectToken? ctx) {
                 var obj = (Dictionary<string, ObjectToken>)data;
                 ctx = obj.GetValueOrDefault(name);
                 
@@ -162,7 +149,7 @@ namespace UHLA {
                 #endif
 
                 #if DEBUG
-                if (!GetMember($"{UniqueMembers.Dependencies}", out var dependenciesObjectToken)) {
+                if (!GetMember("#dependencies", out var dependenciesObjectToken)) {
                     // error, if undefined should have dependencies
                     return false;
                 }
@@ -174,7 +161,7 @@ namespace UHLA {
                 }
                 
                 #elif RELEASE
-                var dependencies = (List<string>)GetMember($"{UniqueMembers.Dependants}")!.data;
+                var dependencies = (List<string>)GetMember("#dependencies")!.data;
                 dependencies.Remove(dependency);
                 #endif
 
@@ -182,6 +169,8 @@ namespace UHLA {
                     // TODO: make inline
                     AttemptDefinitionResolve();
                 }
+
+                return true;
             }
 
             /// <summary>
@@ -217,7 +206,6 @@ namespace UHLA {
                 set => flags |= value ? ObjectTokenFlags.defined : 0;
             }
 
-            internal AccessLevels      level;
             private ObjectTokenFlags   flags;
             internal object            data; // contains members
             internal AssembleTimeTypes type; // type of object
@@ -248,7 +236,6 @@ namespace UHLA {
             
             internal object            ObjectData  => Data.data;
             internal AssembleTimeTypes ObjectType  => Data.type;
-            internal AccessLevels      ObjectLevel => Data.level;
 
             internal ObjectToken       Data;
             internal int               StringIndex, StringLength; // debugging indexes
@@ -401,11 +388,6 @@ namespace UHLA {
             
             OPERATOR,  // for unresolved but declared expressions
             }
-
-        internal enum AccessLevels : byte {
-            PUBLIC  = 0,
-            PRIVATE = 1
-        }
 
         // TODO: create constructors for all structs
         internal record struct RunTimeVariableFilterType {
@@ -697,7 +679,7 @@ namespace UHLA {
                 var TokenIndex  = SourceFileIndexBufferSpan[^1];
                 
                 (List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, int Finish, bool Success, bool Continue) lexer_resp; 
-                (List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, AccessLevels level, bool IsOperator)> result, bool Success, bool Unevaluable)                                              evaluate_resp;
+                (List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, bool IsOperator)> result, bool Success, bool Unevaluable)                                              evaluate_resp;
 
                 while (true) {
                     Step();
@@ -774,7 +756,7 @@ namespace UHLA {
                         
                         case "del":
                             seek_no_whitespace();
-                            var resp = Database.GetObjectFromAlias(ActiveToken.ctx,  Program.ActiveScopeBuffer[^1], AccessLevels.PUBLIC);
+                            var resp = Database.GetObjectFromAlias(ActiveToken.ctx,  Program.ActiveScopeBuffer[^1]);
                             if (resp is null) {
                                 // error : label does not exist
                                 return default;
@@ -856,13 +838,13 @@ namespace UHLA {
                     bool                                                       HadSuccess = false;
 
                     do {
-                        ctx = Database.GetObjectFromAlias(Resolved[0].token, AccessLevels.PUBLIC);
+                        ctx = Database.GetObjectFromAlias(Resolved[0].token);
 
                         if (ctx is not null && ctx.type == AssembleTimeTypes.EXP) {
                             HadSuccess = true;
                             Resolved.RemoveAt(0);
                         
-                            Resolved.InsertRange(0, RegexTokenize((string)((Dictionary<string, (object data, AssembleTimeTypes type, AccessLevels access)>)ctx.data)[""].data)
+                            Resolved.InsertRange(0, RegexTokenize((string)((Dictionary<string, (object data, AssembleTimeTypes type)>)ctx.data)[""].data)
                                                    .Select(token => (token, ActiveToken.StringIndex, token.Length))
                                                    .ToList());
                         }
@@ -2683,11 +2665,10 @@ Svenska           ""-l sw""
                 /// By default the ObjectSearchBuffer only includes the root scope.
                 /// </summary>
                 /// <param name="Alias"></param>
-                /// <param name="UsedAccessLevel"></param>
                 /// <returns></returns>
-                internal static ObjectToken? GetObjectFromAlias(string Alias, AccessLevels UsedAccessLevel) {
+                internal static ObjectToken? GetObjectFromAlias(string Alias) {
                     List<Dictionary<string, ObjectToken>> LocalObjectSearchBuffer = [Program.ActiveScopeBuffer[^1], .. Program.ObjectSearchBuffer];
-                    return __GetObjectFromAlias(Alias, LocalObjectSearchBuffer, UsedAccessLevel);
+                    return __GetObjectFromAlias(Alias, LocalObjectSearchBuffer);
                 }
                 /// <summary>
                 /// Only check the specified scope, may be used like rs\foo. Note that the scope used to specify will be the result of the other method being used first.
@@ -2695,27 +2676,22 @@ Svenska           ""-l sw""
                 /// </summary>
                 /// <param name="Alias"></param>
                 /// <param name="TargetScope"></param>
-                /// <param name="UsedAccessLevel"></param>
                 /// <returns></returns>
                 /// 
-                internal static ObjectToken? GetObjectFromAlias(string Alias, Dictionary<string, ObjectToken> TargetScope, AccessLevels UsedAccessLevel) => __GetObjectFromAlias(Alias, [TargetScope], UsedAccessLevel);
+                internal static ObjectToken? GetObjectFromAlias(string Alias, Dictionary<string, ObjectToken> TargetScope) => __GetObjectFromAlias(Alias, [TargetScope]);
                 
                 /// <summary>
                 /// Internal function iterating over the LocalObjectSearchPath to find the required context if possible.
                 /// </summary>
                 /// <param name="Alias"></param>
                 /// <param name="LocalObjectSearchBuffer"></param>
-                /// <param name="UsedAccessLevel"></param>
                 /// <returns></returns>
-                private  static ObjectToken? __GetObjectFromAlias(string Alias, List<Dictionary<string, ObjectToken>> LocalObjectSearchBuffer, AccessLevels UsedAccessLevel) {
+                private  static ObjectToken? __GetObjectFromAlias(string Alias, List<Dictionary<string, ObjectToken>> LocalObjectSearchBuffer) {
                     ObjectToken ctx;
                     var (found, error) = (false, false);
                     foreach (var LocalObjectSearchContainer in LocalObjectSearchBuffer) {
                         if (LocalObjectSearchContainer.TryGetValue(Alias, out ctx)) {
-                            if (UsedAccessLevel < ctx.level) {
-                                // error, invalid permissions to access item
-                                return null;
-                            }   return null;
+                            return null;
                         }
                     }
 
@@ -2741,7 +2717,6 @@ Svenska           ""-l sw""
                     Program.ActiveScopeBuffer[^1].Add(alias, new ObjectToken(
                         new Dictionary<string, ObjectToken>(),
                         type,
-                        AccessLevels.PUBLIC,
                         false,
                         constant
                     ));
@@ -2762,10 +2737,9 @@ Svenska           ""-l sw""
                     
                     Program.ActiveScopeBuffer[^1].Add(alias, new ObjectToken(
                         new Dictionary<string, ObjectToken>() {
-                            {string.Empty, new ObjectToken(rtv, default, default)}
+                            {"#self", new ObjectToken(rtv, default, default)}
                         },
                         AssembleTimeTypes.RT,
-                        AccessLevels.PUBLIC,
                         false,
                         false
                     ));
@@ -2779,8 +2753,8 @@ Svenska           ""-l sw""
                 /// <param name="alias"></param>
                 /// <param name="access"></param>
                 /// <returns></returns>
-                internal static bool DeleteMember(string alias, AccessLevels access) {
-                    var ctx = GetObjectFromAlias(alias, access);
+                internal static bool DeleteMember(string alias) {
+                    var ctx = GetObjectFromAlias(alias);
                     if (ctx is null) {
                         // error, does not exist
                         return false;
@@ -2788,7 +2762,7 @@ Svenska           ""-l sw""
 
                     if (ctx.type is AssembleTimeTypes.RT) {
                         // return based on Memory.Remove?
-                        var rtv = (RunTimeVariableType)ctx.GetMember(string.Empty, default)!.data;
+                        var rtv = (RunTimeVariableType)ctx.GetMember("#self")!.data;
                         Program.Architecture.MemoryFree(ref rtv);
                     } else {
                         Program.ActiveScopeBuffer[^1].Remove(alias);
@@ -2814,7 +2788,7 @@ Svenska           ""-l sw""
 
                         // if ctx is declared lazily-defined constant, target must be undefined unless runtime located
                         if (tar.defined) {
-                            var rt_ptr = tar.GetMember("rt_ptr", default);
+                            var rt_ptr = tar.GetMember("rt_ptr");
                             if (rt_ptr is null) {
                                 // target is not a runtime member but is defined, we forbid this code practice
                                 return false;
