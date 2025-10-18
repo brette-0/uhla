@@ -81,7 +81,11 @@ namespace UHLA {
                 defined  = 0x01,
                 constant = 0x02
             }
-            
+
+            internal enum UniqueMembers : ushort {
+                Dependencies = '\x01',
+                Dependants   = '\x02'
+            }
             
             internal ObjectToken (object pData, AssembleTimeTypes pType, AccessLevels pLevel, bool pDefined = true, bool pConstant = false) {
                 data     = pData;
@@ -105,7 +109,7 @@ namespace UHLA {
                 if (!defined) {
                     var members = (Dictionary<string, ObjectToken>)data;
                     #if DEBUG
-                    if (!members.Remove(Engine.dependants)) {
+                    if (!members.Remove($"{UniqueMembers.Dependants}")) {
                         // error, should have dependants key if undefined
                         throw new Exception("error, should have dependants key if undefined");
                     }
@@ -127,7 +131,7 @@ namespace UHLA {
             internal ObjectToken((List<HierarchyTokens_t>? Tokens, int MaxHierarchy, string Representation) ctx, AccessLevels pLevel, AssembleTimeTypes pType = AssembleTimeTypes.UNDEFINED) {
                 data = new Dictionary<string, ObjectToken>{
                     {string.Empty, new ObjectToken(ctx, AssembleTimeTypes.UNDEFINED, AccessLevels.PRIVATE)},
-                    {Engine.dependants, new ObjectToken(new List<ObjectToken>(), AssembleTimeTypes.UNDEFINED, AccessLevels.PRIVATE)}
+                    {$"{UniqueMembers.Dependants}", new ObjectToken(new List<ObjectToken>(), AssembleTimeTypes.UNDEFINED, AccessLevels.PRIVATE)}
                 };
                 type     = pType;
                 level    = pLevel;
@@ -135,11 +139,72 @@ namespace UHLA {
                 constant = false;
             }
 
-            internal ObjectToken? GetMember(string name, AccessLevels pLevel) {
+            internal ObjectToken? GetMember(string name, AccessLevels pLevel = default) {
                 var obj = (Dictionary<string, ObjectToken>)data;
                 var ctx = obj.GetValueOrDefault(name);
 
                 return ctx is null || (byte)pLevel < (byte)ctx.level ? ctx : null;
+            }
+
+            internal bool GetMember(string name, out ObjectToken? ctx, AccessLevels pLevel = default) {
+                var obj = (Dictionary<string, ObjectToken>)data;
+                ctx = obj.GetValueOrDefault(name);
+                
+                return ctx is not null;
+            }
+
+            internal bool OnLazyDefinitionComplete(string dependency) {
+                #if DEBUG
+                if (defined) {
+                    // error, if defined, there are no dependencies
+                    return false;
+                }
+                #endif
+
+                #if DEBUG
+                if (!GetMember($"{UniqueMembers.Dependencies}", out var dependenciesObjectToken)) {
+                    // error, if undefined should have dependencies
+                    return false;
+                }
+
+                var dependencies = (List<string>)dependenciesObjectToken!.data;
+                if (!dependencies.Remove(dependency)) {
+                    // error, member not found
+                    return false;
+                }
+                
+                #elif RELEASE
+                var dependencies = (List<string>)GetMember($"{UniqueMembers.Dependants}")!.data;
+                dependencies.Remove(dependency);
+                #endif
+
+                if (dependencies.Count == 0) {
+                    // TODO: make inline
+                    AttemptDefinitionResolve();
+                }
+            }
+
+            /// <summary>
+            /// TODO: implement
+            ///
+            /// On complete lazy definition, dependants attached to that lazily defined constant will invoke
+            /// AttemptDefinitionResolve 
+            /// 
+            /// </summary>
+            /// <returns>success</returns>
+            internal bool AttemptDefinitionResolve() {
+                if (defined) {
+                    // error, already defined
+                }
+
+                #if DEBUG
+                if (type is AssembleTimeTypes.UNDEFINED) {
+                    // error, should not attempt to resolve the definition of something improperly declared
+                }
+                #endif
+                
+                // collect value => Database.Providedefinition
+                return true;
             }
 
             internal bool constant {
@@ -368,10 +433,6 @@ namespace UHLA {
         }
         
         internal static partial class Engine {
-            internal const string dependants = "dependants";
-            
-            
-            
             internal static bool Permits(RunTimeVariableFilterType filter, RunTimeVariableType variable) =>
                        filter.size   == null || filter.size   == variable.size   &&
                        filter.endian == null || filter.endian == variable.endian &&

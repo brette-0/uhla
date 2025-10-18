@@ -1,0 +1,8 @@
+[memory]
+ram         = [1, 0x0000, 0x8000]
+flash       = [0, 0x8000, 0x8000]
+
+[segments]
+rodata      = ["flash", 0x0000, 0x140]
+proc        = ["flash", -1, 0]
+vectors     = ["flash", 0x7ffa, 6]
