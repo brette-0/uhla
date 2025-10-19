@@ -2,14 +2,14 @@
 
 namespace uhla.Core {
     internal static partial class Core {
-        internal static EvalToken? Evaluate(Core.Modes mode = Core.Modes.STANDARD, List<HierarchyTokens_t>? Tokens = null, int MaxHierarchy = -1, Core.Statuses Status = Core.Statuses.OK) {
+        internal static EvalToken? Evaluate(Modes mode = Modes.STANDARD, List<HierarchyTokens_t>? Tokens = null, int MaxHierarchy = -1, Statuses Status = Statuses.OK) {
             if (Tokens is null) {
                 var SourceFileIndexBufferSpan = CollectionsMarshal.AsSpan(Program.SourceFileIndexBuffer);
                 var SourceFileLineBufferSpan  = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
                 var SourceFileStepBufferSpan  = CollectionsMarshal.AsSpan(Program.SourceFileStepBuffer);
 
 
-                (Tokens, MaxHierarchy, Status) = Core.Lexer(
+                (Tokens, MaxHierarchy, Status) = Lexer(
                     Program.SourceFileContentBuffer[^1].ToArray(), 
                     ref SourceFileIndexBufferSpan[^1],
                     ref SourceFileLineBufferSpan[^1], 
@@ -20,7 +20,7 @@ namespace uhla.Core {
             }
 
             switch (Status, LexerMode: mode) {
-                case (Core.Statuses.INIT_ANGORI, _):
+                case (Statuses.INIT_ANGORI, _):
                     /*
                      *  This can look like
                      *      foo:
@@ -34,7 +34,7 @@ namespace uhla.Core {
                     break;
                 
                 
-                case (Core.Statuses.OK, _):
+                case (Statuses.OK, _):
                     /*
                      *  Invokes Generic Evaluate, Yielding List<EvalToken>
                      *
@@ -75,12 +75,145 @@ namespace uhla.Core {
                     
                     break;
                 
-                case (Core.Statuses.FAIL, _): return null;
+                case (Statuses.FAIL, _): return null;
             }
 
             return null;
             
             static (LE_Relationship ctx, EvaluationStatus status) LinearEvaluate(HierarchyTokens_t HierarchyTokens) {
+                foreach (var TermTokens in HierarchyTokens.DeltaTokens) {
+                    var resp = TermEvaluate(TermTokens);
+                }
+                return default;
+            }
+
+            static (LE_Relationship ctx, EvaluationStatus status) TermEvaluate(List<EvalToken> Tokens) {
+                var             WantOperator          = false;
+                List<Operators> PendingUnaryOperators = [];
+                var             TokenEnumerator       = Tokens.GetEnumerator();
+                
+                var i = 0; while (i < Tokens.Count) {
+                    if (WantOperator) {
+                        
+                    }
+
+                    // collect object unary operators
+                    while (TokenEnumerator.Current.IsOperator) {
+                        switch ((Operators)TokenEnumerator.Current.ObjectData) {
+                            case Operators.INC:     // pre inc
+                            case Operators.DEC:     // pre dec
+                            case Operators.ADD:     // absolute (int)   | uppercase (string)
+                            case Operators.SUB:     // negate   (int)   | lowercase (string)
+                            case Operators.NOT:     // is zero  (int)   | clear     (string)
+                            case Operators.BITNOT:  // bitwise negate   | length of (string)
+                                PendingUnaryOperators.Add((Operators)TokenEnumerator.Current.ObjectData);
+                                if (!TokenEnumerator.MoveNext()) {
+                                    // error, collecting unary operators prior to object resulted in term completion
+                                    // syntax error/nothing to do
+                                    return default;
+                                }
+                                continue;
+                            
+                            default:
+                                // error, this is not a unary operator
+                                return default;
+                        }
+                    }
+
+                    var member = Database.GetObjectFromAlias((string)TokenEnumerator.Current.ObjectData);
+
+                    while (TokenEnumerator.MoveNext()) {
+                        if (!TokenEnumerator.Current.IsOperator) {
+                            // Value following value is prohibited
+                            return default;
+                        }
+
+                        // if operator is not member fetching, break iterative logic
+                        if ((Operators)TokenEnumerator.Current.ObjectData is not (Operators.PROPERTY or Operators.NULLPROPERTY)) break;
+                        
+                        // access member
+                        if (!TokenEnumerator.MoveNext()) {
+                            // error, literally no member/property to view
+                            return default;
+                        }
+                             
+                        // null propagation used here, lazily defined constant comprised members cannot have
+                        // evaluated properties at this point
+                        member = member?.GetMember((string)TokenEnumerator.Current.ObjectData);
+                    }
+
+                    if (member is null) {
+                        if (PendingUnaryOperators.Contains(Operators.INC) ||
+                            PendingUnaryOperators.Contains(Operators.DEC)) {
+                            // error, pre mut requesting mut on constant component
+                            return default;
+                        }
+                        
+                        // store pre muts
+                    } else {
+                        // compute pre muts
+                        PendingUnaryOperators.Reverse();
+
+                        if (member.type is not (AssembleTimeTypes.INT or AssembleTimeTypes.STRING)) {
+                            // error, primitives only compatible with non property accessing members
+                            return default;
+                        }
+
+                        var memnew = new ObjectToken(new Dictionary<string, ObjectToken>() {
+                            {"#self", new ObjectToken(
+                                member.type switch {
+                                    AssembleTimeTypes.INT    => 0,
+                                    AssembleTimeTypes.STRING => string.Empty
+                                }, default
+                             )}
+                        }, member.type);
+
+                        while (PendingUnaryOperators.Count > 0) {
+                            switch (PendingUnaryOperators[^1], memnew.type) {
+                                case (Operators.ADD,    AssembleTimeTypes.INT):    memnew.GetMember("#self")!.data = +(int)memnew.GetMember("#self")!.data; break;
+                                case (Operators.SUB,    AssembleTimeTypes.INT):    memnew.GetMember("#self")!.data = -(int)memnew.GetMember("#self")!.data; break;
+                                case (Operators.NOT,    AssembleTimeTypes.INT):    memnew.GetMember("#self")!.data = 0 == (int)memnew.GetMember("#self")!.data ? 1 : 0; break;
+                                case (Operators.BITNOT, AssembleTimeTypes.INT):    memnew.GetMember("#self")!.data = ~(int)memnew.GetMember("#self")!.data; break;
+                                case (Operators.INC,    AssembleTimeTypes.INT):    
+                                    if (PendingUnaryOperators.Count == 1) memnew.GetMember("#self")!.data = 1 + (int)memnew.GetMember("#self")!.data;
+                                    else {
+                                        // error, only permits increment once and at the end
+                                        return default;
+                                    }
+                                    break;
+                                case (Operators.DEC,    AssembleTimeTypes.INT):
+                                    if (PendingUnaryOperators.Count == 1) memnew.GetMember("#self")!.data = (int)memnew.GetMember("#self")!.data - 1;
+                                    else {
+                                        // error, only permits decrement once and at the end
+                                        return default;
+                                    }
+                                    break;
+                                case (Operators.ADD,    AssembleTimeTypes.STRING): memnew.GetMember("#self")!.data = ((string)memnew.GetMember("#self")!.data).ToUpper(); break;
+                                case (Operators.SUB,    AssembleTimeTypes.STRING): memnew.GetMember("#self")!.data = ((string)memnew.GetMember("#self")!.data).ToLower(); break;
+                                case (Operators.NOT,    AssembleTimeTypes.STRING): memnew.GetMember("#self")!.data =  new string(' ', ((string)memnew.GetMember("#self")!.data).Length); break;
+                                case (Operators.BITNOT, AssembleTimeTypes.STRING): memnew.GetMember("#self")!.data = ((string)memnew.GetMember("#self")!.data).Length;
+                                                                                   memnew.type = AssembleTimeTypes.STRING; break;
+                                case (_,    AssembleTimeTypes.STRING): 
+                                    // error, inc/dec not possible on string
+                                    return default;
+                            }
+
+                            PendingUnaryOperators.RemoveAt(PendingUnaryOperators.Count - 1);
+                        }
+
+                        // member is managed, so maybe this should work, check if not
+                        member = new ObjectToken(memnew);   // clone memnew to update member
+                    }
+                    
+                    // perform non unary operations
+                    
+                    // post mut/dec tracking
+                    if ((Operators)TokenEnumerator.Current.ObjectData is Operators.INC or Operators.DEC) {
+                        
+                    }
+                    
+                    WantOperator = !WantOperator;
+                }
                 return default;
             }
         }
@@ -96,7 +229,7 @@ namespace uhla.Core {
             return default;
         }
 
-        private static EvalToken? DeltaEvaluate(List<HierarchyTokens_t>? Tokens, int MaxHierarchy, Core.Statuses Status) {
+        private static EvalToken? DeltaEvaluate(List<HierarchyTokens_t>? Tokens, int MaxHierarchy, Statuses Status) {
             while (MaxHierarchy > 0) {
                 var Targets = Tokens.Where(t => t.Hierarchy == MaxHierarchy);
                 foreach (var Target in Targets) {

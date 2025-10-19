@@ -230,7 +230,7 @@ namespace uhla.Core {
                     if (j == start) return (input, false);
 
                     var hex = input.Substring(start, j - start);
-                    if (int.TryParse(hex, global::System.Globalization.NumberStyles.HexNumber, null, out var value))
+                    if (int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var value))
                         return (((char)value).ToString(), true);
 
                     return (input, false);

@@ -60,13 +60,13 @@ internal static class Terminal {
                 case "--input":
                     if (i == args.Length - 1) {
                         if (!LoadedConfig) LoadConfig();
-                        Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Input Path Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
+                        Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{Language.Language.Connectives[(Program.ActiveLanguage, "No Input Path Provided")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                         return default;
                     }  
                     
                     if (InputPath.Length > 0) {
                         if (!LoadedConfig) LoadConfig();
-                        Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Input Source File Path has already been specified")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
+                        Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{Language.Language.Connectives[(Program.ActiveLanguage, "Input Source File Path has already been specified")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                         return default;
                     }
                     
@@ -77,13 +77,13 @@ internal static class Terminal {
                 case "--output":
                     if (i == args.Length - 1) {
                         if (!LoadedConfig) LoadConfig();
-                        Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Output Path Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
+                        Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{Language.Language.Connectives[(Program.ActiveLanguage, "No Output Path Provided")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                         return default;
                     }  
                     
                     if (OutputPath.Length > 0) {
                         if (!LoadedConfig) LoadConfig();
-                        Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Output Binary File Path has already been specified")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
+                        Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{Language.Language.Connectives[(Program.ActiveLanguage, "Output Binary File Path has already been specified")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                         return default;
                     }
                     OutputPath = args[++i];
@@ -163,11 +163,11 @@ internal static class Terminal {
                              UHLA 2a03 - GPL V2 Brette Allen 2026
 
                              -t | --target       | [arg]     | TODO: WRITE 'SET TARGET' INFO HERE.
-                             -i | --input        | [path]    | {(Language.Language.Connectives[(Program.ActiveLanguage, "Entrypoint Source Assembly File")])}
-                             -o | --output       | [path]    | {(Language.Language.Connectives[(Program.ActiveLanguage, "Output ROM/Disk Binary Output")])}
-                             -h | --help         |           | {(Language.Language.Connectives[(Program.ActiveLanguage, "Display the help string (you did that)")])}
+                             -i | --input        | [path]    | {Language.Language.Connectives[(Program.ActiveLanguage, "Entrypoint Source Assembly File")]}
+                             -o | --output       | [path]    | {Language.Language.Connectives[(Program.ActiveLanguage, "Output ROM/Disk Binary Output")]}
+                             -h | --help         |           | {Language.Language.Connectives[(Program.ActiveLanguage, "Display the help string (you did that)")]}
                              -h | --help         | [arg]     | TODO: WRITE "GET INFO ON SPECIFIC ARGUMENT FUNCTION" HERE
-                             -l | --language     | [lang]    | {(Language.Language.Connectives[(Program.ActiveLanguage, "Choose a language to use")])}
+                             -l | --language     | [lang]    | {Language.Language.Connectives[(Program.ActiveLanguage, "Choose a language to use")]}
                              -w | --warning      | [level]   | TODO: Write "SET WARNING LEVEL" HERE
                              -d | --directory    | [path]    | TODO: Write "SET CWD" HERE
                              -c | --config       | [path]    | TODO: Write "CONFIG FETCH" HERE
@@ -263,7 +263,7 @@ Svenska           ""-l sw""
                 case "--language":
                     if (i == args.Length - 1) {
                         if (!LoadedConfig) LoadConfig();
-                        Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "No Language Provided")])}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
+                        Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{Language.Language.Connectives[(Program.ActiveLanguage, "No Language Provided")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                         return default;
                     }
 
@@ -295,14 +295,14 @@ Svenska           ""-l sw""
 
                     if (Program.ActiveLanguage == Languages.Null) {
                         if (!LoadedConfig) LoadConfig();
-                        Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Invalid Language Provided")])}.", -1, default, Terminal.ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
+                        Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{Language.Language.Connectives[(Program.ActiveLanguage, "Invalid Language Provided")]}.", -1, default, ApplyWiggle(Flattened, StringIndex, args[i].Length), null);
                         return default;
                     }
                     break;
 
                 default:
                     if (!LoadedConfig) LoadConfig();
-                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{(Language.Language.Connectives[(Program.ActiveLanguage, "Unrecognized Terminal Argument")])}.", -1, default, ApplyWiggle(Flattened, 1 + StringIndex, args[i].Length), null);
+                    Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{Language.Language.Connectives[(Program.ActiveLanguage, "Unrecognized Terminal Argument")]}.", -1, default, ApplyWiggle(Flattened, 1 + StringIndex, args[i].Length), null);
                     return default;
             }
         }
@@ -493,7 +493,7 @@ Svenska           ""-l sw""
         ErrorTypeString     = Language.Language.ErrorTypeMessages[(Program.ActiveLanguage, ErrorType)];
         ErrorTypeConnective = Language.Language.Connectives[(Program.ActiveLanguage, "During")];
         DecodePhaseString   = Language.Language.DecodePhaseMessages[(Program.ActiveLanguage, Phase)];
-        LocationString      = LineNumber == -1 ? "" : (StepNumber == 0 ? $"({LineNumber})" : $"({LineNumber}, {StepNumber})");
+        LocationString      = LineNumber == -1 ? "" : StepNumber == 0 ? $"({LineNumber})" : $"({LineNumber}, {StepNumber})";
         Context = Context == null ? "" : $": {Context}";
         ContextFileName ??= "";
 
