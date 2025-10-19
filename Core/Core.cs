@@ -1,8 +1,85 @@
 ﻿using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using uhla.Architectures;
 
 namespace uhla.Core {
     internal static partial class Core {
+        internal static void Initialize(string InputPath, out int success) {
+            #if DEBUG
+            if (Program.EArchitecture is Architectures.None) {
+                throw new Exception("Ran Init Twice, or did not init architecture on first run");
+            }
+            #endif
+
+            var InputFile = File.ReadAllText(InputPath);
+            if (InputFile.Length == 0) {
+                Terminal.Error(ErrorTypes.NothingToDo, DecodingPhases.TOKEN, $"{Language.Language.Connectives[(Program.ActiveLanguage, "Source file")]} {InputPath} {Language.Language.Connectives[(Program.ActiveLanguage, "has no contents")]}", -1, 0, null, null);
+                success = (int)ErrorTypes.NothingToDo;
+            }
+            Program.SourceFileNameBuffer   .Add(InputPath!);
+            Program.SourceFileContentBuffer.Add(RegexTokenize(InputFile));
+            Program.SourceFileIndexBuffer  .Add(0); // begin from char 0
+            Program.SourceFileLineBuffer   .Add(0); // debug line, naturally 0
+            Program.SourceFileStepBuffer   .Add(0); // debug step, naturally 0
+
+            Program.LabelDataBase["type"] =  new ObjectToken(new Dictionary<string, ObjectToken>() {
+                {"",        new ObjectToken(ScopeTypes.Root, AssembleTimeTypes.EXP)},
+            }, AssembleTimeTypes.EXP);
+
+            // rs "Root Scope" has itself as key, value and parent - sitting in the root pointing to itself.
+            // this is the only way via asm to directly refer to rs. Useful for when you use a 'as' level keyword but desires rs resolve.
+            Program.LabelDataBase["rs"] =  new ObjectToken(new Dictionary<string, ObjectToken>() {
+                {"",        new ObjectToken(Program.LabelDataBase, AssembleTimeTypes.SCOPE)},
+            }, AssembleTimeTypes.SCOPE);
+
+            // make language a compiler variable
+            Program.LabelDataBase["lang"]   = new ObjectToken(new Dictionary<string, ObjectToken>() {
+                {"",        new ObjectToken($"\"{Program.ActiveLanguage}\"", AssembleTimeTypes.INT)},
+            }, AssembleTimeTypes.STRING);
+            
+            Program.LabelDataBase["ToString"] = new ObjectToken(
+                new Dictionary<string, (object data, AssembleTimeTypes type)>() {
+                    {"args", (1, AssembleTimeTypes.INT)},
+                    {"", (GenerateFunctionalDefine("# args", ["args"]), default)}
+                }, AssembleTimeTypes.FEXP);
+            
+            // Functions are just lambdas, 0 refers to arg 0, and so on. They are of type Function returns type of type 'type'
+            // The 'self' containing the lambda's type is the return type
+            Program.LabelDataBase["typeof"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
+                {"",        new ObjectToken((ObjectToken ctx) => new ObjectToken(ctx.type, AssembleTimeTypes.TYPE), AssembleTimeTypes.TYPE)},
+                {"ctx",     new ObjectToken(0,                                                                      AssembleTimeTypes.OBJECT) },
+                
+                // arg num 0 => ctx
+                {"0",       new ObjectToken("ctx", default, default)},
+                
+                {"args",    new ObjectToken(1, AssembleTimeTypes.INT)}
+            }, AssembleTimeTypes.FUNCTION);
+
+            Program.LabelDataBase["exists"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
+                {"",        new ObjectToken((string ctx) => Database.GetObjectFromAlias(ctx) is null, AssembleTimeTypes.INT)},
+                {"ctx",     new ObjectToken(0,                                                        AssembleTimeTypes.OBJECT) },
+                
+                // arg num 0 => ctx
+                {"0",       new ObjectToken("ctx", default, default)},
+                
+                {"args",    new ObjectToken(1, AssembleTimeTypes.INT)}
+            }, AssembleTimeTypes.FUNCTION);
+
+            Program.ActiveScopeBuffer.Add(Program.LabelDataBase); // add rs to 'as', default rs
+            Program.ObjectSearchBuffer = [Program.LabelDataBase]; // by default, contains nothing more than this. For each search AS[^1] is added
+
+            Program.Architecture = Program.EArchitecture switch {
+                Architectures.NMOS_6502  => new NMOS_6502(),
+                Architectures.NMOS_6507  => throw new NotImplementedException(),
+                Architectures.RICOH_2A03 => new Ricoh_2a03(),
+                
+                
+                Architectures.None => throw new NotImplementedException(),
+                _                       => throw new NotImplementedException()
+            };
+            success = 0;
+        }
+        
         internal static bool Permits(RunTimeVariableFilterType filter, RunTimeVariableType variable) =>
                    filter.size   == null || filter.size   == variable.size   &&
                    filter.endian == null || filter.endian == variable.endian &&

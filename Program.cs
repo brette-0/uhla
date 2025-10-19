@@ -9,16 +9,19 @@ internal static class Program {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
 
         var (InputPath, OutputPath, Response) = Terminal.Parse(args);
-        if (Response == Terminal.Responses.Terminate_Error)   return (int)ErrorTypes.ParsingError;   // Exit if parsing returns error
-        if (Response == Terminal.Responses.Terminate_Success) return 0;
+        switch (Response) {
+            case Terminal.Responses.Terminate_Error:
+                return (int)ErrorTypes.ParsingError;   // Exit if parsing returns error
 
-        //if (ActiveLanguage == Languages.Null) ActiveLanguage = Language.CaptureSystemLanguage();
-        //if (ActiveLanguage == Languages.Null) {
-        //    ActiveLanguage = Languages.English_UK;
-        //    // TODO: Consider SystemError as more suitable?
-        //    Terminal.Log(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, "Could not detect language, choosing English (UK).",
-        //            -1, default, null);
-        //}
+            case Terminal.Responses.Terminate_Success:
+                return 0;
+
+            case Terminal.Responses.Proceed:
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException();
+        }
 
         if (InputPath == string.Empty) {
             Terminal.Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{Language.Connectives[(ActiveLanguage, "Input path must be provided")]}.",
@@ -38,74 +41,10 @@ internal static class Program {
                 -1, default, null, null);
             return (int)ErrorTypes.ParsingError;
         }
+
+        Core.Core.Initialize(InputPath, out var error);
+        if (error is not 0) return error;
         
-        var InputFile = File.ReadAllText(InputPath);
-        if (InputFile.Length == 0) {
-            Terminal.Error(ErrorTypes.NothingToDo, DecodingPhases.TOKEN, $"{Language.Connectives[(ActiveLanguage, "Source file")]} {InputPath} {Language.Connectives[(ActiveLanguage, "has no contents")]}", -1, 0, null, null);
-            return (int)ErrorTypes.NothingToDo;
-        }
-        SourceFileNameBuffer   .Add(InputPath!);
-        SourceFileContentBuffer.Add(Core.Core.RegexTokenize(InputFile));
-        SourceFileIndexBuffer  .Add(0); // begin from char 0
-        SourceFileLineBuffer   .Add(0); // debug line, naturally 0
-        SourceFileStepBuffer   .Add(0); // debug step, naturally 0
-
-        LabelDataBase["type"] =  new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"",        new ObjectToken(ScopeTypes.Root, AssembleTimeTypes.EXP)},
-        }, AssembleTimeTypes.EXP);
-
-        // rs "Root Scope" has itself as key, value and parent - sitting in the root pointing to itself.
-        // this is the only way via asm to directly refer to rs. Useful for when you use a 'as' level keyword but desires rs resolve.
-        LabelDataBase["rs"] =  new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"",        new ObjectToken(LabelDataBase, AssembleTimeTypes.SCOPE)},
-        }, AssembleTimeTypes.SCOPE);
-
-        // make language a compiler variable
-        LabelDataBase["lang"]   = new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"",        new ObjectToken($"\"{ActiveLanguage}\"", AssembleTimeTypes.INT)},
-        }, AssembleTimeTypes.STRING);
-        
-        LabelDataBase["ToString"] = new ObjectToken(
-            new Dictionary<string, (object data, AssembleTimeTypes type)>() {
-                {"args", (1, AssembleTimeTypes.INT)},
-                {"", (Core.Core.GenerateFunctionalDefine("# args", ["args"]), default)}
-            }, AssembleTimeTypes.FEXP);
-        
-        // Functions are just lambdas, 0 refers to arg 0, and so on. They are of type Function returns type of type 'type'
-        // The 'self' containing the lambda's type is the return type
-        LabelDataBase["typeof"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"",        new ObjectToken((ObjectToken ctx) => new ObjectToken(ctx.type, AssembleTimeTypes.TYPE), AssembleTimeTypes.TYPE)},
-            {"ctx",     new ObjectToken(0,                                                                      AssembleTimeTypes.OBJECT) },
-            
-            // arg num 0 => ctx
-            {"0",       new ObjectToken("ctx", default, default)},
-            
-            {"args",    new ObjectToken(1, AssembleTimeTypes.INT)}
-        }, AssembleTimeTypes.FUNCTION);
-
-        LabelDataBase["exists"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"",        new ObjectToken((string ctx) => Database.GetObjectFromAlias(ctx) is null, AssembleTimeTypes.INT)},
-            {"ctx",     new ObjectToken(0,                                                        AssembleTimeTypes.OBJECT) },
-            
-            // arg num 0 => ctx
-            {"0",       new ObjectToken("ctx", default, default)},
-            
-            {"args",    new ObjectToken(1, AssembleTimeTypes.INT)}
-        }, AssembleTimeTypes.FUNCTION);
-
-        ActiveScopeBuffer.Add(LabelDataBase); // add rs to 'as', default rs
-        ObjectSearchBuffer = [LabelDataBase]; // by default, contains nothing more than this. For each search AS[^1] is added
-
-        Architecture = EArchitecture switch {
-            Core.Architectures.NMOS_6502  => new NMOS_6502(),
-            Core.Architectures.NMOS_6507  => throw new NotImplementedException(),
-            Core.Architectures.RICOH_2A03 => new Ricoh_2a03(),
-            
-            
-            Core.Architectures.None => throw new NotImplementedException(),
-            _                       => throw new NotImplementedException()
-        };
-
         Architecture.Initalize();
         Core.Core.Assemble([]);
         
