@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace UHLA.Engine {
+namespace uhla.Engine {
     internal record struct HierarchyTokens_t {
         internal HierarchyTokens_t(List<List<EvalToken>> pDeltaTokens, int pHierachy, string pRepresentation) {
             DeltaTokens    = pDeltaTokens;

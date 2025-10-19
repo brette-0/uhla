@@ -1,7 +1,7 @@
-using UHLA.Engine;
-using UHLA.InterfaceProtocol;
+using uhla.Engine;
+using uhla.Engine.InterfaceProtocol;
 
-namespace Architectures {
+namespace uhla.Architectures {
     internal class Ricoh_2a03 : NMOS_6502  {
         public override bool    IsMnemonic(string mnemonic) {
             throw new NotImplementedException();

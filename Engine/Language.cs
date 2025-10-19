@@ -1,12 +1,11 @@
-﻿using Microsoft.Win32;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
-using UHLA.Engine;
+using Microsoft.Win32;
 
 // Convert typical interpolated strings to use composite formatting for better language accuracy.
 
-namespace UHLA {
+namespace uhla.Engine {
     namespace Language {
         internal enum Languages {
             Null,               // Used for unrecognized language specify from terminal

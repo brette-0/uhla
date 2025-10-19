@@ -3,7 +3,7 @@
           On error report, refer to RegexParsed[0].ctx, index, length etc...
 */
 
-namespace UHLA.Engine {
+namespace uhla.Engine {
     internal static partial class Engine {
 
         internal enum LexerModes {
@@ -100,7 +100,7 @@ namespace UHLA.Engine {
                                 Message         = "Unexpected end of command.",
                                 LineNumber      = ErrorReportLineNumber,
                                 StepNumber      = ErrorReportStepNumber,
-                                Context         = () => ApplyWiggle(Representation, ActiveToken.StringIndex + 1, 1)
+                                Context         = () => Terminal.ApplyWiggle(Representation, ActiveToken.StringIndex + 1, 1)
                             };
                         }
 
@@ -238,7 +238,7 @@ namespace UHLA.Engine {
             }
 
             // this is permissible as context is full here - no need to involve ErrorContext
-            Terminal.Error(ErrorTypes.SyntaxError, DecodingPhases.TOKEN, "Not enough context to satisfy request", ErrorReportLineNumber - 1, Tokens.Count, ApplyWiggle(Representation, Representation.Length - 1, 1), SourceFilePath);
+            Terminal.Error(ErrorTypes.SyntaxError, DecodingPhases.TOKEN, "Not enough context to satisfy request", ErrorReportLineNumber - 1, Tokens.Count, Terminal.ApplyWiggle(Representation, Representation.Length - 1, 1), SourceFilePath);
             return default;
 
             #region Lexer Functions
@@ -376,7 +376,7 @@ namespace UHLA.Engine {
                         Message = "Unterminated String",
                         LineNumber = LocalErrorReportLineNumber,
                         StepNumber = LocalErrorReportStepNumber,
-                        Context = () => ApplyWiggle(Representation, csi + 1, ActiveToken.StringIndex - csi)
+                        Context = () => Terminal.ApplyWiggle(Representation, csi + 1, ActiveToken.StringIndex - csi)
                     };
                     return false;
                 }
@@ -428,7 +428,7 @@ namespace UHLA.Engine {
                         Message       = "No Open Container before Close Container.",
                         LineNumber    = LocalErrorReportLineNumber,
                         StepNumber    = LocalErrorReportStepNumber,
-                        Context       = () => ApplyWiggle(Representation, 0, LastNonWhiteSpaceIndex + 1)
+                        Context       = () => Terminal.ApplyWiggle(Representation, 0, LastNonWhiteSpaceIndex + 1)
                     };
 
                     return false;
@@ -442,7 +442,7 @@ namespace UHLA.Engine {
                         Message = $"Invalid Container Closer '{Representation[ActiveToken.StringIndex]}' for Opening container '{Representation[LastOpenContainerOperatorStringIndex]}'.",
                         LineNumber = LocalErrorReportLineNumber,
                         StepNumber = LocalErrorReportStepNumber,
-                        Context = () => ApplyWiggle(Representation, LastOpenContainerOperatorStringIndex + 1, ActiveToken.StringIndex - LastOpenContainerOperatorStringIndex + 1)
+                        Context = () => Terminal.ApplyWiggle(Representation, LastOpenContainerOperatorStringIndex + 1, ActiveToken.StringIndex - LastOpenContainerOperatorStringIndex + 1)
                     };
 
                     return false;

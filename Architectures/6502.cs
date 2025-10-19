@@ -1,8 +1,8 @@
 using System.Runtime.InteropServices;
-using UHLA.Engine;
-using UHLA.InterfaceProtocol;
+using uhla.Engine;
+using uhla.Engine.InterfaceProtocol;
 
-namespace Architectures {
+namespace uhla.Architectures {
     internal class NMOS_6502 : IArchitecture {
         
         // TODO: The memory instructions for 6502 either don't care ever or ask for a 'map file' for memory
@@ -25,17 +25,17 @@ namespace Architectures {
         }
         public virtual void Initalize() {
             Program.LabelDataBase["a"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",         new ObjectToken(UHLA.Engine.System.Registers.A, AssembleTimeTypes.REG)},
+                {"",         new ObjectToken(uhla.Engine.System.Registers.A, AssembleTimeTypes.REG)},
                 {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.INT) }
             }, AssembleTimeTypes.REG);
 
             Program.LabelDataBase["x"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",         new ObjectToken(UHLA.Engine.System.Registers.X, AssembleTimeTypes.INT)},
+                {"",         new ObjectToken(uhla.Engine.System.Registers.X, AssembleTimeTypes.INT)},
                 {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.INT) }
             }, AssembleTimeTypes.REG);
 
             Program.LabelDataBase["y"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",         new ObjectToken(UHLA.Engine.System.Registers.Y, AssembleTimeTypes.INT)},
+                {"",         new ObjectToken(uhla.Engine.System.Registers.Y, AssembleTimeTypes.INT)},
                 {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.INT) }
             }, AssembleTimeTypes.REG);
         }
@@ -115,14 +115,14 @@ namespace Architectures {
                 bool         HadSuccess = false;
 
                 do {
-                    ctx = Engine.Database.GetObjectFromAlias(Resolved[0].token);
+                    ctx = Database.GetObjectFromAlias(Resolved[0].token);
 
                     if (ctx is not null && ctx.type == AssembleTimeTypes.EXP) {
                         HadSuccess = true;
                         Resolved.RemoveAt(0);
 
                         Resolved.InsertRange(0,
-                            Engine.RegexTokenize(
+                            Engine.Engine.RegexTokenize(
                                        (string)((Dictionary<string, (object data, AssembleTimeTypes type)>)ctx.data)[""].data)
                                   .Select(token => (token, ActiveToken.StringIndex, token.Length))
                                   .ToList());

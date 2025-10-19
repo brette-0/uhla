@@ -1,9 +1,9 @@
-﻿using Architectures;
-using UHLA;
-using UHLA.Engine;
-using UHLA.Language;
+﻿using uhla.Architectures;
+using uhla.Engine;
+using uhla.Engine.InterfaceProtocol;
+using uhla.Engine.Language;
 
-using static UHLA.Engine.Engine;
+namespace uhla;
 
 internal static class Program {
     internal static int Main(string[] args) {
@@ -29,7 +29,7 @@ internal static class Program {
 
         if (OutputPath == string.Empty) {
             Terminal.Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{Language.Connectives[(ActiveLanguage, "Output path must be provided")]}.",
-                    -1, default, null, null);
+                -1, default, null, null);
             return (int)ErrorTypes.ParsingError;
         }
 
@@ -46,10 +46,10 @@ internal static class Program {
             return (int)ErrorTypes.NothingToDo;
         }
         SourceFileNameBuffer   .Add(InputPath!);
-        SourceFileContentBuffer.Add(RegexTokenize(InputFile));
-        SourceFileIndexBuffer  .Add(0);         // begin from char 0
-        SourceFileLineBuffer   .Add(0);         // debug line, naturally 0
-        SourceFileStepBuffer   .Add(0);         // debug step, naturally 0
+        SourceFileContentBuffer.Add(Engine.Engine.RegexTokenize(InputFile));
+        SourceFileIndexBuffer  .Add(0); // begin from char 0
+        SourceFileLineBuffer   .Add(0); // debug line, naturally 0
+        SourceFileStepBuffer   .Add(0); // debug step, naturally 0
 
         LabelDataBase["type"] =  new ObjectToken(new Dictionary<string, ObjectToken>() {
             {"",        new ObjectToken(ScopeTypes.Root, AssembleTimeTypes.EXP)},
@@ -69,14 +69,14 @@ internal static class Program {
         LabelDataBase["ToString"] = new ObjectToken(
             new Dictionary<string, (object data, AssembleTimeTypes type)>() {
                 {"args", (1, AssembleTimeTypes.INT)},
-                {"", (GenerateFunctionalDefine("# args", ["args"]), default)}
+                {"", (Engine.Engine.GenerateFunctionalDefine("# args", ["args"]), default)}
             }, AssembleTimeTypes.FEXP);
         
         // Functions are just lambdas, 0 refers to arg 0, and so on. They are of type Function returns type of type 'type'
         // The 'self' containing the lambda's type is the return type
         LabelDataBase["typeof"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
             {"",        new ObjectToken((ObjectToken ctx) => new ObjectToken(ctx.type, AssembleTimeTypes.TYPE), AssembleTimeTypes.TYPE)},
-            {"ctx",     new ObjectToken(0, AssembleTimeTypes.OBJECT) },
+            {"ctx",     new ObjectToken(0,                                                                      AssembleTimeTypes.OBJECT) },
             
             // arg num 0 => ctx
             {"0",       new ObjectToken("ctx", default, default)},
@@ -86,7 +86,7 @@ internal static class Program {
 
         LabelDataBase["exists"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
             {"",        new ObjectToken((string ctx) => Database.GetObjectFromAlias(ctx) is null, AssembleTimeTypes.INT)},
-            {"ctx",     new ObjectToken(0, AssembleTimeTypes.OBJECT) },
+            {"ctx",     new ObjectToken(0,                                                        AssembleTimeTypes.OBJECT) },
             
             // arg num 0 => ctx
             {"0",       new ObjectToken("ctx", default, default)},
@@ -94,40 +94,40 @@ internal static class Program {
             {"args",    new ObjectToken(1, AssembleTimeTypes.INT)}
         }, AssembleTimeTypes.FUNCTION);
 
-        ActiveScopeBuffer.Add(LabelDataBase);   // add rs to 'as', default rs
-        ObjectSearchBuffer = [LabelDataBase];   // by default, contains nothing more than this. For each search AS[^1] is added
+        ActiveScopeBuffer.Add(LabelDataBase); // add rs to 'as', default rs
+        ObjectSearchBuffer = [LabelDataBase]; // by default, contains nothing more than this. For each search AS[^1] is added
 
         Architecture = EArchitecture switch {
-            UHLA.Architectures.NMOS_6502  => new NMOS_6502(),
-            UHLA.Architectures.NMOS_6507  => throw new NotImplementedException(),
-            UHLA.Architectures.RICOH_2A03 => new Ricoh_2a03(),
+            Engine.Architectures.NMOS_6502  => new NMOS_6502(),
+            Engine.Architectures.NMOS_6507  => throw new NotImplementedException(),
+            Engine.Architectures.RICOH_2A03 => new Ricoh_2a03(),
             
             
-            UHLA.Architectures.None => throw new NotImplementedException(),
+            Engine.Architectures.None => throw new NotImplementedException(),
             _                       => throw new NotImplementedException()
         };
 
         Architecture.Initalize();
-        Assemble([]);
+        Engine.Engine.Assemble([]);
         
         return 0;
     }
 
-    internal static List<List<string>>  SourceFileContentBuffer = [];
-    internal static List<int>           SourceFileIndexBuffer = [];
-    internal static List<string>        SourceFileNameBuffer  = [];
-    internal static List<int>           SourceFileLineBuffer  = [];  // Used for ERROR REPORT ONLY
-    internal static List<int>           SourceFileStepBuffer  = [];  // Used for ERROR REPORT ONLY
+    internal static List<List<string>> SourceFileContentBuffer = [];
+    internal static List<int>          SourceFileIndexBuffer   = [];
+    internal static List<string>       SourceFileNameBuffer    = [];
+    internal static List<int>          SourceFileLineBuffer    = []; // Used for ERROR REPORT ONLY
+    internal static List<int>          SourceFileStepBuffer    = []; // Used for ERROR REPORT ONLY
 
-    internal static Dictionary<string, ObjectToken>         LabelDataBase         = [];
-    internal static List<Dictionary<string, ObjectToken>>   ActiveScopeBuffer     = [];
-    internal static List<Dictionary<string, ObjectToken>>   ObjectSearchBuffer    = [];
+    internal static Dictionary<string, ObjectToken>       LabelDataBase      = [];
+    internal static List<Dictionary<string, ObjectToken>> ActiveScopeBuffer  = [];
+    internal static List<Dictionary<string, ObjectToken>> ObjectSearchBuffer = [];
 
     internal static List<string> SourceFileSearchPaths = [];
 
     internal static Languages     ActiveLanguage;
     internal static WarningLevels WarningLevel;
 
-    internal static UHLA.Architectures EArchitecture;
-    internal static UHLA.InterfaceProtocol.IArchitecture      Architecture;
+    internal static Engine.Architectures                   EArchitecture;
+    internal static IArchitecture Architecture;
 }
