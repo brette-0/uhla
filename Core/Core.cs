@@ -1,247 +1,8 @@
 ﻿using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 
-namespace uhla.Engine {
-    namespace InterfaceProtocol {
-        internal interface IArchitecture {
-
-            bool MemoryReserve(ref RunTimeVariableType ctx);
-            bool MemoryFree(ref RunTimeVariableType ctx);
-            
-            
-            /// <summary>
-            /// Returns 'true' is the string represents a mnemonic for the target architecture.
-            /// This includes implicits, synthetics and illegals. 
-            /// </summary>
-            /// <param name="mnemonic">the string to be checked if it is mnemonic.</param>
-            /// <returns></returns>
-            bool    IsMnemonic(string mnemonic);
-        
-            /// <summary>
-            /// Reads ahead to confirm any information that the engine will not be able to handle.
-            /// For example, 6502 targets include 'a:', 'z:' and '!' as 'operand decorators'.
-            /// </summary>
-            /// <returns></returns>
-            object? GatherAdditionalMnemonicContext();
-
-            /// <summary>
-            /// Leaves the implementation to decide if the request is possible based on intense validation.
-            /// Mnemonic should be verified at this point and therefore should not be validated further.
-            /// Returns the index of the problematic component or null if completely successful.
-            /// </summary>
-            /// <param name="mnemonic">The instruction attempting to encode</param>
-            /// <param name="args">The context that modified the encoding</param>
-            /// <returns></returns>
-            int? TryCompleteInstruction(string mnemonic, ref List<EvalToken> args);
-
-            void Initalize();
-
-            CheckDirectiveStatus CheckDirective(ref List<EvalToken>                                         args,
-                                                ref List<(string token, int StringIndex, int StringLength)> DefineResolveBuffer,
-                                                ref int                                                     pStringIndex, ref int pTokenIndex,
-                                                ref (string ctx, int StringIndex, int StringLength)         pActiveToken,
-                                                ref string                                                  pRepresentation);
-        }
-
-        internal enum CheckDirectiveStatus {
-            None,
-            Success,
-            Error
-        }
-    }
-    
-
-    internal enum Architectures {
-        None,
-        
-        NMOS_6502,
-        NMOS_6507,                      // 6502 syntax, but limited address range.  '6502'
-
-        RICOH_2A03,                     // NES/Famicom                              '2a03', 'nes', 'fds'
-    }
-    
-    internal enum ScopeTypes {
-        Root      = 0,
-        Namespace = 1,
-        Macro     = 2,
-        Bank      = 3,
-        Procedure = 4,
-        Interrupt = 5
-    }
-    
-    namespace System {
-        internal enum Registers { A, X, Y }
-        
-        [Flags]
-        internal enum Flags : byte {
-            Carry = 0x01,
-            Zero  = 0x02,
-            //  Interrupt   = 0x04,
-            //  Decimal     = 0x08,
-            //  Break       = 0x10,
-            //  None (1)    = 0x20,
-            Overflow = 0x40,
-            Negative = 0x80
-        }
-    }
-
-
-    [Flags]
-    internal enum WarningLevels : byte {
-        IGNORE  = 0x00,
-        DEFAULT = 0x01,
-        ERROR   = 0x02,
-        VERBOSE = 0x04,
-
-        /* Internal     */
-        NONE        = 0xff,
-        NO_OVERRULE = 0x08,
-
-        /* Composite    */
-        STRICT     = VERBOSE | ERROR,
-        CONTROLLED = VERBOSE | ERROR | NO_OVERRULE,
-
-    }
-
-    internal enum Operators : byte {
-        INC,
-        DEC,
-        BITNOT,
-        
-        STRING,
-        FSTRING,
-
-        OPAREN,
-        CPAREN,
-
-        OBRACK,
-        CBRACK,
-
-        OBRACE,
-        CBRACE,
-
-        DESCOPE,
-
-        PROPERTY,
-        NULLPROPERTY,
-
-        MULT,
-        DIV,
-        MOD,
-
-        ADD,
-        SUB,
-
-        RIGHT,
-        LEFT,
-
-        BITMASK,
-
-        BITFLIP,
-
-        BITSET,
-
-        GT,
-        LT,
-        GOET,
-        LOET,
-        SERIAL,
-
-        EQUAL,
-        INEQUAL,
-
-        AND,
-
-        OR,
-
-        NULL,
-        CHECK,
-        ELSE,
-
-        SET,
-        INCREASE,
-        DECREASE,
-        MULTIPLY,
-        DIVIDE,
-        MODULATE,
-        NULLSET,
-        RIGHTSET,
-        LEFTSET,
-
-        ASSIGNMASK,
-        ASSIGNSET,
-        ASSIGNFLIP,
-
-        TERM,
-        NOT,
-
-        NONE = 255
-    }
-
-    [Flags]
-    internal enum AssembleTimeTypes : byte {
-        UNDEFINED,  // default
-        INT,    // assemble time integer
-        STRING, // assemble time string
-        
-        SCOPE, // scope type
-        RT,    // Runtime Variable
-        REG,   // Register
-        FLAG,  // CPU Status Flag
-        PROC,  // Procedure
-        INTER, // Interrupt
-        BANK,  // Bank
-        EXP,   // Expression
-
-        OBJECT, // The Boxed 'AnyType' such as long as its not constant      | Cast Exclusive Type
-
-        FEXP,    // Functional Expression
-
-        IRWN,  // Indexing Register with N             foo[i + 2] situations
-        ICRWN, // Indexing Constant Register with N    foo[x + 2] situations
-
-        FUNCTION, // Macro Function
-        OPER,     // Operation
-
-        MACRO = 0x80,
-        
-        TYPE,    // typeof result
-        CHARMAP, // for ASCII redirection
-        
-        INDEX,
-        CALL,
-        
-        TUPLE,   // elems = List<Object>    types = List<AssembleTimeTypes>
-        
-        OPERATOR,  // for unresolved but declared expressions
-        }
-
-    // TODO: create constructors for all structs
-    internal record struct RunTimeVariableFilterType {
-        internal uint? size;
-        internal bool? signed;
-        internal bool? endian;
-    }
-    
-    internal record struct RunTimeVariableType {
-        internal uint size;   // in bytes
-        internal bool signed; // false => unsigned
-        internal bool endian; // false => little
-    }
-
-    internal enum ErrorLevels : byte {
-        NONE, LOG, WARN, ERROR
-    }
-
-    internal enum ErrorTypes : byte {
-        None, SyntaxError, ParsingError, NothingToDo
-    }
-
-    internal enum DecodingPhases : byte {
-        TERMINAL, TOKEN, EVALUATION
-    }
-    
-    internal static partial class Engine {
+namespace uhla.Core {
+    internal static partial class Core {
         internal static bool Permits(RunTimeVariableFilterType filter, RunTimeVariableType variable) =>
                    filter.size   == null || filter.size   == variable.size   &&
                    filter.endian == null || filter.endian == variable.endian &&
@@ -345,55 +106,6 @@ namespace uhla.Engine {
                 return tokens;
             }
 
-        }
-        
-        /// <summary>
-        /// GENERATED CODE : Attempts to normalize and validate a path as safe across Windows, macOS, and Linux.
-        /// Returns true if the path is valid and portable; false otherwise.
-        /// </summary>
-        internal static bool TryNormalizeSafePath(string input, out string normalized)
-        {
-            normalized = string.Empty;
-            if (string.IsNullOrWhiteSpace(input)) return false;
-
-            try
-            {
-                string path = Path.GetFullPath(input.Trim());
-
-                if (path.Length >= 240) return false;
-
-                // Reject invalid path characters
-                if (path.IndexOfAny(Path.GetInvalidPathChars()) != -1) return false;
-
-                // Split into segments to check each component
-                string[] parts = path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                if (string.IsNullOrWhiteSpace(parts[0])) return false;
-                
-                foreach (var part in parts)
-                {
-                    if (string.IsNullOrWhiteSpace(part)) continue;
-
-                    // Trim + reject bad chars
-                    string name = part.Trim();
-                    if (name.Length                                     == 0) return false;
-                    if (name.IndexOfAny(Path.GetInvalidFileNameChars()) != -1) return false;
-
-                    // Disallow reserved Windows device names
-                    string upper = name.ToUpperInvariant();
-                    if (Regex.IsMatch(upper, @"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$"))
-                        return false;
-
-                    // No trailing dot or space
-                    if (name.EndsWith(" ") || name.EndsWith(".")) return false;
-                }
-
-                normalized = path;
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
         }
         
         /// <summary>
@@ -533,9 +245,9 @@ namespace uhla.Engine {
 
                     case '.':
                         switch (Program.Architecture.CheckDirective(ref args, ref DefineResolveBuffer, ref StringIndex, ref TokenIndex, ref ActiveToken, ref Representation)) {
-                            case InterfaceProtocol.CheckDirectiveStatus.Error:   
-                            case InterfaceProtocol.CheckDirectiveStatus.None:    return default;    // error, not architecture provided :: pass back
-                            case InterfaceProtocol.CheckDirectiveStatus.Success: continue;
+                            case CheckDirectiveStatus.Error:   
+                            case CheckDirectiveStatus.None:    return default;    // error, not architecture provided :: pass back
+                            case CheckDirectiveStatus.Success: continue;
 
                             default:
                                 throw new ArgumentOutOfRangeException();
@@ -1821,16 +1533,7 @@ namespace uhla.Engine {
             Program.SourceFileIndexBuffer.Add(0);
             Program.SourceFileIndexBuffer.Add(0);
         }
-
-        internal enum Unary : byte {
-            INC,
-            DEC,
-            ABS,
-            NEG,
-            BIT,
-            NOT
-        };
-
+        
         internal static bool IsNonLiteral(char First) =>
             First switch {
                 '0' or '1' or '2' or '3' or '4' or '5' or '6' or '7' or '8' or '9' or '$' or '%' or '&' or '+' or '-' or '!' or '^' or '*' or '[' or ']' or '{' or '}' or '\'' or '#' or '~' or ':' or ',' or '<' or '.' or '>' or '/' or '?' => false,

@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
-using uhla.Engine;
-using uhla.Engine.InterfaceProtocol;
+using uhla.Core;
 
 namespace uhla.Architectures {
     internal class NMOS_6502 : IArchitecture {
@@ -25,17 +24,17 @@ namespace uhla.Architectures {
         }
         public virtual void Initalize() {
             Program.LabelDataBase["a"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",         new ObjectToken(uhla.Engine.System.Registers.A, AssembleTimeTypes.REG)},
+                {"",         new ObjectToken('a', AssembleTimeTypes.REG)},
                 {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.INT) }
             }, AssembleTimeTypes.REG);
 
             Program.LabelDataBase["x"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",         new ObjectToken(uhla.Engine.System.Registers.X, AssembleTimeTypes.INT)},
+                {"",         new ObjectToken('x', AssembleTimeTypes.INT)},
                 {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.INT) }
             }, AssembleTimeTypes.REG);
 
             Program.LabelDataBase["y"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",         new ObjectToken(uhla.Engine.System.Registers.Y, AssembleTimeTypes.INT)},
+                {"",         new ObjectToken('y', AssembleTimeTypes.INT)},
                 {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.INT) }
             }, AssembleTimeTypes.REG);
         }
@@ -122,7 +121,7 @@ namespace uhla.Architectures {
                         Resolved.RemoveAt(0);
 
                         Resolved.InsertRange(0,
-                            Engine.Engine.RegexTokenize(
+                            Core.Core.RegexTokenize(
                                        (string)((Dictionary<string, (object data, AssembleTimeTypes type)>)ctx.data)[""].data)
                                   .Select(token => (token, ActiveToken.StringIndex, token.Length))
                                   .ToList());

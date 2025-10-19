@@ -1,4 +1,4 @@
-namespace uhla.Engine;
+namespace uhla.Core;
 
 internal class EvalToken {
     internal EvalToken(

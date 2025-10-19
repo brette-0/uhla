@@ -3,17 +3,17 @@
           On error report, refer to RegexParsed[0].ctx, index, length etc...
 */
 
-namespace uhla.Engine {
-    internal static partial class Engine {
+namespace uhla.Core {
+    internal static partial class Core {
 
-        internal enum LexerModes {
+        internal enum Modes {
             STANDARD,
             HEADER,
             OPERAND,
             LABEL,                  // looks something like 'foo:' ... uses AngoriMath
         }
 
-        internal enum LexerStatuses {
+        internal enum Statuses {
             FAIL,
             
             OK,                     // generic success
@@ -35,7 +35,7 @@ namespace uhla.Engine {
         /// <param name="ErrorReportStepNumber">The count of instructions that have passed on this line + 1</param>
         /// <param name="SourceFilePath">The file path we obtained the source content from, for debugging information.</param>
         /// <returns></returns>
-        internal static (List<HierarchyTokens_t> Tokens, int MaxHierarchy, LexerStatuses Status) Lexer(Memory<string> BasicRegexTokens, ref int SourceTokenIndex, ref int ErrorReportLineNumber, ref int ErrorReportStepNumber, string SourceFilePath, LexerModes LexerMode = LexerModes.STANDARD) {
+        internal static (List<HierarchyTokens_t> Tokens, int MaxHierarchy, Statuses Status) Lexer(Memory<string> BasicRegexTokens, ref int SourceTokenIndex, ref int ErrorReportLineNumber, ref int ErrorReportStepNumber, string SourceFilePath, Modes mode = Modes.STANDARD) {
             // use BasicRegexTokens => RegexTokens (ref, no cloning?) | Ensures we solve all new defines without mutating the original
             //List<string> RegexTokens = ResolveDefines(BasicRegexTokens);
             var Representation = string.Empty;
@@ -165,13 +165,13 @@ namespace uhla.Engine {
                     case "[": OpenContainer(Operators.OBRACK); break;
                     case "?": OpenContainer(Operators.CHECK);  break;
                     case "{":
-                        switch (ContainerBuffer.Count, LexerMode) {
+                        switch (ContainerBuffer.Count, LexerMode: mode) {
                             case (> 0, _) when ContainerBuffer[^1] == Operators.FSTRING:
                                 // Format String
                                 OpenContainer(Operators.OBRACE);
                                 break;
                             
-                            case (0, LexerModes.HEADER):
+                            case (0, Modes.HEADER):
                                 // header lexing is complete
                                 SourceTokenIndex = LocalSourceTokenIndex; ErrorReportLineNumber = LocalErrorReportLineNumber; ErrorReportStepNumber = LocalErrorReportStepNumber;
                                 return Success();
@@ -196,7 +196,7 @@ namespace uhla.Engine {
                     case "}":
                         if (ContainerBuffer.Count == 0) {
                             SourceTokenIndex = LocalSourceTokenIndex; ErrorReportLineNumber = LocalErrorReportLineNumber; ErrorReportStepNumber = LocalErrorReportStepNumber;
-                            return Success(LexerStatuses.CLOSE_BLOCK);
+                            return Success(Statuses.CLOSE_BLOCK);
                         }
                         if (SimpleCloseContainer(Operators.CBRACE))       break; return default;
                         
@@ -208,7 +208,7 @@ namespace uhla.Engine {
 
                         Step(); // We don't include the colon, it's a lexer flag if anything. If it was typed will still appear in the error report.
                         SourceTokenIndex = LocalSourceTokenIndex; ErrorReportLineNumber = LocalErrorReportLineNumber; ErrorReportStepNumber = LocalErrorReportStepNumber;
-                        return Success(LexerStatuses.INIT_ANGORI);
+                        return Success(Statuses.INIT_ANGORI);
 
                     // Term Catching
                     case ",":
@@ -310,7 +310,7 @@ namespace uhla.Engine {
                 return (args, true);
             }
             
-            (List<HierarchyTokens_t> Tokens, int MaxHierachy, LexerStatuses Status) Success(LexerStatuses status = LexerStatuses.OK) => (Tokens, MaxHierarchy, status);
+            (List<HierarchyTokens_t> Tokens, int MaxHierachy, Statuses Status) Success(Statuses status = Statuses.OK) => (Tokens, MaxHierarchy, status);
             
             void Step(bool regexParse = true) {
                 ActiveToken = default;

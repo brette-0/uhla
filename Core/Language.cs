@@ -5,7 +5,7 @@ using Microsoft.Win32;
 
 // Convert typical interpolated strings to use composite formatting for better language accuracy.
 
-namespace uhla.Engine {
+namespace uhla.Core {
     namespace Language {
         internal enum Languages {
             Null,               // Used for unrecognized language specify from terminal

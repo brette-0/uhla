@@ -1,7 +1,6 @@
 ﻿using uhla.Architectures;
-using uhla.Engine;
-using uhla.Engine.InterfaceProtocol;
-using uhla.Engine.Language;
+using uhla.Core;
+using uhla.Core.Language;
 
 namespace uhla;
 
@@ -46,7 +45,7 @@ internal static class Program {
             return (int)ErrorTypes.NothingToDo;
         }
         SourceFileNameBuffer   .Add(InputPath!);
-        SourceFileContentBuffer.Add(Engine.Engine.RegexTokenize(InputFile));
+        SourceFileContentBuffer.Add(Core.Core.RegexTokenize(InputFile));
         SourceFileIndexBuffer  .Add(0); // begin from char 0
         SourceFileLineBuffer   .Add(0); // debug line, naturally 0
         SourceFileStepBuffer   .Add(0); // debug step, naturally 0
@@ -69,7 +68,7 @@ internal static class Program {
         LabelDataBase["ToString"] = new ObjectToken(
             new Dictionary<string, (object data, AssembleTimeTypes type)>() {
                 {"args", (1, AssembleTimeTypes.INT)},
-                {"", (Engine.Engine.GenerateFunctionalDefine("# args", ["args"]), default)}
+                {"", (Core.Core.GenerateFunctionalDefine("# args", ["args"]), default)}
             }, AssembleTimeTypes.FEXP);
         
         // Functions are just lambdas, 0 refers to arg 0, and so on. They are of type Function returns type of type 'type'
@@ -98,17 +97,17 @@ internal static class Program {
         ObjectSearchBuffer = [LabelDataBase]; // by default, contains nothing more than this. For each search AS[^1] is added
 
         Architecture = EArchitecture switch {
-            Engine.Architectures.NMOS_6502  => new NMOS_6502(),
-            Engine.Architectures.NMOS_6507  => throw new NotImplementedException(),
-            Engine.Architectures.RICOH_2A03 => new Ricoh_2a03(),
+            Core.Architectures.NMOS_6502  => new NMOS_6502(),
+            Core.Architectures.NMOS_6507  => throw new NotImplementedException(),
+            Core.Architectures.RICOH_2A03 => new Ricoh_2a03(),
             
             
-            Engine.Architectures.None => throw new NotImplementedException(),
+            Core.Architectures.None => throw new NotImplementedException(),
             _                       => throw new NotImplementedException()
         };
 
         Architecture.Initalize();
-        Engine.Engine.Assemble([]);
+        Core.Core.Assemble([]);
         
         return 0;
     }
@@ -128,6 +127,6 @@ internal static class Program {
     internal static Languages     ActiveLanguage;
     internal static WarningLevels WarningLevel;
 
-    internal static Engine.Architectures                   EArchitecture;
+    internal static Core.Architectures                   EArchitecture;
     internal static IArchitecture Architecture;
 }

@@ -1,9 +1,10 @@
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using Tomlyn;
-using uhla.Engine.Language;
+using uhla.Core.Language;
 
-namespace uhla.Engine;
+namespace uhla.Core;
 
 internal static class Terminal {
     internal enum Responses : byte {
@@ -611,5 +612,54 @@ Svenska           ""-l sw""
         }
 
         return builder.ToString();
+    }
+    
+    /// <summary>
+    /// GENERATED CODE : Attempts to normalize and validate a path as safe across Windows, macOS, and Linux.
+    /// Returns true if the path is valid and portable; false otherwise.
+    /// </summary>
+    internal static bool TryNormalizeSafePath(string input, out string normalized)
+    {
+        normalized = string.Empty;
+        if (string.IsNullOrWhiteSpace(input)) return false;
+
+        try
+        {
+            string path = Path.GetFullPath(input.Trim());
+
+            if (path.Length >= 240) return false;
+
+            // Reject invalid path characters
+            if (path.IndexOfAny(Path.GetInvalidPathChars()) != -1) return false;
+
+            // Split into segments to check each component
+            string[] parts = path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (string.IsNullOrWhiteSpace(parts[0])) return false;
+                
+            foreach (var part in parts)
+            {
+                if (string.IsNullOrWhiteSpace(part)) continue;
+
+                // Trim + reject bad chars
+                string name = part.Trim();
+                if (name.Length                                     == 0) return false;
+                if (name.IndexOfAny(Path.GetInvalidFileNameChars()) != -1) return false;
+
+                // Disallow reserved Windows device names
+                string upper = name.ToUpperInvariant();
+                if (Regex.IsMatch(upper, @"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$"))
+                    return false;
+
+                // No trailing dot or space
+                if (name.EndsWith(" ") || name.EndsWith(".")) return false;
+            }
+
+            normalized = path;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

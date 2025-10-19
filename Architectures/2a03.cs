@@ -1,5 +1,4 @@
-using uhla.Engine;
-using uhla.Engine.InterfaceProtocol;
+using uhla.Core;
 
 namespace uhla.Architectures {
     internal class Ricoh_2a03 : NMOS_6502  {

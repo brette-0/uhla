@@ -1,83 +1,26 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace uhla.Engine {
-    internal record struct HierarchyTokens_t {
-        internal HierarchyTokens_t(List<List<EvalToken>> pDeltaTokens, int pHierachy, string pRepresentation) {
-            DeltaTokens    = pDeltaTokens;
-            Hierarchy      = pHierachy;
-            Representation = pRepresentation;
-        }
-
-        /// <summary>
-        /// Converts all members within a hierarchy into a tuple object.
-        ///
-        /// TODO: Check ref/weak/copy philosophy
-        /// TODO: Ensure UNDEFINED porting
-        /// 
-        /// </summary>
-        /// <param name="index"></param>
-        internal EvalToken ToTuple() {
-            Dictionary<string, EvalToken> Mapping = [];
-            for (var i = 0; i < Mapping.Count; i++) {
-                #if DEBUG
-                if (DeltaTokens[i].Count > 0) {
-                    // error, cannot Tuplicate this!
-                    throw new Exception("Cannot Tuplicate this!");
-                }
-                #endif
-                Mapping[$"{i}"] = DeltaTokens[i][0];
-            }
-
-            return new EvalToken(
-                Mapping["0"].StringIndex,
-                Mapping[$"{Mapping.Count - 1}"].StringIndex + Mapping[$"{Mapping.Count - 1}"].StringLength,
-                new ObjectToken(
-                    Mapping,
-                    AssembleTimeTypes.TUPLE
-                ),
-                false
-            );
-        }
-    
-        internal List<List<EvalToken>> DeltaTokens;
-        internal int                   Hierarchy;
-        internal string                Representation;
-    }
-
-    /// <summary>
-    /// Handed back from LE, might be a request for more context, term collection or an EvalToken 
-    /// </summary>
-    internal record struct LE_Relationship {
-        internal object            ctx;
-        internal AssembleTimeTypes type;
-    }
-
-    internal enum EvaluationStatus : byte {
-        ERROR,
-        OK,
-        SYMBOL_UNDEFINED,
-    }
-    
-    internal static partial class Engine {
-        internal static EvalToken? Evaluate(LexerModes LexerMode = LexerModes.STANDARD, List<HierarchyTokens_t>? Tokens = null, int MaxHierarchy = -1, LexerStatuses Status = LexerStatuses.OK) {
+namespace uhla.Core {
+    internal static partial class Core {
+        internal static EvalToken? Evaluate(Core.Modes mode = Core.Modes.STANDARD, List<HierarchyTokens_t>? Tokens = null, int MaxHierarchy = -1, Core.Statuses Status = Core.Statuses.OK) {
             if (Tokens is null) {
                 var SourceFileIndexBufferSpan = CollectionsMarshal.AsSpan(Program.SourceFileIndexBuffer);
                 var SourceFileLineBufferSpan  = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
                 var SourceFileStepBufferSpan  = CollectionsMarshal.AsSpan(Program.SourceFileStepBuffer);
 
 
-                (Tokens, MaxHierarchy, Status) = Lexer(
+                (Tokens, MaxHierarchy, Status) = Core.Lexer(
                     Program.SourceFileContentBuffer[^1].ToArray(), 
                     ref SourceFileIndexBufferSpan[^1],
                     ref SourceFileLineBufferSpan[^1], 
                     ref SourceFileStepBufferSpan[^1], 
                     Program.SourceFileNameBuffer[^1], 
-                    LexerMode
+                    mode
                 );
             }
 
-            switch (Status, LexerMode) {
-                case (LexerStatuses.INIT_ANGORI, _):
+            switch (Status, LexerMode: mode) {
+                case (Core.Statuses.INIT_ANGORI, _):
                     /*
                      *  This can look like
                      *      foo:
@@ -91,7 +34,7 @@ namespace uhla.Engine {
                     break;
                 
                 
-                case (LexerStatuses.OK, _):
+                case (Core.Statuses.OK, _):
                     /*
                      *  Invokes Generic Evaluate, Yielding List<EvalToken>
                      *
@@ -132,7 +75,7 @@ namespace uhla.Engine {
                     
                     break;
                 
-                case (LexerStatuses.FAIL, _): return null;
+                case (Core.Statuses.FAIL, _): return null;
             }
 
             return null;
@@ -153,7 +96,7 @@ namespace uhla.Engine {
             return default;
         }
 
-        private static EvalToken? DeltaEvaluate(List<HierarchyTokens_t>? Tokens, int MaxHierarchy, LexerStatuses Status) {
+        private static EvalToken? DeltaEvaluate(List<HierarchyTokens_t>? Tokens, int MaxHierarchy, Core.Statuses Status) {
             while (MaxHierarchy > 0) {
                 var Targets = Tokens.Where(t => t.Hierarchy == MaxHierarchy);
                 foreach (var Target in Targets) {

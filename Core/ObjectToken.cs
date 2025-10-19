@@ -1,4 +1,4 @@
-namespace uhla.Engine;
+namespace uhla.Core;
 
 internal class ObjectToken {
     [Flags]
@@ -19,7 +19,7 @@ internal class ObjectToken {
     /// </summary>
     /// <param name="pOT">Token to be cloned</param>
     internal ObjectToken(ObjectToken pOT) {
-        data     = Engine.Clone((Dictionary<string, ObjectToken>)pOT.data);    // recursively clone contents
+        data     = Core.Clone((Dictionary<string, ObjectToken>)pOT.data);    // recursively clone contents
         type     = pOT.type > type ? pOT.type : type;
         defined  = pOT.defined;
         constant = pOT.constant;
