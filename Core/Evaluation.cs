@@ -87,10 +87,14 @@ namespace uhla.Core {
                 return default;
             }
 
-            static (LE_Relationship ctx, EvaluationStatus status) TermEvaluate(List<EvalToken> Tokens) {
+            // total definition will return one member per term, whereas in the event of lazy definition
+            // it will be a simplified formula
+            static List<EvalToken> TermEvaluate(List<EvalToken> Tokens) {
                 var             WantOperator          = false;
                 List<Operators> PendingUnaryOperators = [];
                 var             TokenEnumerator       = Tokens.GetEnumerator();
+
+                List<EvalToken> Response = [];
                 
                 var i = 0; while (i < Tokens.Count) {
                     if (WantOperator) {
@@ -110,13 +114,13 @@ namespace uhla.Core {
                                 if (!TokenEnumerator.MoveNext()) {
                                     // error, collecting unary operators prior to object resulted in term completion
                                     // syntax error/nothing to do
-                                    return default;
+                                    return [];
                                 }
                                 continue;
                             
                             default:
                                 // error, this is not a unary operator
-                                return default;
+                                return [];
                         }
                     }
 
@@ -125,7 +129,7 @@ namespace uhla.Core {
                     while (TokenEnumerator.MoveNext()) {
                         if (!TokenEnumerator.Current.IsOperator) {
                             // Value following value is prohibited
-                            return default;
+                            return [];
                         }
 
                         // if operator is not member fetching, break iterative logic
@@ -134,7 +138,7 @@ namespace uhla.Core {
                         // access member
                         if (!TokenEnumerator.MoveNext()) {
                             // error, literally no member/property to view
-                            return default;
+                            return [];
                         }
                              
                         // null propagation used here, lazily defined constant comprised members cannot have
@@ -146,7 +150,7 @@ namespace uhla.Core {
                         if (PendingUnaryOperators.Contains(Operators.INC) ||
                             PendingUnaryOperators.Contains(Operators.DEC)) {
                             // error, pre mut requesting mut on constant component
-                            return default;
+                            return [];
                         }
                         
                         // store pre muts
@@ -156,7 +160,7 @@ namespace uhla.Core {
 
                         if (member.type is not (AssembleTimeTypes.INT or AssembleTimeTypes.STRING)) {
                             // error, primitives only compatible with non property accessing members
-                            return default;
+                            return [];
                         }
 
                         var memnew = new ObjectToken(new Dictionary<string, ObjectToken>() {
@@ -168,36 +172,9 @@ namespace uhla.Core {
                              )}
                         }, member.type);
 
+                        // process unaries 
                         while (PendingUnaryOperators.Count > 0) {
-                            switch (PendingUnaryOperators[^1], memnew.type) {
-                                case (Operators.ADD,    AssembleTimeTypes.INT):    memnew.GetMember("#self")!.data = +(int)memnew.GetMember("#self")!.data; break;
-                                case (Operators.SUB,    AssembleTimeTypes.INT):    memnew.GetMember("#self")!.data = -(int)memnew.GetMember("#self")!.data; break;
-                                case (Operators.NOT,    AssembleTimeTypes.INT):    memnew.GetMember("#self")!.data = 0 == (int)memnew.GetMember("#self")!.data ? 1 : 0; break;
-                                case (Operators.BITNOT, AssembleTimeTypes.INT):    memnew.GetMember("#self")!.data = ~(int)memnew.GetMember("#self")!.data; break;
-                                case (Operators.INC,    AssembleTimeTypes.INT):    
-                                    if (PendingUnaryOperators.Count == 1) memnew.GetMember("#self")!.data = 1 + (int)memnew.GetMember("#self")!.data;
-                                    else {
-                                        // error, only permits increment once and at the end
-                                        return default;
-                                    }
-                                    break;
-                                case (Operators.DEC,    AssembleTimeTypes.INT):
-                                    if (PendingUnaryOperators.Count == 1) memnew.GetMember("#self")!.data = (int)memnew.GetMember("#self")!.data - 1;
-                                    else {
-                                        // error, only permits decrement once and at the end
-                                        return default;
-                                    }
-                                    break;
-                                case (Operators.ADD,    AssembleTimeTypes.STRING): memnew.GetMember("#self")!.data = ((string)memnew.GetMember("#self")!.data).ToUpper(); break;
-                                case (Operators.SUB,    AssembleTimeTypes.STRING): memnew.GetMember("#self")!.data = ((string)memnew.GetMember("#self")!.data).ToLower(); break;
-                                case (Operators.NOT,    AssembleTimeTypes.STRING): memnew.GetMember("#self")!.data =  new string(' ', ((string)memnew.GetMember("#self")!.data).Length); break;
-                                case (Operators.BITNOT, AssembleTimeTypes.STRING): memnew.GetMember("#self")!.data = ((string)memnew.GetMember("#self")!.data).Length;
-                                                                                   memnew.type = AssembleTimeTypes.STRING; break;
-                                case (_,    AssembleTimeTypes.STRING): 
-                                    // error, inc/dec not possible on string
-                                    return default;
-                            }
-
+                            if (!ProcessUnaryOperator(PendingUnaryOperators[^1], ref memnew)) return [];
                             PendingUnaryOperators.RemoveAt(PendingUnaryOperators.Count - 1);
                         }
 
@@ -209,12 +186,52 @@ namespace uhla.Core {
                     
                     // post mut/dec tracking
                     if ((Operators)TokenEnumerator.Current.ObjectData is Operators.INC or Operators.DEC) {
-                        
+                        if (member is null) {
+                            // error, constants cannot mutate
+                            return [];
+                        }
+                        if (!ProcessUnaryOperator((Operators)TokenEnumerator.Current.ObjectData, ref member)) return [];
+                    } else if (member is null && ((Operators)TokenEnumerator.Current.ObjectData) == Operators.CHECK) {
+                        // branching logic requires definition <due to mid-line mutation based on conditional scripting>
+                        return [];
                     }
                     
                     WantOperator = !WantOperator;
                 }
                 return default;
+
+                bool ProcessUnaryOperator(Operators op, ref ObjectToken memnew) {
+                    switch (op, memnew.type) {
+                        case (Operators.ADD,    AssembleTimeTypes.INT):    memnew.GetMember("#self")!.data = +(int)memnew.GetMember("#self")!.data; break;
+                        case (Operators.SUB,    AssembleTimeTypes.INT):    memnew.GetMember("#self")!.data = -(int)memnew.GetMember("#self")!.data; break;
+                        case (Operators.NOT,    AssembleTimeTypes.INT):    memnew.GetMember("#self")!.data = 0 == (int)memnew.GetMember("#self")!.data ? 1 : 0; break;
+                        case (Operators.BITNOT, AssembleTimeTypes.INT):    memnew.GetMember("#self")!.data = ~(int)memnew.GetMember("#self")!.data; break;
+                        case (Operators.INC,    AssembleTimeTypes.INT):    
+                            if (PendingUnaryOperators.Count == 1) memnew.GetMember("#self")!.data = 1 + (int)memnew.GetMember("#self")!.data;
+                            else {
+                                // error, only permits increment once and at the end
+                                return false;
+                            }
+                            break;
+                        case (Operators.DEC,    AssembleTimeTypes.INT):
+                            if (PendingUnaryOperators.Count == 1) memnew.GetMember("#self")!.data = (int)memnew.GetMember("#self")!.data - 1;
+                            else {
+                                // error, only permits decrement once and at the end
+                                return false;
+                            }
+                            break;
+                        case (Operators.ADD,    AssembleTimeTypes.STRING): memnew.GetMember("#self")!.data = ((string)memnew.GetMember("#self")!.data).ToUpper(); break;
+                        case (Operators.SUB,    AssembleTimeTypes.STRING): memnew.GetMember("#self")!.data = ((string)memnew.GetMember("#self")!.data).ToLower(); break;
+                        case (Operators.NOT,    AssembleTimeTypes.STRING): memnew.GetMember("#self")!.data =  new string(' ', ((string)memnew.GetMember("#self")!.data).Length); break;
+                        case (Operators.BITNOT, AssembleTimeTypes.STRING): memnew.GetMember("#self")!.data = ((string)memnew.GetMember("#self")!.data).Length;
+                                                                           memnew.type = AssembleTimeTypes.STRING; break;
+                        case (_,    AssembleTimeTypes.STRING): 
+                            // error, inc/dec not possible on string
+                            return false;
+                    }
+
+                    return true;
+                }
             }
         }
 
