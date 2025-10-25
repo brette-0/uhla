@@ -18,6 +18,8 @@ internal class EvalToken {
         StringIndex  = pET.StringIndex;
         StringLength = pET.StringLength;
     }
+
+    internal bool IsOperator() => ObjectType is AssembleTimeTypes.OPERATOR;
             
             
     internal object            ObjectData => Data.data;

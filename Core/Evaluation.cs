@@ -109,7 +109,7 @@ namespace uhla.Core {
                     }
 
                     // collect object unary operators
-                    while (TokenEnumerator.Current.Data.type is AssembleTimeTypes.OPERATOR) {
+                    while (TokenEnumerator.Current.IsOperator()) {
                         switch ((Operators)TokenEnumerator.Current.ObjectData) {
                             case Operators.INC:     // pre inc
                             case Operators.DEC:     // pre dec
@@ -134,7 +134,7 @@ namespace uhla.Core {
                     var member = Database.GetObjectFromAlias((string)TokenEnumerator.Current.ObjectData);
 
                     while (TokenEnumerator.MoveNext()) {
-                        if (TokenEnumerator.Current.Data.type is not AssembleTimeTypes.OPERATOR) {
+                        if (!TokenEnumerator.Current.IsOperator()) {
                             // Value following value is prohibited
                             return [];
                         }

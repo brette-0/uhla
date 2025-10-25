@@ -229,7 +229,7 @@ namespace uhla.Core {
                 }
             }
 
-            IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : Tokens[^1].DeltaTokens[^1].Count != 0 && Tokens[^1].DeltaTokens[^1][LastNonWhiteSpaceIndex].Data.type is AssembleTimeTypes.OPERATOR;
+            IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : Tokens[^1].DeltaTokens[^1].Count != 0 && Tokens[^1].DeltaTokens[^1][LastNonWhiteSpaceIndex].IsOperator();
             if (ContainerBuffer.Count == 0 && !IsLastOperator) {
                 // final steps
                 SourceTokenIndex = LocalSourceTokenIndex; ErrorReportLineNumber = LocalErrorReportLineNumber; ErrorReportStepNumber = LocalErrorReportStepNumber;
