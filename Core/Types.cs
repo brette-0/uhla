@@ -33,8 +33,7 @@ internal record struct HierarchyTokens_t {
             new ObjectToken(
                 Mapping,
                 AssembleTimeTypes.TUPLE
-            ),
-            false
+            )
         );
     }
     

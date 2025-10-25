@@ -80,6 +80,8 @@ namespace uhla.Core {
 
             return null;
             
+            
+            // TODO: consider how LE can be integrated into DE 
             static (LE_Relationship ctx, EvaluationStatus status) LinearEvaluate(HierarchyTokens_t HierarchyTokens) {
                 foreach (var TermTokens in HierarchyTokens.DeltaTokens) {
                     var resp = TermEvaluate(TermTokens);
@@ -93,16 +95,21 @@ namespace uhla.Core {
                 var             WantOperator          = false;
                 List<Operators> PendingUnaryOperators = [];
                 var             TokenEnumerator       = Tokens.GetEnumerator();
-
+                List<EvalToken> ObjectStack           = [];
+                List<Operators> OperatorStack         = [];
+                
+                
                 List<EvalToken> Response = [];
+                
+                
                 
                 var i = 0; while (i < Tokens.Count) {
                     if (WantOperator) {
-                        
+
                     }
 
                     // collect object unary operators
-                    while (TokenEnumerator.Current.IsOperator) {
+                    while (TokenEnumerator.Current.Data.type is AssembleTimeTypes.OPERATOR) {
                         switch ((Operators)TokenEnumerator.Current.ObjectData) {
                             case Operators.INC:     // pre inc
                             case Operators.DEC:     // pre dec
@@ -127,7 +134,7 @@ namespace uhla.Core {
                     var member = Database.GetObjectFromAlias((string)TokenEnumerator.Current.ObjectData);
 
                     while (TokenEnumerator.MoveNext()) {
-                        if (!TokenEnumerator.Current.IsOperator) {
+                        if (TokenEnumerator.Current.Data.type is not AssembleTimeTypes.OPERATOR) {
                             // Value following value is prohibited
                             return [];
                         }
@@ -198,7 +205,7 @@ namespace uhla.Core {
                     
                     WantOperator = !WantOperator;
                 }
-                return default;
+                return Response;
 
                 bool ProcessUnaryOperator(Operators op, ref ObjectToken memnew) {
                     switch (op, memnew.type) {

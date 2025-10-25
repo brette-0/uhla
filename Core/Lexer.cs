@@ -221,8 +221,7 @@ namespace uhla.Core {
                             ActiveToken.StringLength,
                             new ObjectToken(new Dictionary<string, ObjectToken> {
                                 { "#self", new ObjectToken(ActiveToken.ctx, AssembleTimeTypes.EXP) }
-                            }, AssembleTimeTypes.EXP),
-                            false
+                            }, AssembleTimeTypes.EXP)
                         ));
                         LastNonWhiteSpaceIndex = Tokens[^1].DeltaTokens[^1].Count - 1;
                         break;
@@ -230,7 +229,7 @@ namespace uhla.Core {
                 }
             }
 
-            IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : Tokens[^1].DeltaTokens[^1].Count != 0 && Tokens[^1].DeltaTokens[^1][LastNonWhiteSpaceIndex].IsOperator;
+            IsLastOperator = LastNonWhiteSpaceIndex == -1 ? IsLastOperator : Tokens[^1].DeltaTokens[^1].Count != 0 && Tokens[^1].DeltaTokens[^1][LastNonWhiteSpaceIndex].Data.type is AssembleTimeTypes.OPERATOR;
             if (ContainerBuffer.Count == 0 && !IsLastOperator) {
                 // final steps
                 SourceTokenIndex = LocalSourceTokenIndex; ErrorReportLineNumber = LocalErrorReportLineNumber; ErrorReportStepNumber = LocalErrorReportStepNumber;
@@ -389,8 +388,7 @@ namespace uhla.Core {
                         new Dictionary<string, ObjectToken>() {
                            {"self",    new ObjectToken(literalCstring,        AssembleTimeTypes.STRING) },
                            {"length",  new ObjectToken(literalCstring.Length, AssembleTimeTypes.INT) },
-                        },AssembleTimeTypes.STRING),
-                        false
+                        },AssembleTimeTypes.STRING)
                     ));
 
                     literalCstring = "";   // wipe string for next capture
@@ -400,7 +398,7 @@ namespace uhla.Core {
 
             // Tokens[^1] contains tokens per term for last delta. DeltaTokens[^1] is the last term's tokens.
             void AddOperator(Operators Operator, int sl) {
-                Tokens[^1].DeltaTokens[^1].Add(new EvalToken(ActiveToken.StringIndex, sl, new ObjectToken(Operator, AssembleTimeTypes.OPERATOR), true));
+                Tokens[^1].DeltaTokens[^1].Add(new EvalToken(ActiveToken.StringIndex, sl, new ObjectToken(Operator, AssembleTimeTypes.OPERATOR)));
                 LastNonWhiteSpaceIndex = Tokens[^1].DeltaTokens[^1].Count - 1;
             } 
             
