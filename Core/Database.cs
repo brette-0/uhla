@@ -13,7 +13,7 @@ internal static class Database {
     /// <param name="Alias"></param>
     /// <returns></returns>
     internal static ObjectToken? GetObjectFromAlias(string Alias) {
-        List<Dictionary<string, ObjectToken>> LocalObjectSearchBuffer = [Program.ActiveScopeBuffer[^1], .. Program.ObjectSearchBuffer];
+        List<Dictionary<string, ObjectToken?>> LocalObjectSearchBuffer = [Program.ActiveScopeBuffer[^1], .. Program.ObjectSearchBuffer];
         return __GetObjectFromAlias(Alias, LocalObjectSearchBuffer);
     }
     /// <summary>
@@ -24,7 +24,7 @@ internal static class Database {
     /// <param name="TargetScope"></param>
     /// <returns></returns>
     /// 
-    internal static ObjectToken? GetObjectFromAlias(string Alias, Dictionary<string, ObjectToken> TargetScope) => __GetObjectFromAlias(Alias, [TargetScope]);
+    internal static ObjectToken? GetObjectFromAlias(string Alias, Dictionary<string, ObjectToken?> TargetScope) => __GetObjectFromAlias(Alias, [TargetScope]);
     
     /// <summary>
     /// Internal function iterating over the LocalObjectSearchPath to find the required context if possible.
@@ -32,65 +32,52 @@ internal static class Database {
     /// <param name="Alias"></param>
     /// <param name="LocalObjectSearchBuffer"></param>
     /// <returns></returns>
-    private  static ObjectToken? __GetObjectFromAlias(string Alias, List<Dictionary<string, ObjectToken>> LocalObjectSearchBuffer) {
-        ObjectToken ctx;
-        var (found, error) = (false, false);
+    private  static ObjectToken? __GetObjectFromAlias(string Alias, List<Dictionary<string, ObjectToken?>> LocalObjectSearchBuffer) {
         foreach (var LocalObjectSearchContainer in LocalObjectSearchBuffer) {
+            ObjectToken? ctx;
             if (LocalObjectSearchContainer.TryGetValue(Alias, out ctx)) {
-                return null;
+                return ctx;
             }
         }
-
-        return default;
+        
+        return null;
     }
 
-
-    /// <summary>
-    /// Declare member responds to code like 'u8 foo' or 'int bar' or 'const string ash'
-    /// it creates an ObjectToken for the member with total emptiness on the stack
-    ///     definition will provide it the value it needs
-    /// </summary>
-    /// <param name="alias">name of the object token</param>
-    /// <param name="type">the type of the object token</param>
-    /// <param name="constant">its 'constant-ness'</param>
-    /// <returns></returns>
-    internal static bool DeclareScriptingOrReadOnlyMember(string alias, AssembleTimeTypes type, bool constant = false) {
-        if (Program.ActiveScopeBuffer[^1].ContainsKey(alias)) {
-            // error, already declared member
+    // validating constant empty const declare or lazy const declare is not handled here.
+    internal static bool Declare(string alias, AssembleTimeTypes type, List<HierarchyTokens_t> Query, bool isconst) {
+        if (GetObjectFromAlias(alias) is not null) {
+            // error, attempted re-declaration: this language is type static
             return false;
         }
         
-        Program.ActiveScopeBuffer[^1].Add(alias, new ObjectToken(
-            new Dictionary<string, ObjectToken>(),
-            type,
-            false,
-            constant
-        ));
-        
+        // Declaration
+        var OT = new ObjectToken(new Dictionary<string, ObjectToken>() {
+            {"#self", new ObjectToken(Query, AssembleTimeTypes.UNDEFINED, false, false)}        
+        }, type, false, isconst);
+
+        Program.ActiveScopeBuffer[^1].Add(alias, OT);
         return true;
     }
 
-    internal static bool DeclareRuntimeVariable(string alias, RunTimeVariableType rtv) {
-        if (Program.ActiveScopeBuffer[^1].ContainsKey(alias)) {
-            // error, already declared member
+    internal static bool Declare(string alias, RunTimeVariableType type, List<HierarchyTokens_t> Query, bool isconst) {
+        if (GetObjectFromAlias(alias) is not null) {
+            // error, attempted re-declaration: this language is type static
+            return false;
+        }
+        
+        // Declaration
+        var OT = new ObjectToken(new Dictionary<string, ObjectToken>() {
+            {"#self",   new ObjectToken(Query, AssembleTimeTypes.UNDEFINED, false, false)},
+            {"#offset", new ObjectToken(Program.Architecture.MemoryReserve(ref type), AssembleTimeTypes.INT, true, true)}
+        }, AssembleTimeTypes.RT, false, isconst);
+
+        if ((int)((Dictionary<string, ObjectToken>)OT.data)["#offset"].data is -1) {
+            // failed memory reserve
             return false;
         }
 
-        if (!Program.Architecture.MemoryReserve(ref rtv)) {
-            // pass back error
-            return false;
-        }
-        
-        Program.ActiveScopeBuffer[^1].Add(alias, new ObjectToken(
-            new Dictionary<string, ObjectToken>() {
-                {"#self", new ObjectToken(rtv, default, default)}
-            },
-            AssembleTimeTypes.RT,
-            false,
-            false
-        ));
-        
-        return true;   
+        Program.ActiveScopeBuffer[^1].Add(alias, OT);
+        return true;
     }
 
     /// <summary>

@@ -57,9 +57,9 @@ internal static class Program {
     internal static List<int>          SourceFileLineBuffer    = []; // Used for ERROR REPORT ONLY
     internal static List<int>          SourceFileStepBuffer    = []; // Used for ERROR REPORT ONLY
 
-    internal static Dictionary<string, ObjectToken>       LabelDataBase      = [];
-    internal static List<Dictionary<string, ObjectToken>> ActiveScopeBuffer  = [];
-    internal static List<Dictionary<string, ObjectToken>> ObjectSearchBuffer = [];
+    internal static Dictionary<string, ObjectToken?>       LabelDataBase      = [];
+    internal static List<Dictionary<string, ObjectToken?>> ActiveScopeBuffer  = [];
+    internal static List<Dictionary<string, ObjectToken?>> ObjectSearchBuffer = [];
 
     internal static List<string> SourceFileSearchPaths = [];
 
