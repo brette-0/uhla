@@ -23,47 +23,46 @@ namespace uhla.Core {
             Program.SourceFileStepBuffer   .Add(0); // debug step, naturally 0
 
             Program.LabelDataBase["type"] =  new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",        new ObjectToken(ScopeTypes.Root, AssembleTimeTypes.EXP)},
-            }, AssembleTimeTypes.EXP);
+                {"",        new ObjectToken(ScopeTypes.Root, AssembleTimeTypes.EXP, true, true)},
+            }, AssembleTimeTypes.EXP, true, true);
 
             // rs "Root Scope" has itself as key, value and parent - sitting in the root pointing to itself.
             // this is the only way via asm to directly refer to rs. Useful for when you use a 'as' level keyword but desires rs resolve.
             Program.LabelDataBase["rs"] =  new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",        new ObjectToken(Program.LabelDataBase, AssembleTimeTypes.SCOPE)},
-            }, AssembleTimeTypes.SCOPE);
+                {"#self", new ObjectToken(Program.LabelDataBase, AssembleTimeTypes.SCOPE, true, true)},
+            }, AssembleTimeTypes.SCOPE, true, true);
 
             // make language a compiler variable
             Program.LabelDataBase["lang"]   = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",        new ObjectToken($"\"{Program.ActiveLanguage}\"", AssembleTimeTypes.INT)},
-            }, AssembleTimeTypes.STRING);
+                {"", new ObjectToken($"\"{Program.ActiveLanguage}\"", AssembleTimeTypes.INT, true, true)},
+            }, AssembleTimeTypes.STRING, true, true);
             
-            Program.LabelDataBase["ToString"] = new ObjectToken(
-                new Dictionary<string, (object data, AssembleTimeTypes type)>() {
-                    {"args", (1, AssembleTimeTypes.INT)},
-                    {"", (GenerateFunctionalDefine("# args", ["args"]), default)}
-                }, AssembleTimeTypes.FEXP);
+            Program.LabelDataBase["ToString"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
+                    {"args", new ObjectToken(1, AssembleTimeTypes.INT, true, true)},
+                    {"#self", new ObjectToken(GenerateFunctionalDefine("# args", ["args"]), AssembleTimeTypes.FUNCTION, true, true)}
+            }, AssembleTimeTypes.FEXP, true, true);
             
             // Functions are just lambdas, 0 refers to arg 0, and so on. They are of type Function returns type of type 'type'
             // The 'self' containing the lambda's type is the return type
             Program.LabelDataBase["typeof"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",        new ObjectToken((ObjectToken ctx) => new ObjectToken(ctx.type, AssembleTimeTypes.TYPE), AssembleTimeTypes.TYPE)},
-                {"ctx",     new ObjectToken(0,                                                                      AssembleTimeTypes.OBJECT) },
+                {"",        new ObjectToken((ObjectToken ctx) => new ObjectToken(ctx.type, AssembleTimeTypes.TYPE, true, true), AssembleTimeTypes.TYPE, true, true)},
+                {"ctx",     new ObjectToken(0, AssembleTimeTypes.OBJECT, true, true) },
                 
                 // arg num 0 => ctx
-                {"0",       new ObjectToken("ctx", default, default)},
+                {"0",       new ObjectToken("ctx", default, true, true)},
                 
-                {"args",    new ObjectToken(1, AssembleTimeTypes.INT)}
-            }, AssembleTimeTypes.FUNCTION);
+                {"args",    new ObjectToken(1, AssembleTimeTypes.INT, true, true)}
+            }, AssembleTimeTypes.FUNCTION, true, true);
 
             Program.LabelDataBase["exists"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",        new ObjectToken((string ctx) => Database.GetObjectFromAlias(ctx) is null, AssembleTimeTypes.INT)},
-                {"ctx",     new ObjectToken(0,                                                        AssembleTimeTypes.OBJECT) },
+                {"",        new ObjectToken((string ctx) => Database.GetObjectFromAlias(ctx) is null, AssembleTimeTypes.INT, true, true)},
+                {"ctx",     new ObjectToken(0, AssembleTimeTypes.OBJECT, true, true) },
                 
                 // arg num 0 => ctx
-                {"0",       new ObjectToken("ctx", default, default)},
+                {"0",       new ObjectToken("ctx", default, false, true)},
                 
-                {"args",    new ObjectToken(1, AssembleTimeTypes.INT)}
-            }, AssembleTimeTypes.FUNCTION);
+                {"args",    new ObjectToken(1, AssembleTimeTypes.INT, true, true)}
+            }, AssembleTimeTypes.FUNCTION, true, true);
 
             Program.ActiveScopeBuffer.Add(Program.LabelDataBase); // add rs to 'as', default rs
             Program.ObjectSearchBuffer = [Program.LabelDataBase]; // by default, contains nothing more than this. For each search AS[^1] is added

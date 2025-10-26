@@ -175,9 +175,9 @@ namespace uhla.Core {
                                 member.type switch {
                                     AssembleTimeTypes.INT    => 0,
                                     AssembleTimeTypes.STRING => string.Empty
-                                }, default
+                                }, default, true, true
                              )}
-                        }, member.type);
+                        }, member.type, true, true);
 
                         // process unaries 
                         while (PendingUnaryOperators.Count > 0) {

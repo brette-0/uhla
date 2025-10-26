@@ -32,7 +32,9 @@ internal record struct HierarchyTokens_t {
             Mapping[$"{Mapping.Count - 1}"].StringIndex + Mapping[$"{Mapping.Count - 1}"].StringLength,
             new ObjectToken(
                 Mapping,
-                AssembleTimeTypes.TUPLE
+                AssembleTimeTypes.TUPLE,
+                true,
+                false
             )
         );
     }
@@ -246,7 +248,12 @@ internal enum CheckDirectiveStatus {
 
 internal interface IArchitecture {
 
-    bool MemoryReserve(ref RunTimeVariableType ctx);
+    /// <summary>
+    /// returns index of allocated back through ref RTV, returns negative if failed alloc
+    /// </summary>
+    /// <param name="ctx"></param>
+    /// <returns></returns>
+    int  MemoryReserve(ref RunTimeVariableType ctx);
     bool MemoryFree(ref    RunTimeVariableType ctx);
     
     

@@ -6,7 +6,7 @@ namespace uhla.Architectures {
         
         // TODO: The memory instructions for 6502 either don't care ever or ask for a 'map file' for memory
         
-        public bool MemoryReserve(ref RunTimeVariableType ctx) {
+        public int MemoryReserve(ref RunTimeVariableType ctx) {
             throw new NotImplementedException();
         }
         public bool MemoryFree(ref    RunTimeVariableType ctx) {
@@ -24,19 +24,19 @@ namespace uhla.Architectures {
         }
         public virtual void Initalize() {
             Program.LabelDataBase["a"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",         new ObjectToken('a', AssembleTimeTypes.REG)},
-                {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.INT) }
-            }, AssembleTimeTypes.REG);
+                {"#self",    new ObjectToken('a', AssembleTimeTypes.REG, true, true)},
+                {"indexing", new ObjectToken(0,   AssembleTimeTypes.INT, true, true) }
+            }, AssembleTimeTypes.REG, true, true);
 
             Program.LabelDataBase["x"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",         new ObjectToken('x', AssembleTimeTypes.INT)},
-                {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.INT) }
-            }, AssembleTimeTypes.REG);
+                {"#self",    new ObjectToken('x', AssembleTimeTypes.INT, true, true)},
+                {"indexing", new ObjectToken(0,   AssembleTimeTypes.INT, true, true) }
+            }, AssembleTimeTypes.REG, true, true);
 
             Program.LabelDataBase["y"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",         new ObjectToken('y', AssembleTimeTypes.INT)},
-                {"indexing", new ObjectToken(0,                                  AssembleTimeTypes.INT) }
-            }, AssembleTimeTypes.REG);
+                {"#self",    new ObjectToken('y', AssembleTimeTypes.INT, true, true)},
+                {"indexing", new ObjectToken(0,   AssembleTimeTypes.INT, true, true) }
+            }, AssembleTimeTypes.REG, true, true);
         }
 
         public virtual CheckDirectiveStatus CheckDirective(ref List<EvalToken> args,

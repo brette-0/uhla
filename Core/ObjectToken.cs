@@ -7,7 +7,7 @@ internal class ObjectToken {
         constant = 0x02
     }
             
-    internal ObjectToken (object pData, AssembleTimeTypes pType, bool pDefined = true, bool pConstant = false) {
+    internal ObjectToken (object pData, AssembleTimeTypes pType, bool pDefined, bool pConstant) {
         data     = pData;
         type     = pType;
         defined  = pDefined;
@@ -38,22 +38,6 @@ internal class ObjectToken {
             members = (Dictionary<string, ObjectToken>)pOT.data;
             members.Add("this", this);  // entirely broken!! TODO: immediate fix required!
         }
-    }
-
-    /// <summary>
-    /// 'undefined' constructor.
-    /// </summary>
-    /// <param name="ctx"></param>
-    /// <param name="pType"></param>
-    /// <param name="pLevel"></param>
-    internal ObjectToken((List<HierarchyTokens_t>? Tokens, int MaxHierarchy, string Representation) ctx, AssembleTimeTypes pType = AssembleTimeTypes.UNDEFINED) {
-        data = new Dictionary<string, ObjectToken>{
-            {"#self",       new ObjectToken(ctx,                     AssembleTimeTypes.UNDEFINED)},
-            {"#dependants", new ObjectToken(new List<ObjectToken>(), AssembleTimeTypes.UNDEFINED)}
-        };
-        type     = pType;
-        defined  = false;
-        constant = false;
     }
 
     internal ObjectToken? GetMember(string name) => ((Dictionary<string, ObjectToken>)data).GetValueOrDefault(name);
