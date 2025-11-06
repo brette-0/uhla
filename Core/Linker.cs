@@ -12,9 +12,13 @@ internal class Linker {
             null,
             new TomlModelOptions { ConvertPropertyName = name => name }
         );
-        
-        foreach (var (_, seg) in Script.Segments) {
 
+        var ActiveOffset = 0;
+        foreach (var (_, seg) in Script.Segments) {
+            if (!seg.Split(ref ActiveOffset, null)) {
+                Script = null;
+                return;
+            }
         }
         return;
     }
@@ -57,7 +61,7 @@ internal class Linker {
             /// <param name="activeOffset">An 'incrementation' exploring global offsets.</param>
             /// <param name="parent"></param>
             /// <returns></returns>
-            private bool Split(ref int activeOffset, Segment? parent) {
+            internal bool Split(ref int activeOffset, Segment? parent) {
                 globalOffset += activeOffset;
 
                 Segments = Segments.OrderBy(s => s.Value.offset).ToDictionary();
@@ -116,7 +120,6 @@ internal class Linker {
             
             public int                         offset   { get; set; }
             public int                         width    { get; set; }
-            public string?                     memory   { get; set; }
             public Dictionary<string, Segment> Segments { get; set; } = [];
 
             // parameterised by core.Linker, not by toml parser
