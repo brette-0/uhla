@@ -1,8 +1,37 @@
-[memory]
-ram         = [1, 0x0000, 0x8000]
-flash       = [0, 0x8000, 0x8000]
-
 [segments]
-rodata      = ["flash", 0x0000, 0x140]
-proc        = ["flash", -1, 0]
-vectors     = ["flash", 0x7ffa, 6]
+    [segments.ram]
+        write = 1
+        cpu   = 0
+        rom   = -1
+        width = 0x800
+
+        [segments.ram.direct]
+            offset = 0
+            width  = 256
+
+        [segments.ram.stack]
+        offset = 256
+        width  = 256
+
+    [segments.cart]
+        write = 0
+        cpu   = 0x8000
+        rom   = 0
+        width = 0x8000
+
+        [segments.rodata]
+            offset = 0
+            width  = 256
+ 
+        [segments.vectors]
+            offset = 0x7ffa
+            width  = 6
+        
+
+[rules]
+    proc    = ["segments.cart", "segments.cart.rodata"]
+    table   = ["segments.cart.rodata", "segments.cart"]
+    slow    = ["segments.ram", "segments.direct"]
+    fast    = ["segments.direct", "segments.ram"]
+    direct  = ["segments.direct"]
+    

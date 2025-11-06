@@ -327,7 +327,7 @@ Svenska           ""-l sw""
                                                            """);
             }
 
-            var Config = Toml.ToModel<UHLAConfigTomlTemplate>(
+            var Config = Toml.ToModel<uhlaConfigTomlTemplate>(
                                                                   File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "UHLA.toml")),
                                                                   null,
                                                                   new TomlModelOptions { ConvertPropertyName = name => name }
@@ -435,7 +435,7 @@ Svenska           ""-l sw""
         }
     }
 
-    internal class UHLAConfigTomlTemplate {
+    internal class uhlaConfigTomlTemplate {
         public class DefaultsBlock {
             public string DefaultWarningLevel { get; set; } = "DefaultWarningLevel";
             public string DefaultLanguage     { get; set; } = "DefaultLanguage";

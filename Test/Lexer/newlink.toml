@@ -1,0 +1,40 @@
+# NES/Famicom (NROM) Linker Script Example
+[memory]
+    # memory info (contributes to Ricoh2a03.Memory)
+    [memory.sysram]
+        write = 1
+        start = 0x0000
+        width = 0x0800
+
+
+    # cartridge space (contributes to output)
+    [memory.cartrom]
+        write = 0
+        start = 0x8000
+        width = 0x8000
+
+
+[segments]
+    # ram segment, child nodes inherit memory
+    [segments.sysram]
+        memory = "sysram"
+        start  = 0x0000
+        width  = 0x0800
+
+        # allocation for direct (zero) page
+        [segments.sysram.direct]
+            start  = 0x0000
+            width  = 0x0100
+
+        # allocation for stack page
+        [segments.sysram.stack]
+            start  = 0x0100
+            width  = 0x0100
+
+
+# these become keywords for scripting
+[rules]
+    stack  = ["sysram.stack"]
+    direct = ["sysram.direct"]
+    fast   = ["sysram.direct", "sysram"]
+    slow   = ["sysram", "sysram.direct"]

@@ -40,7 +40,6 @@ x64/
 *.vssscc
 .builds
 *.pidb
-*.log
 *.svclog
 *.scc
 
@@ -51,6 +50,9 @@ ipch/
 *.opensdf
 *.sdf
 *.cachefile
+
+# Docs
+.venv
 
 # Visual Studio profiler
 *.psess
