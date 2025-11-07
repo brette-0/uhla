@@ -31,7 +31,7 @@ def __main__():
 
     for segment in segments:
         globalOffset = regions[segment["region"]]["start"]
-        
+
         pass
 
     return

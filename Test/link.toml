@@ -1,37 +1,41 @@
-[segments]
-    [segments.ram]
-        write = 1
+[dynamic]
+    [dynamic.ram]
         cpu   = 0
-        rom   = -1
+        offset = 0    
         width = 0x800
 
-        [segments.ram.direct]
+        [dynamic.ram.direct]
             offset = 0
             width  = 256
+        
+        [dynamic.ram.stack]
+            offset = 256
+            width  = 256
+    
 
-        [segments.ram.stack]
-        offset = 256
-        width  = 256
+[static]
+    [static.prgrom]
+        cpu    = 0x8000
+        offset = 0
+        width  = 0x8000
 
-    [segments.cart]
-        write = 0
-        cpu   = 0x8000
-        rom   = 0
-        width = 0x8000
-
-        [segments.rodata]
+        [static.rodata]
             offset = 0
             width  = 256
  
-        [segments.vectors]
+        [static.vectors]
             offset = 0x7ffa
             width  = 6
         
+    [static.chrrom]
+        cpu    = 0
+        offset = 0x8000
+        width  = 0x2000
 
 [rules]
-    proc    = ["segments.cart", "segments.cart.rodata"]
-    table   = ["segments.cart.rodata", "segments.cart"]
-    slow    = ["segments.ram", "segments.direct"]
-    fast    = ["segments.direct", "segments.ram"]
-    direct  = ["segments.direct"]
+    proc    = ["static.prgrom", "static.prgrom.rodata"]
+    table   = ["static.prgrom.rodata", "static.prgrom"]
+    slow    = ["dynamic.ram", "dynamic.ram.direct"]
+    fast    = ["dynamic.ram.direct", "dynamic.ram"]
+    direct  = ["dynamic.ram.direct"]
     

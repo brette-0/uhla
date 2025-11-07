@@ -6,21 +6,30 @@ using Tomlyn;
 
 internal class Linker {
     internal Linker(string fp) {
-        
-        var Script = Toml.ToModel<Format>(
+        Script = Toml.ToModel<Format>(
             File.ReadAllText(fp),
             null,
             new TomlModelOptions { ConvertPropertyName = name => name }
         );
 
-        var ActiveOffset = 0;
-        foreach (var (_, seg) in Script.Segments) {
-            if (!seg.Split(ref ActiveOffset, null)) {
+        
+        foreach (var (_, seg) in Script.Statics) {
+            // set AO to 0 per top level segment (each top level is its own memory location, physically different)
+            var activeOffset = 0;
+            if (!seg.Split(ref activeOffset, null)) {
                 Script = null;
                 return;
             }
         }
-        return;
+        
+        foreach (var (_, seg) in Script.Dynamics) {
+            // set AO to 0 per top level segment (each top level is its own memory location, physically different)
+            var activeOffset = 0;
+            if (!seg.Split(ref activeOffset, null)) {
+                Script = null;
+                return;
+            }
+        }
     }
 
     /// <summary>
@@ -34,11 +43,15 @@ internal class Linker {
     }
 
     internal class Format {
-        public class Memory {
-            public int offset { get; set; }
-            public int width  { get; set; }
-            public int write  { get; set; }
+        public class Static : Segment {
+            public int cpu { get; set; }
+            public int rom { get; set; }
         }
+
+        public class Dynamic : Segment {
+            public int cpu { get; set; }
+        }
+        
 
         public class Segment {
             internal class Slice {
@@ -127,8 +140,10 @@ internal class Linker {
             internal List<Slice> Slices = [];
         }
 
-        public Dictionary<string, Segment>       Segments { get; set; } = [];
-        public Dictionary<string, Memory>        Regions  { get; set; } = [];
+        public Dictionary<string, Static>        Statics  { get; set; } = [];
+        public Dictionary<string, Dynamic>       Dynamics { get; set; } = [];
         public Dictionary<string, List<Segment>> Rules    { get; set; } = [];
     }
+
+    internal Format? Script;
 }
