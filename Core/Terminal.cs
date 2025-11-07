@@ -444,7 +444,8 @@ Svenska           ""-l sw""
             }
             #endregion Default Langauge from Config TOML
 
-            Program.SourceFileSearchPaths = [.. Config.Paths.LibraryIncludePaths];
+            Program.SourceFileSearchPaths.Clear();
+            Program.SourceFileSearchPaths.AddRange(Config.Paths.LibraryIncludePaths);
 
             if (Program.SourceFileSearchPaths.Count == 0) {
                 // warn, no libraries at all (this is unusual, they should at least have the standard library)

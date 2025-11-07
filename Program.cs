@@ -51,17 +51,17 @@ internal static class Program {
         return 0;
     }
 
-    internal static List<List<string>> SourceFileContentBuffer = [];
-    internal static List<int>          SourceFileIndexBuffer   = [];
-    internal static List<string>       SourceFileNameBuffer    = [];
-    internal static List<int>          SourceFileLineBuffer    = []; // Used for ERROR REPORT ONLY
-    internal static List<int>          SourceFileStepBuffer    = []; // Used for ERROR REPORT ONLY
+    internal static readonly List<List<string>> SourceFileContentBuffer = [];
+    internal static readonly List<int>          SourceFileIndexBuffer   = [];
+    internal static readonly List<string>       SourceFileNameBuffer    = [];
+    internal static readonly List<int>          SourceFileLineBuffer    = []; // Used for ERROR REPORT ONLY
+    internal static readonly List<int>          SourceFileStepBuffer    = []; // Used for ERROR REPORT ONLY
 
-    internal static Dictionary<string, ObjectToken?>       LabelDataBase      = [];
-    internal static List<Dictionary<string, ObjectToken?>> ActiveScopeBuffer  = [];
-    internal static List<Dictionary<string, ObjectToken?>> ObjectSearchBuffer = [];
+    internal static readonly Dictionary<string, ObjectToken?>       LabelDataBase      = [];
+    internal static readonly List<Dictionary<string, ObjectToken?>> ActiveScopeBuffer  = [];
+    internal static readonly List<Dictionary<string, ObjectToken?>> ObjectSearchBuffer = [];
 
-    internal static List<string> SourceFileSearchPaths = [];
+    internal static readonly List<string>                           SourceFileSearchPaths = [];
 
     internal static Languages     ActiveLanguage;
     internal static WarningLevels WarningLevel;

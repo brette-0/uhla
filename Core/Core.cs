@@ -65,7 +65,7 @@ namespace uhla.Core {
             }, AssembleTimeTypes.FUNCTION, true, true);
 
             Program.ActiveScopeBuffer.Add(Program.LabelDataBase); // add rs to 'as', default rs
-            Program.ObjectSearchBuffer = [Program.LabelDataBase]; // by default, contains nothing more than this. For each search AS[^1] is added
+            Program.ObjectSearchBuffer.Add(Program.LabelDataBase); // by default, contains nothing more than this. For each search AS[^1] is added
 
             Program.Architecture = Program.EArchitecture switch {
                 Architectures.NMOS_6502  => new NMOS_6502(),

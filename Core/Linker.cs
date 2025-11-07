@@ -28,6 +28,49 @@ internal class Linker {
                 return;
             }
         }
+
+        Format.Segment? activeSegment;
+        foreach (var (rule, segs) in Script.Rules) {
+            Rules.Add(rule, []);
+            foreach (var name in segs) {
+                var path = name.Split('.');
+                switch (path[0]) {
+                    case "static":
+                        activeSegment = Script.Statics.GetValueOrDefault(path[1]);
+                        if (activeSegment is null) {
+                            // error, rule specified non-existent segment
+                            Script = null;
+                            return;
+                        }
+                        break;
+                    
+                    case "dynamic":
+                        activeSegment = Script.Dynamics.GetValueOrDefault(path[1]);
+                        if (activeSegment is null) {
+                            // error, rule specified non-existent segment
+                            Script = null;
+                            return;
+                        }
+                        break;
+                    
+                    default:
+                        // error
+                        Script = null;
+                        return;
+                }
+
+                foreach (var p in path.Skip(2)) {
+                    activeSegment = activeSegment.Segments.GetValueOrDefault(p);
+                    if (activeSegment is null) {
+                        // error, rule specified non-existent segment
+                        Script = null;
+                        return;
+                    }
+                }
+                
+                Rules[rule].Add(activeSegment);
+            }
+        }
     }
 
     /// <summary>
@@ -136,8 +179,9 @@ internal class Linker {
 
         public Dictionary<string, TopLevel>      Statics  { get; set; } = [];
         public Dictionary<string, TopLevel>      Dynamics { get; set; } = [];
-        public Dictionary<string, List<Segment>> Rules    { get; set; } = [];
+        public Dictionary<string, List<string>>  Rules    { get; set; } = [];
     }
 
     internal Format? Script;
+    internal readonly Dictionary<string, List<Format.Segment>> Rules = [];
 }
