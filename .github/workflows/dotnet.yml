@@ -7,9 +7,9 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build-ubuntu:
+  build-ubuntu-x64:
     runs-on: ubuntu-latest
-    name: Build & Test (Ubuntu)
+    name: Build & Test (Ubuntu x64)
     steps:
       - uses: actions/checkout@v4
 
@@ -23,14 +23,35 @@ jobs:
         run: dotnet restore
 
       - name: Build
-        run: dotnet build --no-restore
+        run: dotnet build --no-restore -r linux-x64
 
       - name: Test
         run: dotnet test --no-build --verbosity normal
 
-  build-windows:
+  build-ubuntu-x86:
+    runs-on: ubuntu-latest
+    name: Build & Test (Ubuntu x86)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+          include-prerelease: true
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore -r linux-x86
+
+      - name: Test
+        run: dotnet test --no-build --verbosity normal
+
+  build-windows-x64:
     runs-on: windows-latest
-    name: Build & Test (Windows)
+    name: Build & Test (Windows x64)
     steps:
       - uses: actions/checkout@v4
 
@@ -44,14 +65,14 @@ jobs:
         run: dotnet restore
 
       - name: Build
-        run: dotnet build --no-restore
+        run: dotnet build --no-restore -r win-x64
 
       - name: Test
         run: dotnet test --no-build --verbosity normal
 
-  build-macos:
-    runs-on: macos-latest
-    name: Build & Test (macOS)
+  build-windows-x86:
+    runs-on: windows-latest
+    name: Build & Test (Windows x86)
     steps:
       - uses: actions/checkout@v4
 
@@ -65,7 +86,28 @@ jobs:
         run: dotnet restore
 
       - name: Build
-        run: dotnet build --no-restore
+        run: dotnet build --no-restore -r win-x86
+
+      - name: Test
+        run: dotnet test --no-build --verbosity normal
+
+  build-macos-x64:
+    runs-on: macos-latest
+    name: Build & Test (macOS x64)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+          include-prerelease: true
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore -r osx-x64
 
       - name: Test
         run: dotnet test --no-build --verbosity normal
