@@ -1,41 +1,42 @@
 [dynamic]
-    [dynamic.ram]
-        cpu   = 0
-        offset = 0    
-        width = 0x800
-
-        [dynamic.ram.direct]
-            offset = 0
-            width  = 256
+    [dynamic.system]
+        offset = 0          # address is derived from offset with bss regions (it does not contribute to file out)
+        width  = 0x800      # width of memory hunk (physical)
         
-        [dynamic.ram.stack]
-            offset = 256
-            width  = 256
+        [dynamic.system.direct]
+            offset = 0      # relative offset to dynamic.system
+            width  = 256    # direct refers to 'zero page' or the first page
+        
+        [dynamic.system.stack]
+            offset = 256    # relative offset to dynamic.system
+            width  = 256    # the stack lies from 0x100 to 0x200
     
 
 [static]
     [static.prgrom]
-        cpu    = 0x8000
-        offset = 0
-        width  = 0x8000
+        address = 0x8000    # with the NES in mind, ROM begins at 0x8000
+        offset  = 0         # in file, this is where the content begins
+        width   = 0x8000    # it is 32KiB in size
 
-        [static.rodata]
-            offset = 0
-            width  = 256
+        [static.prgrom.rodata]
+            offset = 0      # the rodata begins at the first ROM page
+            width  = 256    # page aligned data is faster to access
  
-        [static.vectors]
-            offset = 0x7ffa
-            width  = 6
+        [static.prgrom.vectors]
+            offset = 0x7ffa # the vectors may only lie in the last
+            width  = 6      # 6 bytes of CPU
         
     [static.chrrom]
-        cpu    = 0
-        offset = 0x8000
-        width  = 0x2000
+        offset = 0x8000     # NES ROMs demand the CHR to be stored after PRG
+        width  = 0x2000     # the minimum is 8KiB
 
+# ordered in order of link
 [rules]
+    direct  = ["dynamic.system.direct"]
+    fast    = ["dynamic.system.direct", "dynamic.system"]    
     proc    = ["static.prgrom", "static.prgrom.rodata"]
     table   = ["static.prgrom.rodata", "static.prgrom"]
-    slow    = ["dynamic.ram", "dynamic.ram.direct"]
-    fast    = ["dynamic.ram.direct", "dynamic.ram"]
-    direct  = ["dynamic.ram.direct"]
+    slow    = ["dynamic.system", "dynamic.system.direct"]
+    
+
     

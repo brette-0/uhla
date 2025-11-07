@@ -42,7 +42,7 @@ internal static class Terminal {
                     }
 
                     Program.Linker = new Linker(args[++i]);
-                    if (Program.Linker.Script is null) {
+                    if (Program.Linker.Rules.Count is 0) {
                         // error creating
                         return default;
                     }
