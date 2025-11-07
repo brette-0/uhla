@@ -66,6 +66,7 @@ internal static class Program {
     internal static Languages     ActiveLanguage;
     internal static WarningLevels WarningLevel;
 
-    internal static Core.Architectures                   EArchitecture;
-    internal static IArchitecture Architecture;
+    internal static Core.Architectures EArchitecture;
+    internal static IArchitecture      Architecture;
+    internal static Linker?            Linker;
 }

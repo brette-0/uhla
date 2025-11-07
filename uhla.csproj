@@ -22,8 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Architectures\2a03\boards\" />
-    <Folder Include="Architectures\6502\math\" />
+    <Folder Include="Architectures\6502\lib\math\" />
     <Folder Include="Properties\" />
   </ItemGroup>
 

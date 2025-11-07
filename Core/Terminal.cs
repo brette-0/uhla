@@ -15,9 +15,9 @@ internal static class Terminal {
                 
                 
     internal static (string InputPath, string OutputPath, Responses Response) Parse(string[] args) {
-        string InputPath   = "", OutputPath = "";
-        var    StringIndex = 0;
-        var    Flattened   = string.Join(" ", args);
+        var (InputPath, OutputPath) = (string.Empty, string.Empty);
+        var StringIndex = 0;
+        var Flattened   = string.Join(" ", args);
 
         var Response = Responses.Proceed;
         Program.WarningLevel = WarningLevels.NONE;
@@ -29,8 +29,27 @@ internal static class Terminal {
             StringIndex += args[i].Length;
 
             switch (args[i]) {
-                case "-t":
-                case "--target":
+                case "-ll":
+                case "--link":
+                    if (i == args.Length - 1) {
+                        // error, no linker script provided
+                        return default;
+                    }
+
+                    if (Program.Linker is not null) {
+                        // error, linker is already created
+                        return default;
+                    }
+
+                    Program.Linker = new Linker(args[++i]);
+                    if (Program.Linker.Script is null) {
+                        // error creating
+                        return default;
+                    }
+                    break;
+                
+                case "-a":
+                case "--architecture":
                     if (i == args.Length - 1) {
                         // error, no target provided
                         return default;
@@ -162,17 +181,18 @@ internal static class Terminal {
                             $"""
                              UHLA 2a03 - GPL V2 Brette Allen 2026
 
-                             -t | --target       | [arg]     | TODO: WRITE 'SET TARGET' INFO HERE.
-                             -i | --input        | [path]    | {Language.Language.Connectives[(Program.ActiveLanguage, "Entrypoint Source Assembly File")]}
-                             -o | --output       | [path]    | {Language.Language.Connectives[(Program.ActiveLanguage, "Output ROM/Disk Binary Output")]}
-                             -h | --help         |           | {Language.Language.Connectives[(Program.ActiveLanguage, "Display the help string (you did that)")]}
-                             -h | --help         | [arg]     | TODO: WRITE "GET INFO ON SPECIFIC ARGUMENT FUNCTION" HERE
-                             -l | --language     | [lang]    | {Language.Language.Connectives[(Program.ActiveLanguage, "Choose a language to use")]}
-                             -w | --warning      | [level]   | TODO: Write "SET WARNING LEVEL" HERE
-                             -d | --directory    | [path]    | TODO: Write "SET CWD" HERE
-                             -c | --config       | [path]    | TODO: Write "CONFIG FETCH" HERE
+                             -a  | --architecture | [arg]     | TODO: WRITE 'SET Architecture' INFO HERE.
+                             -ll | --link         | [path]    | TODO: WRITE 'SET LINK PATH' INFO HERE
+                             -i  | --input        | [path]    | {Language.Language.Connectives[(Program.ActiveLanguage, "Entrypoint Source Assembly File")]}
+                             -o  | --output       | [path]    | {Language.Language.Connectives[(Program.ActiveLanguage, "Output ROM/Disk Binary Output")]}
+                             -h  | --help         |           | {Language.Language.Connectives[(Program.ActiveLanguage, "Display the help string (you did that)")]}
+                             -h  | --help         | [arg]     | TODO: WRITE "GET INFO ON SPECIFIC ARGUMENT FUNCTION" HERE
+                             -l  | --language     | [lang]    | {Language.Language.Connectives[(Program.ActiveLanguage, "Choose a language to use")]}
+                             -w  | --warning      | [level]   | TODO: Write "SET WARNING LEVEL" HERE
+                             -d  | --directory    | [path]    | TODO: Write "SET CWD" HERE
+                             -c  | --config       | [path]    | TODO: Write "CONFIG FETCH" HERE
                                     
-                             """,            -1, default, null, null);
+                             """,            -1, 0, null, null);
                     } else {
                         // TODO: Add support for all new arguments
                         switch (args[++i]) {

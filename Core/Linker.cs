@@ -1,5 +1,3 @@
-using Microsoft.CodeAnalysis.Scripting;
-
 namespace uhla.Core;
 
 using Tomlyn;
@@ -43,13 +41,9 @@ internal class Linker {
     }
 
     internal class Format {
-        public class Static : Segment {
+        public class TopLevel : Segment {
             public int cpu { get; set; }
             public int rom { get; set; }
-        }
-
-        public class Dynamic : Segment {
-            public int cpu { get; set; }
         }
         
 
@@ -140,8 +134,8 @@ internal class Linker {
             internal List<Slice> Slices = [];
         }
 
-        public Dictionary<string, Static>        Statics  { get; set; } = [];
-        public Dictionary<string, Dynamic>       Dynamics { get; set; } = [];
+        public Dictionary<string, TopLevel>      Statics  { get; set; } = [];
+        public Dictionary<string, TopLevel>      Dynamics { get; set; } = [];
         public Dictionary<string, List<Segment>> Rules    { get; set; } = [];
     }
 
