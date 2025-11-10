@@ -25,6 +25,8 @@ internal static class Terminal {
         var LoadedConfig = false;
         var CWDSet       = false;
 
+        string? LinkerPath = null;
+
         for (var i = 0; i < args.Length; i++) {
             StringIndex += args[i].Length;
 
@@ -41,11 +43,7 @@ internal static class Terminal {
                         return default;
                     }
 
-                    Program.Linker = new Linker(args[++i]);
-                    if (Program.Linker.Rules.Count is 0) {
-                        // error creating
-                        return default;
-                    }
+                    LinkerPath = args[++i];
                     break;
                 
                 case "-a":
@@ -328,6 +326,18 @@ Svenska           ""-l sw""
         }
 
         if (!LoadedConfig) LoadedConfig = LoadConfig();
+
+        if (LinkerPath is null) {
+            // error no linker specified
+            return default;
+        }
+        
+        Program.Linker = new Linker(LinkerPath);
+        if (Program.Linker.Rules.Count is 0) {
+            // error creating linker
+            return default;
+        }
+        
         return LoadedConfig ? (InputPath, OutputPath, Response) : default;
 
         static bool LoadConfig(string? path = null) {
@@ -470,7 +480,7 @@ Svenska           ""-l sw""
         public DefaultsBlock Defaults { get; set; } = new();
     }
 
-    internal record struct ErrorContext {
+    internal struct ErrorContext {
         internal ErrorLevels    ErrorLevel;
         internal ErrorTypes     ErrorType;
         internal DecodingPhases DecodingPhase;

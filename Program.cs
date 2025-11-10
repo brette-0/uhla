@@ -9,6 +9,7 @@ internal static class Program {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
 
         var (InputPath, OutputPath, Response) = Terminal.Parse(args);
+        
         switch (Response) {
             case Terminal.Responses.Terminate_Error:
                 return (int)ErrorTypes.ParsingError;   // Exit if parsing returns error
@@ -66,7 +67,7 @@ internal static class Program {
     internal static Languages     ActiveLanguage;
     internal static WarningLevels WarningLevel;
 
-    internal static Core.Architectures EArchitecture;
-    internal static IArchitecture      Architecture;
-    internal static Linker?            Linker;
+    internal static Core.Architectures     EArchitecture;
+    internal static IArchitecture          Architecture;
+    internal static Linker?                Linker;
 }

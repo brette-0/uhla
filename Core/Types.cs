@@ -215,11 +215,15 @@ internal enum ErrorLevels : byte {
 }
 
 internal enum ErrorTypes : byte {
-    None, SyntaxError, ParsingError, NothingToDo
+    None, SyntaxError, ParsingError, LinkerError, NothingToDo
+}
+
+internal enum ErrorNames : byte {
+    ErroneousTopLevelSegment
 }
 
 internal enum DecodingPhases : byte {
-    TERMINAL, TOKEN, EVALUATION
+    TERMINAL, LINKER_INIT, TOKEN, EVALUATION
 }
 
 internal enum Architectures {

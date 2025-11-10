@@ -12,8 +12,21 @@ internal class Linker {
             new TomlModelOptions { ConvertPropertyName = name => name.ToLowerInvariant() }
         );
 
+        var ETLs = Parse.Where(e => !new List<string> {"dynamic", "static", "rules"}.Contains(e.Key)).ToArray();
         // check top level domains
-        if (Parse.Any(e => !new List<string> {"dynamic", "static", "rules"}.Contains(e.Key))) {
+        if (ETLs.Length > 0) {
+            var ErrorContext = new Terminal.ErrorContext {
+                ErrorLevel      = ErrorLevels.ERROR,
+                ErrorType       = ErrorTypes.LinkerError,
+                DecodingPhase   = DecodingPhases.LINKER_INIT,
+                Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.ErroneousTopLevelSegment)]([ETLs[0].Key]),
+                LineNumber      = -1,
+                StepNumber      = 0,
+                ContextFileName = fp,
+                Context = () => string.Empty
+            };
+
+            Terminal.Error(ErrorContext);
             // error, erroneous top level segments
             return;
         }
@@ -95,12 +108,10 @@ internal class Linker {
                 return;
             }
             Rules.Add(key, Rule);
-        } else {
-            // error, rules isn't a TomlTable invalid type
-            return;
         }
-        
 
+
+        // error, rules isn't a TomlTable invalid type
         return;
 
         StaticTopLevel? ParseStaticSegmentTopLevel(ref IDictionary<string, object> Table) {
@@ -109,12 +120,14 @@ internal class Linker {
             if (ctx is null) {
                 // error pass back
                 return null;
-            } else if (Table.ContainsKey("address") && Table["address"] is long address) {
-                return new StaticTopLevel(ctx.Value.offset, ctx.Value.width, address);
-            } else {
-                // error, seg offset is not integer or does not exist
-                return null;
             }
+
+            if (Table.ContainsKey("address") && Table["address"] is long address) {
+                return new StaticTopLevel(ctx.Value.offset, ctx.Value.width, address);
+            }
+
+            // error, seg offset is not integer or does not exist
+            return null;
         }
 
         (long offset, long width, Dictionary<string, Segment>? segments)? __ParseSegmentToml(ref IDictionary<string, object> Table) {

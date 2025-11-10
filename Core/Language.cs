@@ -40,51 +40,57 @@ namespace uhla.Core {
             internal static Languages CaptureSystemLanguage() {
                 string langCode;
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
-                    using var key = Registry.CurrentUser.OpenSubKey(@"Control Panel\International\User Profile");
-                    var langs = key?.GetValue("Languages") as string[];
+                    using var key   = Registry.CurrentUser.OpenSubKey(@"Control Panel\International\User Profile");
+                    var       langs = key?.GetValue("Languages") as string[];
                     langCode = langs?.FirstOrDefault() ?? CultureInfo.InstalledUICulture.Name;
                 } else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) {
                     langCode = Environment.GetEnvironmentVariable("LANG")?
-                           .Split('.')[0] ?? "en";
+                       .Split('.')[0] ?? "en";
                 } else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) {
                     var psi = new ProcessStartInfo("defaults", "read .GlobalPreferences AppleLanguages") {
                         RedirectStandardOutput = true
                     };
                     var outp = Process.Start(psi)!.StandardOutput.ReadToEnd();
                     langCode = outp.Split(['"', ','], StringSplitOptions.RemoveEmptyEntries)
-                               .FirstOrDefault(s => s.Length >= 2) ?? "en";
+                                   .FirstOrDefault(s => s.Length >= 2) ?? "en";
                 } else {
                     // error, attempted to capture system language
                     langCode = "";
                 }
 
                 return langCode switch {
-                    "en" or "en-GB" => Languages.English_UK,
-                    "en-US" => Languages.English_US,
-                    "es" or "es-ES" => Languages.Spanish,
-                    "de" or "de-DE" => Languages.German,
-                    "ja" or "ja-JP" => Languages.Japanese,
-                    "fr" or "fr-FR" => Languages.French,
+                    "en" or "en-GB"            => Languages.English_UK,
+                    "en-US"                    => Languages.English_US,
+                    "es" or "es-ES"            => Languages.Spanish,
+                    "de" or "de-DE"            => Languages.German,
+                    "ja" or "ja-JP"            => Languages.Japanese,
+                    "fr" or "fr-FR"            => Languages.French,
                     "pt" or "pt-PT" or "pt-BR" => Languages.Portuguese,
-                    "ru" or "ru-RU" => Languages.Russian,
-                    "it" or "it-IT" => Languages.Italian,
-                    "nl" or "nl-NL" => Languages.Dutch,
-                    "pl" or "pl-PL" => Languages.Polish,
-                    "tr" or "tr-TR" => Languages.Turkish,
-                    "vi" or "vi-VN" => Languages.Vietnamese,
-                    "id" or "id-ID" => Languages.Indonesian,
-                    "cs" or "cs-CZ" => Languages.Czech,
-                    "ko" or "ko-KR" => Languages.Korean,
-                    "uk" or "uk-UA" => Languages.Ukrainian,
-                    "ar" or "ar-SA" => Languages.Arabic,
-                    "sv" or "sv-SE" => Languages.Swedish,
-                    "fa" or "fa-IR" => Languages.Persian,
+                    "ru" or "ru-RU"            => Languages.Russian,
+                    "it" or "it-IT"            => Languages.Italian,
+                    "nl" or "nl-NL"            => Languages.Dutch,
+                    "pl" or "pl-PL"            => Languages.Polish,
+                    "tr" or "tr-TR"            => Languages.Turkish,
+                    "vi" or "vi-VN"            => Languages.Vietnamese,
+                    "id" or "id-ID"            => Languages.Indonesian,
+                    "cs" or "cs-CZ"            => Languages.Czech,
+                    "ko" or "ko-KR"            => Languages.Korean,
+                    "uk" or "uk-UA"            => Languages.Ukrainian,
+                    "ar" or "ar-SA"            => Languages.Arabic,
+                    "sv" or "sv-SE"            => Languages.Swedish,
+                    "fa" or "fa-IR"            => Languages.Persian,
                     "zh" or "zh-CN" or "zh-TW" => Languages.Chinese,
-                    _ => Languages.English_US
+                    _                          => Languages.English_US
                 };
             }
 
-            /// <summary>
+            internal static readonly Dictionary<(Languages, ErrorNames), Func<object[], string>> Errors = new() {
+                // Linker
+                // erroneous top level segments
+                {(Languages.English_UK, ErrorNames.ErroneousTopLevelSegment), (object[] args) => string.Format("Erroneous table '{0}' found at the top level of linker script, may only consist of 'static', 'dynamic' and 'rules'", args)}
+            };
+
+        /// <summary>
             /// Here, connectives refer to strings that connect translated components that directly describe the context of the information.
             /// </summary>
             internal static readonly Dictionary<(Languages, string), string> Connectives = new() {
@@ -617,6 +623,27 @@ namespace uhla.Core {
                 {(Languages.Swedish,        DecodingPhases.TOKEN),    "Fas för avkodning av token"},
                 {(Languages.Persian,        DecodingPhases.TOKEN),    "مرحله رمزگشایی توکن"},
                 {(Languages.Chinese,        DecodingPhases.TOKEN),    "标记解码阶段"},
+                
+                {(Languages.English_UK,     DecodingPhases.LINKER_INIT),    "Linker Initialisation Phase"},
+                {(Languages.English_US,     DecodingPhases.LINKER_INIT),    "Linker Initialization Phase"},
+                {(Languages.Spanish,        DecodingPhases.LINKER_INIT),    "Fase de inicialización del enlazador"},
+                {(Languages.German,         DecodingPhases.LINKER_INIT),    "Linker-Initialisierungsphase"},
+                {(Languages.French,         DecodingPhases.LINKER_INIT),    "Phase d’initialisation de l’éditeur de liens"},
+                {(Languages.Portuguese,     DecodingPhases.LINKER_INIT),    "Fase de inicialização do ligador"},
+                {(Languages.Russian,        DecodingPhases.LINKER_INIT),    "Фаза инициализации компоновщика"},
+                {(Languages.Italian,        DecodingPhases.LINKER_INIT),    "Fase di inizializzazione del linker"},
+                {(Languages.Dutch,          DecodingPhases.LINKER_INIT),    "Linker-initialisatiefase"},
+                {(Languages.Polish,         DecodingPhases.LINKER_INIT),    "Faza inicjalizacji łączycza"},
+                {(Languages.Turkish,        DecodingPhases.LINKER_INIT),    "Bağlayıcı başlatma aşaması"},
+                {(Languages.Vietnamese,     DecodingPhases.LINKER_INIT),    "Giai đoạn khởi tạo liên kết"},
+                {(Languages.Indonesian,     DecodingPhases.LINKER_INIT),    "Fase inisialisasi linker"},
+                {(Languages.Czech,          DecodingPhases.LINKER_INIT),    "Fáze inicializace linkeru"},
+                {(Languages.Korean,         DecodingPhases.LINKER_INIT),    "링커 초기화 단계"},
+                {(Languages.Ukrainian,      DecodingPhases.LINKER_INIT),    "Фаза ініціалізації зв’язування"},
+                {(Languages.Arabic,         DecodingPhases.LINKER_INIT),    "مرحلة تهيئة الرابط"},
+                {(Languages.Swedish,        DecodingPhases.LINKER_INIT),    "Länkarinitieringsfas"},
+                {(Languages.Persian,        DecodingPhases.LINKER_INIT),    "مرحله‌ی راه‌اندازی لینک‌گر"},
+                {(Languages.Chinese,        DecodingPhases.LINKER_INIT),    "链接器初始化阶段"},
             };
 
 
@@ -666,6 +693,28 @@ namespace uhla.Core {
                 {(Languages.Swedish,        ErrorTypes.ParsingError), "Parsningsfel"},
                 {(Languages.Persian,        ErrorTypes.ParsingError), "خطای تجزیه"},
                 {(Languages.Chinese,        ErrorTypes.ParsingError), "解析错误"},
+                
+                {(Languages.English_UK,   ErrorTypes.LinkerError), "Linker Error"},
+                {(Languages.English_US,   ErrorTypes.LinkerError), "Linker Error"},
+                {(Languages.Spanish,      ErrorTypes.LinkerError), "Error de vinculación"},
+                {(Languages.German,       ErrorTypes.LinkerError), "Linker-Fehler"},
+                {(Languages.Japanese,     ErrorTypes.LinkerError), "リンカ・エラー"},
+                {(Languages.French,       ErrorTypes.LinkerError), "Erreur de l’éditeur de liens"},
+                {(Languages.Portuguese,   ErrorTypes.LinkerError), "Erro do ligador"},
+                {(Languages.Russian,      ErrorTypes.LinkerError), "Ошибка компоновки"},
+                {(Languages.Italian,      ErrorTypes.LinkerError), "Errore del linker"},
+                {(Languages.Dutch,        ErrorTypes.LinkerError), "Linker-fout"},
+                {(Languages.Polish,       ErrorTypes.LinkerError), "Błąd linkowania"},
+                {(Languages.Turkish,      ErrorTypes.LinkerError), "Bağlayıcı hatası"},
+                {(Languages.Vietnamese,   ErrorTypes.LinkerError), "Lỗi liên kết"},
+                {(Languages.Indonesian,   ErrorTypes.LinkerError), "Kesalahan linker"},
+                {(Languages.Czech,        ErrorTypes.LinkerError), "Chyba linkeru"},
+                {(Languages.Korean,       ErrorTypes.LinkerError), "링커 오류"},
+                {(Languages.Ukrainian,    ErrorTypes.LinkerError), "Помилка зв’язування"},
+                {(Languages.Arabic,       ErrorTypes.LinkerError), "خطأ فى الرابط"},
+                {(Languages.Swedish,      ErrorTypes.LinkerError), "Länkningsfel"},
+                {(Languages.Persian,      ErrorTypes.LinkerError), "خطای لینک‌گر"},
+                {(Languages.Chinese,      ErrorTypes.LinkerError), "链接器错误"},
 
                 // Nothing To Do
                 {(Languages.English_UK,     ErrorTypes.NothingToDo), "Nothing to do"},
