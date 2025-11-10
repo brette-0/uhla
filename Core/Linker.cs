@@ -11,13 +11,7 @@ internal class Linker {
             fp,
             new TomlModelOptions { ConvertPropertyName = name => name.ToLowerInvariant() }
         );
-        
-        // convert parse into Format
-        if (Parse.Any(e => e.Key.StartsWith("rules.") && e.Key.Count(c => c == '.') > 1)) {
-            // tables found inside the rules, forbidden
-            return;
-        }
-        
+
         // check top level domains
         if (Parse.Any(e => !new List<string> {"dynamic", "static", "rules"}.Contains(e.Key))) {
             // error, erroneous top level segments
@@ -54,7 +48,7 @@ internal class Linker {
                     return;
                 }
                 
-                Dynamic.Add(key, seg);
+                Static.Add(key, seg);
             } else {
                 // error, static seg is not a Table
                 return;
@@ -86,7 +80,7 @@ internal class Linker {
                                 return;
                             }
 
-                            bone.Segments.GetValueOrDefault(nbone);
+                            bone = bone.Segments.GetValueOrDefault(nbone);
                         }
 
                         Rule.Add(bone);
@@ -109,60 +103,95 @@ internal class Linker {
 
         return;
 
-        Segment? ParseStaticSegmentTopLevel(ref IDictionary<string, object> Table) {
-            var ctx = new StaticTopLevel(Offset: 0, Width: 0, Address: 0);
-            if (Table.ContainsKey("address") && Table["address"] is int address) {
-                ctx.address = address;
+        StaticTopLevel? ParseStaticSegmentTopLevel(ref IDictionary<string, object> Table) {
+            var ctx = __ParseSegmentToml(ref Table);
+
+            if (ctx is null) {
+                // error pass back
+                return null;
+            } else if (Table.ContainsKey("address") && Table["address"] is long address) {
+                return new StaticTopLevel(ctx.Value.offset, ctx.Value.width, address);
+            } else {
+                // error, seg offset is not integer or does not exist
+                return null;
+            }
+        }
+
+        (long offset, long width, Dictionary<string, Segment>? segments)? __ParseSegmentToml(ref IDictionary<string, object> Table) {
+            var (_offset, _width, _segments) = (0l, 0l, new Dictionary<string, Segment>());
+            if (Table.ContainsKey("offset") && Table["offset"] is long offset) {
+                _offset = offset;
             } else {
                 // error, seg offset is not integer or does not exist
                 return null;
             }
             
-            return ParseSegmentToml(ref Table);
+            if (Table.ContainsKey("width") && Table["width"] is long width) {
+                _width = width;
+            } else {
+                // error, seg width is not integer or does not exist
+                return null;
+            }
+
+            foreach (var (name, seg) in Table.Where(e => !new[] {"offset", "width", "address"}.Contains(e.Key))) {
+                if (seg is TomlTable SegTable) {
+                    IDictionary<string, object> SegDict = SegTable.ToDictionary();
+                    var                         child   = ParseSegmentToml(ref SegDict);
+                    if (child is null) {
+                        // error, child had issue - report back
+                        return null;
+                    }
+                    _segments.Add(name, child);    
+                } else {
+                    // error child segment is not a table
+                    return null;
+                }
+            }
+           
+            return (_offset, _width, _segments);
         }
         
         Segment? ParseSegmentToml(ref IDictionary<string, object> Table) {
             var ctx = new Segment(Offset: 0, Width: 0);
-            if (Table.ContainsKey("offset") && Table["offset"] is int offset) {
+            if (Table.ContainsKey("offset") && Table["offset"] is long offset) {
                 ctx.offset = offset;
             } else {
                 // error, seg offset is not integer or does not exist
                 return null;
             }
             
-            if (Table.ContainsKey("width") && Table["width"] is int width) {
+            if (Table.ContainsKey("width") && Table["width"] is long width) {
                 ctx.width = width;
             } else {
                 // error, seg width is not integer or does not exist
                 return null;
             }
-            
-            if (!Table.TryGetValue("segments", out var SegmentsObject)) return ctx;
-            if (SegmentsObject is TomlTable Segments) foreach (var (ckey, value) in Segments) {
-                if (value is TomlTable SegTable) {
+
+            foreach (var (name, seg) in Table.Where(e => !new[] {"offset", "width", "address"}.Contains(e.Key))) {
+                if (seg is TomlTable SegTable) {
                     IDictionary<string, object> SegDict = SegTable.ToDictionary();
-                    var child = ParseSegmentToml(ref SegDict);
+                    var                         child   = ParseSegmentToml(ref SegDict);
                     if (child is null) {
                         // error, child had issue - report back
                         return null;
                     }
-                    ctx.Segments.Add(ckey, child);    
+                    ctx.Segments.Add(name, child);    
                 } else {
                     // error child segment is not a table
                     return null;
                 }
             }
-
+           
             return ctx;
         }
         
         StaticTopLevel? AddStaticTopLevel(ref TomlTable Table) {
-            (int? Offset, int? Width, int? Address) = (null, null, null);
+            (long? Offset, long? Width, long? Address) = (null, null, null);
             foreach (var (key, value) in Table) {
                 switch (key) {
-                    case "address": if (value is int address) { Address = address;} else address = -1; break;
-                    case "offset":  if (value is int offset)  { Offset = offset;}   else offset  = -1; break;
-                    case "width":   if (value is int width)   { Width = width;}     else width   = -1; break;
+                    case "address": if (value is long address) { Address = address;} else address = -1; break;
+                    case "offset":  if (value is long offset)  { Offset  = offset;}   else offset = -1; break;
+                    case "width":   if (value is long width)   { Width   = width;}     else width = -1; break;
                     
                     default:
                         // error, member should not exist
@@ -175,15 +204,15 @@ internal class Linker {
                 return null;
             }
             
-            return new StaticTopLevel((int)Offset, (int)Width, (int)Address);
+            return new StaticTopLevel((long)Offset, (long)Width, (long)Address);
         }
         
         Segment? AddSegment(ref TomlTable Table) {
-            (int? Offset, int? Width, int? Address) = (null, null, null);
+            (long? Offset, long? Width, long? Address) = (null, null, null);
             foreach (var (key, value) in Table) {
                 switch (key) {
-                    case "offset":  if (value is int offset)  { Offset  = offset;}   else offset = -1; break;
-                    case "width":   if (value is int width)   { Width   = width;}     else width = -1; break;
+                    case "offset": if (value is long offset)  { Offset = offset;}    else offset = -1; break;
+                    case "width":  if (value is long width)   { Width  = width;}     else width = -1; break;
                     
                     default:
                         // error, member should not exist
@@ -196,7 +225,7 @@ internal class Linker {
                 return null;
             }
             
-            return new Segment((int)Offset, (int)Width);
+            return new Segment((long)Offset, (long)Width);
         }
     }
 
@@ -211,27 +240,27 @@ internal class Linker {
     }
 
     public class StaticTopLevel : Segment {
-        internal StaticTopLevel(int Offset, int Width, int Address) : base (Offset, Width) {
+        internal StaticTopLevel(long Offset, long Width, long Address) : base (Offset, Width) {
             address = Address;
         }
-        public int address { get; set; }
+        public long address { get; set; }
     }
         
 
     public class Segment {
 
-        internal Segment(int Offset, int Width) {
+        internal Segment(long Offset, long Width) {
             offset = Offset; width = Width;
         }
         
         internal class Slice {
-            internal Slice(int Offset, int Width) {
+            internal Slice(long Offset, long Width) {
                 offset = Offset;
                 width = Width;
             }
             
-            internal int offset;
-            internal int width;
+            internal long offset;
+            internal long width;
         }
 
         /// <summary>
@@ -244,7 +273,7 @@ internal class Linker {
         /// <param name="activeOffset">An 'incrementation' exploring global offsets.</param>
         /// <param name="parent"></param>
         /// <returns></returns>
-        internal bool Split(ref int activeOffset, Segment? parent) {
+        internal bool Split(ref long activeOffset, Segment? parent) {
             globalOffset += activeOffset;
 
             Segments = Segments.OrderBy(s => s.Value.offset).ToDictionary();
@@ -301,9 +330,9 @@ internal class Linker {
             return true;
         }
         
-        public int                          offset   { get; set; }
-        public int                          width    { get; set; }
-        private int                         globalOffset;
+        public  long                        offset { get; set; }
+        public  long                        width  { get; set; }
+        private long                        globalOffset;
         private List<Slice>                 Slices = [];
         public  Dictionary<string, Segment> Segments { get; set; } = [];
     }

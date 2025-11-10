@@ -27,6 +27,7 @@
             width  = 6      # 6 bytes of CPU
         
     [static.chrrom]
+        address = 0         # required by linker, nothing else
         offset = 0x8000     # NES ROMs demand the CHR to be stored after PRG
         width  = 0x2000     # the minimum is 8KiB
 
