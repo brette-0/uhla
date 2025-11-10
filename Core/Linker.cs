@@ -17,200 +17,145 @@ internal class Linker {
             // tables found inside the rules, forbidden
             return;
         }
-
+        
         // check top level domains
-        foreach (var (key, value) in Parse.Where(e => e.Key.All(c => c is not '.'))) {
-            switch (key) {
-                case "static":
-                case "dynamic":
-                    if (value is not TomlTable) {
-                        // error : static must be a TomlTable
-                        return;
-                    }
-                    
-                    break;
-                
-                case "rules":
-                    if (value is not TomlArray) {
-                        // error : static must be a TomlTable
-                        return;
-                    }
-                    
-                    break;
-                
-                default:
-                    // erroneous top level
-                    return;
-            }
+        if (Parse.Any(e => !new List<string> {"dynamic", "static", "rules"}.Contains(e.Key))) {
+            // error, erroneous top level segments
+            return;
         }
         
-        // segments
-        var Pairing = new Dictionary<string, Segment>();
-        foreach (var (key, value) in Order(Parse).Where(e => e.Key.Count(c => c == '.') > 0 
-                                                          && e.Value is TomlTable
-                                                          && !e.Key.StartsWith("rules."))) {
-            var     body = key.TrimStart('.'); 
+        if (Parse["dynamic"] is TomlTable DynamicSegments) foreach (var (key, value) in DynamicSegments) {
+            if (value is TomlTable segToml) {
+                IDictionary<string, object> segDict = segToml.ToDictionary();
+                var                         seg     = ParseSegmentToml(ref segDict);
 
-            // top level segments
-            if (body.Count(c => c == '.') is 1) {
-                switch (key.Trim('.')) {
-                    case "static":
-                        if (value is TomlTable StaticTable) {
-                            var resp = AddStaticTopLevel(ref StaticTable);
-                            if (resp is null) {
-                                // error pass back
-                                return;
-                            }
-                            
-                            // add top level segment
-                            Static.Add(key.TrimStart('.'), resp);
-                            Pairing.Add(body, resp);
-                        } else {
-                            // error, member of static was not a table
-                            return;
-                        }
-                        
-                        continue;
-                    
-                    case "dynamic":
-                        if (value is TomlTable DynamicTable) {
-                            var resp = AddSegment(ref DynamicTable);
-                            if (resp is null) {
-                                // error pass back
-                                return;
-                            }
-                            
-                            // add top level segment
-                            Pairing.Add(body, resp);
-                            Dynamic.Add(key.TrimStart('.'), resp);
-                        } else {
-                            // error, member of static was not a table
-                            return;
-                        }
-                        
-                        continue;
-                    
-                    #if DEBUG
-                    default:
-                        // should be impossible, but if we attempt to subscribe an unpermitted top level domain, error
-                        return;
-                    #endif
-                }
-            }
-
-            var activeSegment = key.Trim('.') switch {
-                "static"  => Static.GetValueOrDefault(body.Trim('.')),
-                "dynamic" => Dynamic.GetValueOrDefault(body.Trim('.')),
-                #if DEBUG
-                _ => throw new Exception($"Unknown segment: {key}"),
-                #else
-                _ => null,
-                #endif
-            };
-            
-            #if RELEASE
-            if  (activeSegment is null) {
-                // fatal error : report on github
-                return;
-            }
-            #endif
-
-            //activeSegment = activeSegment!;
-
-            var bones = body.Split('.');
-            
-            foreach (var boneName in bones.Skip(1).SkipLast(1)) {
-                // we can make this completely null safe because we ordered it such that we create parents first always
-                // invalid parents are destroyed and the process is quit before attempt to subscribe chidlren
-                activeSegment = activeSegment!.Segments.GetValueOrDefault(boneName)!;
-            }
-
-            if (value is TomlTable Table) {
-                var resp = AddSegment(ref Table);
-                if (resp is null) {
+                if (seg is null) {
+                    // error in seg, report back
                     return;
                 }
-
-                Pairing.Add(body, resp);
-                activeSegment!.Segments.Add(bones[^1], resp);
-            }
-            #if DEBUG
-            else {
-                // fatal error
-                throw new Exception($"Unknown segment: {body}");
-            }
-            #endif
-        }
-        
-        foreach (var (_, seg) in Static) {
-            // set AO to 0 per top level segment (each top level is its own memory location, physically different)
-            var activeOffset = 0;
-            if (!seg.Split(ref activeOffset, null)) {
-                Rules = [];
-                return;
-            }
-        }
-        
-        foreach (var (_, seg) in Dynamic) {
-            // set AO to 0 per top level segment (each top level is its own memory location, physically different)
-            var activeOffset = 0;
-            if (!seg.Split(ref activeOffset, null)) {
-                Rules = [];
-                return;
-            }
-        }
-
-        if (Parse["rules"] is TomlTable ParsedRules) {
-            foreach (var (key, rule) in ParsedRules) {
-                Rules.Add(key, []);
-                foreach (var path in from seg in (TomlArray)rule select ((string)seg!).Split('.')) {
-                    Segment? activeSegment;
-                    switch (path[0]) {
-                        case "static":
-                            activeSegment = Static.GetValueOrDefault(path[1]);
-                            if (activeSegment is null) {
-                                // error, rule specified non-existent segment
-                                Rules = [];
-                                return;
-                            }
-                            break;
-                    
-                        case "dynamic":
-                            activeSegment = Dynamic.GetValueOrDefault(path[1]);
-                            if (activeSegment is null) {
-                                // error, rule specified non-existent segment
-                                Rules = [];
-                                return;
-                            }
-                            break;
-                    
-                        default:
-                            // error
-                            Rules = [];
-                            return;
-                    }
-                    
-                    foreach (var p in path.Skip(2)) {
-                        activeSegment = activeSegment.Segments.GetValueOrDefault(p);
-                        if (activeSegment is null) {
-                            // error, rule specified non-existent segment
-                            Rules = [];
-                            return;
-                        }
-                    }
                 
-                    Rules[key].Add(activeSegment);
-                }
+                Dynamic.Add(key, seg);
+            } else {
+                // error, dynamic seg is not a Table
+                return;
             }
         } else {
-            // error : rules isn't a table of rule arrays
-            Rules = [];
+            // error, dynamics isn't a TomlTable invalid type
+            return;
         }
+        
+        if (Parse["static"] is TomlTable StaticSegments) foreach (var (key, value) in StaticSegments) {
+            if (value is TomlTable segToml) {
+                IDictionary<string, object> segDict = segToml.ToDictionary();
+                var                         seg     = ParseStaticSegmentTopLevel(ref segDict);
+
+                if (seg is null) {
+                    // error in seg, report back
+                    return;
+                }
+                
+                Dynamic.Add(key, seg);
+            } else {
+                // error, static seg is not a Table
+                return;
+            }
+        } else {
+            // error, statics isn't a TomlTable invalid type
+            return;
+        }
+        
+        List<Segment> Rule    = [];
+        if (Parse["rules"] is TomlTable RuleTable) foreach (var (key, value) in RuleTable) {
+            if (value is TomlArray ruleArray) {
+                foreach (var seg in ruleArray) {
+                    if (seg is string RuleString) {
+                        // process rule
+                        var bones = RuleString.Split('.');
+                        
+                        var bone = bones[0] switch {
+                            "dynamic" => Dynamic.GetValueOrDefault(bones[1]),
+                            "static"  => Static. GetValueOrDefault(bones[1]),
+
+                            _ => null,
+
+                        };
+
+                        foreach (var nbone in bones.Skip(2)) {
+                            if (bone is null) {
+                                // error - segment does not exist
+                                return;
+                            }
+
+                            bone.Segments.GetValueOrDefault(nbone);
+                        }
+
+                        Rule.Add(bone);
+
+                    } else {
+                        // error, rule is not a string
+                        return;
+                    }
+                }
+            } else {
+                // error, rules arent array
+                return;
+            }
+            Rules.Add(key, Rule);
+        } else {
+            // error, rules isn't a TomlTable invalid type
+            return;
+        }
+        
 
         return;
-        
-        IOrderedEnumerable<KeyValuePair<string,object>> Order(TomlTable t) => t.OrderBy(t => t.Key.Split('.').Length).ThenBy(t => t);
 
+        Segment? ParseStaticSegmentTopLevel(ref IDictionary<string, object> Table) {
+            var ctx = new StaticTopLevel(Offset: 0, Width: 0, Address: 0);
+            if (Table.ContainsKey("address") && Table["address"] is int address) {
+                ctx.address = address;
+            } else {
+                // error, seg offset is not integer or does not exist
+                return null;
+            }
+            
+            return ParseSegmentToml(ref Table);
+        }
+        
+        Segment? ParseSegmentToml(ref IDictionary<string, object> Table) {
+            var ctx = new Segment(Offset: 0, Width: 0);
+            if (Table.ContainsKey("offset") && Table["offset"] is int offset) {
+                ctx.offset = offset;
+            } else {
+                // error, seg offset is not integer or does not exist
+                return null;
+            }
+            
+            if (Table.ContainsKey("width") && Table["width"] is int width) {
+                ctx.width = width;
+            } else {
+                // error, seg width is not integer or does not exist
+                return null;
+            }
+            
+            if (!Table.TryGetValue("segments", out var SegmentsObject)) return ctx;
+            if (SegmentsObject is TomlTable Segments) foreach (var (ckey, value) in Segments) {
+                if (value is TomlTable SegTable) {
+                    IDictionary<string, object> SegDict = SegTable.ToDictionary();
+                    var child = ParseSegmentToml(ref SegDict);
+                    if (child is null) {
+                        // error, child had issue - report back
+                        return null;
+                    }
+                    ctx.Segments.Add(ckey, child);    
+                } else {
+                    // error child segment is not a table
+                    return null;
+                }
+            }
+
+            return ctx;
+        }
+        
         StaticTopLevel? AddStaticTopLevel(ref TomlTable Table) {
             (int? Offset, int? Width, int? Address) = (null, null, null);
             foreach (var (key, value) in Table) {
@@ -267,9 +212,9 @@ internal class Linker {
 
     public class StaticTopLevel : Segment {
         internal StaticTopLevel(int Offset, int Width, int Address) : base (Offset, Width) {
-            adress = Address;
+            address = Address;
         }
-        public int adress { get; set; }
+        public int address { get; set; }
     }
         
 
@@ -356,13 +301,11 @@ internal class Linker {
             return true;
         }
         
-        public int                         offset   { get; set; }
-        public int                         width    { get; set; }
-        
-        // parameterised by core.Linker, not by toml parser
-        private  int                         globalOffset;
-        private  List<Slice>                 Slices = [];
-        internal Dictionary<string, Segment> Segments { get; set; } = [];
+        public int                          offset   { get; set; }
+        public int                          width    { get; set; }
+        private int                         globalOffset;
+        private List<Slice>                 Slices = [];
+        public  Dictionary<string, Segment> Segments { get; set; } = [];
     }
 
     public Dictionary<string, StaticTopLevel> Static  { get; set; } = [];
