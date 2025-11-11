@@ -38,6 +38,3 @@
     proc    = ["static.prgrom", "static.prgrom.rodata"]
     table   = ["static.prgrom.rodata", "static.prgrom"]
     slow    = ["dynamic.system", "dynamic.system.direct"]
-    
-[badTopLevel]
-    

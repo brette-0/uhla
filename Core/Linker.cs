@@ -15,7 +15,7 @@ internal class Linker {
         var ETLs = Parse.Where(e => !new List<string> {"dynamic", "static", "rules"}.Contains(e.Key)).ToArray();
         // check top level domains
         if (ETLs.Length > 0) {
-            var ErrorContext = new Terminal.ErrorContext {
+            Terminal.Error(new Terminal.ErrorContext {
                 ErrorLevel      = ErrorLevels.ERROR,
                 ErrorType       = ErrorTypes.LinkerError,
                 DecodingPhase   = DecodingPhases.LINKER_INIT,
@@ -24,9 +24,7 @@ internal class Linker {
                 StepNumber      = 0,
                 ContextFileName = fp,
                 Context = () => string.Empty
-            };
-
-            Terminal.Error(ErrorContext);
+            });
             // error, erroneous top level segments
             return;
         }
@@ -34,40 +32,76 @@ internal class Linker {
         if (Parse["dynamic"] is TomlTable DynamicSegments) foreach (var (key, value) in DynamicSegments) {
             if (value is TomlTable segToml) {
                 IDictionary<string, object> segDict = segToml.ToDictionary();
-                var                         seg     = ParseSegmentToml(ref segDict);
+                var                      (ctx, err) = ParseSegmentToml(ref segDict);
 
-                if (seg is null) {
-                    // error in seg, report back
+                if (err is not null) {
+                    Terminal.Error(err.Value.ctx($"{key}.{err.Value.dbgname}"[..^1]));
                     return;
                 }
                 
-                Dynamic.Add(key, seg);
+                Dynamic.Add(key, ctx!);
             } else {
-                // error, dynamic seg is not a Table
+                Terminal.Error(new Terminal.ErrorContext {
+                    ErrorLevel      = ErrorLevels.ERROR,
+                    ErrorType       = ErrorTypes.LinkerError,
+                    DecodingPhase   = DecodingPhases.LINKER_INIT,
+                    Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.NonTableSegment)]([key, "dynamic"]),
+                    LineNumber      = -1,
+                    StepNumber      = 0,
+                    ContextFileName = fp,
+                    Context = () => string.Empty
+                });
                 return;
             }
         } else {
-            // error, dynamics isn't a TomlTable invalid type
+            Terminal.Error(new Terminal.ErrorContext {
+                ErrorLevel      = ErrorLevels.ERROR,
+                ErrorType       = ErrorTypes.LinkerError,
+                DecodingPhase   = DecodingPhases.LINKER_INIT,
+                Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.NonTableTopLevel)]([]),
+                LineNumber      = -1,
+                StepNumber      = 0,
+                ContextFileName = fp,
+                Context         = () => string.Empty
+            });
             return;
         }
         
         if (Parse["static"] is TomlTable StaticSegments) foreach (var (key, value) in StaticSegments) {
             if (value is TomlTable segToml) {
                 IDictionary<string, object> segDict = segToml.ToDictionary();
-                var                         seg     = ParseStaticSegmentTopLevel(ref segDict);
+                var                      (ctx, err) = ParseStaticSegmentTopLevel(ref segDict);
 
-                if (seg is null) {
-                    // error in seg, report back
+                if (err is not null) {
+                    Terminal.Error(err.Value.ctx($"{key}.{err.Value.dbgname}"[..^1]));
                     return;
                 }
                 
-                Static.Add(key, seg);
+                Static.Add(key, ctx!);
             } else {
-                // error, static seg is not a Table
+                Terminal.Error(new Terminal.ErrorContext {
+                    ErrorLevel      = ErrorLevels.ERROR,
+                    ErrorType       = ErrorTypes.LinkerError,
+                    DecodingPhase   = DecodingPhases.LINKER_INIT,
+                    Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.NonTableSegment)]([key, "static"]),
+                    LineNumber      = -1,
+                    StepNumber      = 0,
+                    ContextFileName = fp,
+                    Context = () => string.Empty
+                });
                 return;
             }
         } else {
-            // error, statics isn't a TomlTable invalid type
+            Terminal.Error(new Terminal.ErrorContext {
+                ErrorLevel      = ErrorLevels.ERROR,
+                ErrorType       = ErrorTypes.LinkerError,
+                DecodingPhase   = DecodingPhases.LINKER_INIT,
+                Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.NonTableTopLevel)]([]),
+                LineNumber      = -1,
+                StepNumber      = 0,
+                ContextFileName = fp,
+                Context         = () => string.Empty
+            });
             return;
         }
         
@@ -87,9 +121,31 @@ internal class Linker {
 
                         };
 
+                        if (bone is null) {
+                            Terminal.Error(new Terminal.ErrorContext {
+                                ErrorLevel      = ErrorLevels.ERROR,
+                                ErrorType       = ErrorTypes.LinkerError,
+                                DecodingPhase   = DecodingPhases.LINKER_INIT,
+                                Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.MissingSegment)]([key, seg]),
+                                LineNumber      = -1,
+                                StepNumber      = 0,
+                                ContextFileName = fp,
+                                Context = () => string.Empty
+                            });
+                        }
+
                         foreach (var nbone in bones.Skip(2)) {
                             if (bone is null) {
-                                // error - segment does not exist
+                                Terminal.Error(new Terminal.ErrorContext {
+                                    ErrorLevel      = ErrorLevels.ERROR,
+                                    ErrorType       = ErrorTypes.LinkerError,
+                                    DecodingPhase   = DecodingPhases.LINKER_INIT,
+                                    Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.MissingSegment)]([key, seg]),
+                                    LineNumber      = -1,
+                                    StepNumber      = 0,
+                                    ContextFileName = fp,
+                                    Context = () => string.Empty
+                                });
                                 return;
                             }
 
@@ -99,12 +155,30 @@ internal class Linker {
                         Rule.Add(bone);
 
                     } else {
-                        // error, rule is not a string
+                        Terminal.Error(new Terminal.ErrorContext {
+                            ErrorLevel      = ErrorLevels.ERROR,
+                            ErrorType       = ErrorTypes.LinkerError,
+                            DecodingPhase   = DecodingPhases.LINKER_INIT,
+                            Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.MissingSegment)]([key, seg]),
+                            LineNumber      = -1,
+                            StepNumber      = 0,
+                            ContextFileName = fp,
+                            Context = () => string.Empty
+                        });
                         return;
                     }
                 }
             } else {
-                // error, rules arent array
+                Terminal.Error(new Terminal.ErrorContext {
+                    ErrorLevel      = ErrorLevels.ERROR,
+                    ErrorType       = ErrorTypes.LinkerError,
+                    DecodingPhase   = DecodingPhases.LINKER_INIT,
+                    Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.NonArrayRule)]([key]),
+                    LineNumber      = -1,
+                    StepNumber      = 0,
+                    ContextFileName = fp,
+                    Context = () => string.Empty
+                });
                 return;
             }
             Rules.Add(key, Rule);
@@ -114,88 +188,145 @@ internal class Linker {
         // error, rules isn't a TomlTable invalid type
         return;
 
-        StaticTopLevel? ParseStaticSegmentTopLevel(ref IDictionary<string, object> Table) {
-            var ctx = __ParseSegmentToml(ref Table);
+        (StaticTopLevel? ctx, (Func<string, Terminal.ErrorContext> ctx, string dbgname)? err) ParseStaticSegmentTopLevel(ref IDictionary<string, object> Table) {
+            var (ctx, err) = __ParseSegmentToml(ref Table);
 
-            if (ctx is null) {
+            if (err is not null) {
                 // error pass back
-                return null;
+                return (null, err);
             }
 
             if (Table.ContainsKey("address") && Table["address"] is long address) {
-                return new StaticTopLevel(ctx.Value.offset, ctx.Value.width, address);
+                return (new StaticTopLevel(ctx!.Value.offset, ctx.Value.width, address), null);
             }
 
-            // error, seg offset is not integer or does not exist
-            return null;
+            // error, seg address is not integer or does not exist
+            return (null, (name => new Terminal.ErrorContext {
+                ErrorLevel      = ErrorLevels.ERROR,
+                ErrorType       = ErrorTypes.LinkerError,
+                DecodingPhase   = DecodingPhases.LINKER_INIT,
+                Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.MissingSegmentMember)]([name, "address"]),
+                LineNumber      = -1,
+                StepNumber      = 0,
+                ContextFileName = fp,
+                Context         = () => string.Empty
+            }, string.Empty));
         }
 
-        (long offset, long width, Dictionary<string, Segment>? segments)? __ParseSegmentToml(ref IDictionary<string, object> Table) {
-            var (_offset, _width, _segments) = (0l, 0l, new Dictionary<string, Segment>());
-            if (Table.ContainsKey("offset") && Table["offset"] is long offset) {
-                _offset = offset;
+        ((long offset, long width, Dictionary<string, Segment>? segments)? ctx, (Func<string, Terminal.ErrorContext> ctx, string dbgname)? err) __ParseSegmentToml(ref IDictionary<string, object> Table) {
+            var (offset, width, segments) = (0l, 0l, new Dictionary<string, Segment>());
+            if (Table.ContainsKey("offset") && Table["offset"] is long _offset) {
+                offset = _offset;
             } else {
-                // error, seg offset is not integer or does not exist
-                return null;
+                return (null, (name => new Terminal.ErrorContext {
+                    ErrorLevel      = ErrorLevels.ERROR,
+                    ErrorType       = ErrorTypes.LinkerError,
+                    DecodingPhase   = DecodingPhases.LINKER_INIT,
+                    Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.MissingSegmentMember)]([name, "offset"]),
+                    LineNumber      = -1,
+                    StepNumber      = 0,
+                    ContextFileName = fp,
+                    Context         = () => string.Empty
+                }, string.Empty));
             }
             
-            if (Table.ContainsKey("width") && Table["width"] is long width) {
-                _width = width;
+            if (Table.ContainsKey("width") && Table["width"] is long _width) {
+                width = _width;
             } else {
-                // error, seg width is not integer or does not exist
-                return null;
+                return (null, (name => new Terminal.ErrorContext {
+                    ErrorLevel      = ErrorLevels.ERROR,
+                    ErrorType       = ErrorTypes.LinkerError,
+                    DecodingPhase   = DecodingPhases.LINKER_INIT,
+                    Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.MissingSegmentMember)]([name, "width"]),
+                    LineNumber      = -1,
+                    StepNumber      = 0,
+                    ContextFileName = fp,
+                    Context         = () => string.Empty
+                }, string.Empty));
             }
 
             foreach (var (name, seg) in Table.Where(e => !new[] {"offset", "width", "address"}.Contains(e.Key))) {
                 if (seg is TomlTable SegTable) {
-                    IDictionary<string, object> SegDict = SegTable.ToDictionary();
-                    var                         child   = ParseSegmentToml(ref SegDict);
-                    if (child is null) {
+                    IDictionary<string, object>                                           SegDict = SegTable.ToDictionary();
+                    var child   = ParseSegmentToml(ref SegDict);
+                    if (child.err is not null) {
                         // error, child had issue - report back
-                        return null;
+                        return (null, (child.err.Value.ctx, $"{name}.{child.err.Value.dbgname}"));
                     }
-                    _segments.Add(name, child);    
+                    segments.Add(name, child.ctx!);    
                 } else {
-                    // error child segment is not a table
-                    return null;
+                    return (null, (child => new Terminal.ErrorContext {
+                        ErrorLevel      = ErrorLevels.ERROR,
+                        ErrorType       = ErrorTypes.LinkerError,
+                        DecodingPhase   = DecodingPhases.LINKER_INIT,
+                        Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.NonTableSegment)]([name, child]),
+                        LineNumber      = -1,
+                        StepNumber      = 0,
+                        ContextFileName = fp,
+                        Context         = () => string.Empty
+                    }, name));
                 }
             }
            
-            return (_offset, _width, _segments);
+            return ((offset, width, segments), null);
         }
         
-        Segment? ParseSegmentToml(ref IDictionary<string, object> Table) {
+        (Segment? ctx, (Func<string, Terminal.ErrorContext> ctx, string dbgname)? err) ParseSegmentToml(ref IDictionary<string, object> Table) {
             var ctx = new Segment(Offset: 0, Width: 0);
             if (Table.ContainsKey("offset") && Table["offset"] is long offset) {
                 ctx.offset = offset;
             } else {
-                // error, seg offset is not integer or does not exist
-                return null;
+                return (null, (name => new Terminal.ErrorContext {
+                    ErrorLevel      = ErrorLevels.ERROR,
+                    ErrorType       = ErrorTypes.LinkerError,
+                    DecodingPhase   = DecodingPhases.LINKER_INIT,
+                    Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.MissingSegmentMember)]([name, "offset"]),
+                    LineNumber      = -1,
+                    StepNumber      = 0,
+                    ContextFileName = fp,
+                    Context         = () => string.Empty
+                }, string.Empty));
             }
             
             if (Table.ContainsKey("width") && Table["width"] is long width) {
                 ctx.width = width;
             } else {
-                // error, seg width is not integer or does not exist
-                return null;
+                return (null, (name => new Terminal.ErrorContext {
+                    ErrorLevel      = ErrorLevels.ERROR,
+                    ErrorType       = ErrorTypes.LinkerError,
+                    DecodingPhase   = DecodingPhases.LINKER_INIT,
+                    Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.MissingSegmentMember)]([name, "offset"]),
+                    LineNumber      = -1,
+                    StepNumber      = 0,
+                    ContextFileName = fp,
+                    Context         = () => string.Empty
+                }, string.Empty));
             }
 
             foreach (var (name, seg) in Table.Where(e => !new[] {"offset", "width", "address"}.Contains(e.Key))) {
                 if (seg is TomlTable SegTable) {
-                    IDictionary<string, object> SegDict = SegTable.ToDictionary();
-                    var                         child   = ParseSegmentToml(ref SegDict);
-                    if (child is null) {
+                    IDictionary<string, object>                                           SegDict = SegTable.ToDictionary();
+                    var child   = ParseSegmentToml(ref SegDict);
+                    if (child.err is not null) {
                         // error, child had issue - report back
-                        return null;
+                        return (null, (child.err.Value.ctx, $"{name}.{child.err.Value.dbgname}"));
                     }
-                    ctx.Segments.Add(name, child);    
+                    ctx.Segments.Add(name, child.ctx!);    
                 } else {
-                    // error child segment is not a table
-                    return null;
+                    return (null, (child => new Terminal.ErrorContext {
+                        ErrorLevel      = ErrorLevels.ERROR,
+                        ErrorType       = ErrorTypes.LinkerError,
+                        DecodingPhase   = DecodingPhases.LINKER_INIT,
+                        Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.NonTableSegment)]([name, child]),
+                        LineNumber      = -1,
+                        StepNumber      = 0,
+                        ContextFileName = fp,
+                        Context         = () => string.Empty
+                    }, name));
                 }
             }
            
-            return ctx;
+            return (ctx, null);
         }
         
         StaticTopLevel? AddStaticTopLevel(ref TomlTable Table) {

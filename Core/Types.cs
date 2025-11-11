@@ -219,7 +219,12 @@ internal enum ErrorTypes : byte {
 }
 
 internal enum ErrorNames : byte {
-    ErroneousTopLevelSegment
+    ErroneousTopLevelSegment,
+    NonTableSegment,
+    NonTableTopLevel,
+    MissingSegment,
+    NonArrayRule,
+    MissingSegmentMember
 }
 
 internal enum DecodingPhases : byte {

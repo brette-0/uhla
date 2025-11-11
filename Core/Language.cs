@@ -86,8 +86,131 @@ namespace uhla.Core {
 
             internal static readonly Dictionary<(Languages, ErrorNames), Func<object[], string>> Errors = new() {
                 // Linker
-                // erroneous top level segments
-                {(Languages.English_UK, ErrorNames.ErroneousTopLevelSegment), (object[] args) => string.Format("Erroneous table '{0}' found at the top level of linker script, may only consist of 'static', 'dynamic' and 'rules'", args)}
+                // Erroneous top-level segments
+                {(Languages.English_UK, ErrorNames.ErroneousTopLevelSegment), args => string.Format("Erroneous table '{0}' found at the top level of linker script, may only consist of 'static', 'dynamic' and 'rules'", args)},
+                {(Languages.Spanish, ErrorNames.ErroneousTopLevelSegment), args => string.Format("Se ha encontrado la tabla errónea '{0}' en el nivel superior del script de enlace; sólo puede consistir de 'static', 'dynamic' y 'rules'", args)},
+                {(Languages.German, ErrorNames.ErroneousTopLevelSegment), args => string.Format("Fehlerhafte Tabelle '{0}' im obersten Level des Linker-Skripts gefunden; sie darf nur aus 'static', 'dynamic' und 'rules' bestehen", args)},
+                {(Languages.French, ErrorNames.ErroneousTopLevelSegment), args => string.Format("Table erronée «{0}» trouvée au niveau supérieur du script de l’éditeur de liens ; elle ne peut être que 'static', 'dynamic' ou 'rules'", args)},
+                {(Languages.Portuguese, ErrorNames.ErroneousTopLevelSegment), args => string.Format("Tabela incorreta '{0}' encontrada no nível superior do script de ligação; só pode consistir em 'static', 'dynamic' e 'rules'", args)},
+                {(Languages.Russian, ErrorNames.ErroneousTopLevelSegment), args => string.Format("Найдена неверная таблица «{0}» на верхнем уровне скрипта компоновщика; она может содержать только 'static', 'dynamic' и 'rules'", args)},
+                {(Languages.Italian, ErrorNames.ErroneousTopLevelSegment), args => string.Format("Tavola errata '{0}' trovata al livello superiore dello script del linker; può solo consistere di 'static', 'dynamic' e 'rules'", args)},
+                {(Languages.Dutch, ErrorNames.ErroneousTopLevelSegment), args => string.Format("Foutieve tabel '{0}' gevonden op het hoogste niveau van het linker-script; deze mag alleen bestaan uit 'static', 'dynamic' en 'rules'", args)},
+                {(Languages.Polish, ErrorNames.ErroneousTopLevelSegment), args => string.Format("Znaleziono nieprawidłową tabelę '{0}' na najwyższym poziomie skryptu linkera; może się składać wyłącznie z 'static', 'dynamic' i 'rules'", args)},
+                {(Languages.Turkish, ErrorNames.ErroneousTopLevelSegment), args => string.Format("Bağlayıcı betiğinin en üst düzeyinde hatalı tablo '{0}' bulundu; yalnızca 'static', 'dynamic' ve 'rules' içerebilir", args)},
+                {(Languages.Korean, ErrorNames.ErroneousTopLevelSegment), args => string.Format("링커 스크립트의 최상위에서 잘못된 테이블 '{0}'이(가) 발견되었습니다; 'static', 'dynamic', 'rules'만 포함될 수 있습니다", args)},
+                {(Languages.Chinese, ErrorNames.ErroneousTopLevelSegment), args => string.Format("在链接脚本的顶层发现错误的表 '{0}'；其只能由 'static'、'dynamic' 和 'rules' 组成", args)},
+
+                // Non-table segment
+                {(Languages.English_UK,     ErrorNames.NonTableSegment), args => string.Format("Segment member '{0}' inside '{1}' must be a table", args)},
+                {(Languages.English_US,     ErrorNames.NonTableSegment), args => string.Format("Segment member '{0}' within segment '{1}' must be a table", args)},
+                {(Languages.Spanish,        ErrorNames.NonTableSegment), args => string.Format("El miembro del segmento '{0}' dentro del segmento '{1}' debe ser una tabla", args)},
+                {(Languages.German,         ErrorNames.NonTableSegment), args => string.Format("Segmentmitglied '{0}' im Segment '{1}' muss eine Tabelle sein", args)},
+                {(Languages.French,         ErrorNames.NonTableSegment), args => string.Format("Le membre de segment '{0}' dans le segment '{1}' doit être une table", args)},
+                {(Languages.Portuguese,     ErrorNames.NonTableSegment), args => string.Format("O membro do segmento '{0}' dentro do segmento '{1}' deve ser uma tabela", args)},
+                {(Languages.Russian,        ErrorNames.NonTableSegment), args => string.Format("Элемент сегмента '{0}' внутри сегмента '{1}' должен быть таблицей", args)},
+                {(Languages.Italian,        ErrorNames.NonTableSegment), args => string.Format("Il membro del segmento '{0}' all'interno del segmento '{1}' deve essere una tabella", args)},
+                {(Languages.Dutch,          ErrorNames.NonTableSegment), args => string.Format("Segmentlid '{0}' binnen segment '{1}' moet een tabel zijn", args)},
+                {(Languages.Polish,         ErrorNames.NonTableSegment), args => string.Format("Element segmentu '{0}' w segmencie '{1}' musi być tabelą", args)},
+                {(Languages.Turkish,        ErrorNames.NonTableSegment), args => string.Format("'{1}' segmentindeki '{0}' üyesi bir tablo olmalıdır", args)},
+                {(Languages.Vietnamese,     ErrorNames.NonTableSegment), args => string.Format("Thành phần '{0}' trong phân đoạn '{1}' phải là một bảng", args)},
+                {(Languages.Indonesian,     ErrorNames.NonTableSegment), args => string.Format("Anggota segmen '{0}' di dalam segmen '{1}' harus berupa tabel", args)},
+                {(Languages.Czech,          ErrorNames.NonTableSegment), args => string.Format("Člen segmentu '{0}' v segmentu '{1}' musí být tabulkou", args)},
+                {(Languages.Korean,         ErrorNames.NonTableSegment), args => string.Format("세그먼트 '{1}'의 구성원 '{0}'은(는) 테이블이어야 합니다", args)},
+                {(Languages.Ukrainian,      ErrorNames.NonTableSegment), args => string.Format("Елемент сегмента '{0}' у сегменті '{1}' має бути таблицею", args)},
+                {(Languages.Arabic,         ErrorNames.NonTableSegment), args => string.Format("يجب أن يكون العضو '{0}' في المقطع '{1}' جدولاً", args)},
+                {(Languages.Swedish,        ErrorNames.NonTableSegment), args => string.Format("Segmentmedlemmen '{0}' i segmentet '{1}' måste vara en tabell", args)},
+                {(Languages.Persian,        ErrorNames.NonTableSegment), args => string.Format("عضو بخش '{0}' در بخش '{1}' باید یک جدول باشد", args)},
+                {(Languages.Chinese,        ErrorNames.NonTableSegment), args => string.Format("段“{1}”中的段成员“{0}”必须是一个表", args)},
+                
+                // Non-table top level
+                {(Languages.English_UK,     ErrorNames.NonTableTopLevel), _ => "Top-level members must be a table"},
+                {(Languages.English_US,     ErrorNames.NonTableTopLevel), _ => "Top-level members must be a table"},
+                {(Languages.Spanish,        ErrorNames.NonTableTopLevel), _ => "Los miembros de nivel superior deben ser una tabla"},
+                {(Languages.German,         ErrorNames.NonTableTopLevel), _ => "Elemente auf oberster Ebene müssen eine Tabelle sein"},
+                {(Languages.French,         ErrorNames.NonTableTopLevel), _ => "Les éléments de niveau supérieur doivent être une table"},
+                {(Languages.Portuguese,     ErrorNames.NonTableTopLevel), _ => "Os membros de nível superior devem ser uma tabela"},
+                {(Languages.Russian,        ErrorNames.NonTableTopLevel), _ => "Элементы верхнего уровня должны быть таблицей"},
+                {(Languages.Italian,        ErrorNames.NonTableTopLevel), _ => "I membri di livello superiore devono essere una tabella"},
+                {(Languages.Dutch,          ErrorNames.NonTableTopLevel), _ => "Topniveauelementen moeten een tabel zijn"},
+                {(Languages.Polish,         ErrorNames.NonTableTopLevel), _ => "Elementy najwyższego poziomu muszą być tabelą"},
+                {(Languages.Turkish,        ErrorNames.NonTableTopLevel), _ => "En üst düzey öğeler bir tablo olmalıdır"},
+                {(Languages.Vietnamese,     ErrorNames.NonTableTopLevel), _ => "Các thành phần cấp cao nhất phải là một bảng"},
+                {(Languages.Indonesian,     ErrorNames.NonTableTopLevel), _ => "Anggota tingkat atas harus berupa tabel"},
+                {(Languages.Czech,          ErrorNames.NonTableTopLevel), _ => "Prvky nejvyšší úrovně musí být tabulkou"},
+                {(Languages.Korean,         ErrorNames.NonTableTopLevel), _ => "최상위 구성원은 테이블이어야 합니다"},
+                {(Languages.Ukrainian,      ErrorNames.NonTableTopLevel), _ => "Елементи верхнього рівня мають бути таблицею"},
+                {(Languages.Arabic,         ErrorNames.NonTableTopLevel), _ => "يجب أن تكون العناصر ذات المستوى الأعلى جدولاً"},
+                {(Languages.Swedish,        ErrorNames.NonTableTopLevel), _ => "Toppnivåelement måste vara en tabell"},
+                {(Languages.Persian,        ErrorNames.NonTableTopLevel), _ => "اعضای سطح بالا باید یک جدول باشند"},
+                {(Languages.Chinese,        ErrorNames.NonTableTopLevel), _ => "顶层成员必须是表"},
+                
+                // Missing Segment
+                {(Languages.English_UK,     ErrorNames.MissingSegment), args => string.Format("Could not satisfy rule '{0}' with segment by name '{1}'", args)},
+                {(Languages.English_US,     ErrorNames.MissingSegment), args => string.Format("Could not satisfy rule '{0}' with segment by name '{1}'", args)},
+                {(Languages.Spanish,        ErrorNames.MissingSegment), args => string.Format("No se pudo satisfacer la regla '{0}' con el segmento llamado '{1}'", args)},
+                {(Languages.German,         ErrorNames.MissingSegment), args => string.Format("Regel '{0}' konnte mit dem Segment namens '{1}' nicht erfüllt werden", args)},
+                {(Languages.French,         ErrorNames.MissingSegment), args => string.Format("Impossible de satisfaire la règle '{0}' avec le segment nommé '{1}'", args)},
+                {(Languages.Portuguese,     ErrorNames.MissingSegment), args => string.Format("Não foi possível satisfazer a regra '{0}' com o segmento chamado '{1}'", args)},
+                {(Languages.Russian,        ErrorNames.MissingSegment), args => string.Format("Не удалось удовлетворить правило '{0}' с сегментом под именем '{1}'", args)},
+                {(Languages.Italian,        ErrorNames.MissingSegment), args => string.Format("Impossibile soddisfare la regola '{0}' con il segmento chiamato '{1}'", args)},
+                {(Languages.Dutch,          ErrorNames.MissingSegment), args => string.Format("Kon regel '{0}' niet voldoen met segment genaamd '{1}'", args)},
+                {(Languages.Polish,         ErrorNames.MissingSegment), args => string.Format("Nie można spełnić reguły '{0}' za pomocą segmentu o nazwie '{1}'", args)},
+                {(Languages.Turkish,        ErrorNames.MissingSegment), args => string.Format("'{1}' adlı segment ile '{0}' kuralı karşılanamadı", args)}, // reversed for natural Turkish
+                {(Languages.Vietnamese,     ErrorNames.MissingSegment), args => string.Format("Không thể đáp ứng quy tắc '{0}' với đoạn có tên '{1}'", args)},
+                {(Languages.Indonesian,     ErrorNames.MissingSegment), args => string.Format("Tidak dapat memenuhi aturan '{0}' dengan segmen bernama '{1}'", args)},
+                {(Languages.Czech,          ErrorNames.MissingSegment), args => string.Format("Nelze splnit pravidlo '{0}' se segmentem s názvem '{1}'", args)},
+                {(Languages.Korean,         ErrorNames.MissingSegment), args => string.Format("세그먼트 '{1}'(으)로 규칙 '{0}'을(를) 충족할 수 없습니다", args)}, // reordered, Korean reads subject–object–verb
+                {(Languages.Ukrainian,      ErrorNames.MissingSegment), args => string.Format("Не вдалося задовольнити правило '{0}' за допомогою сегмента з назвою '{1}'", args)},
+                {(Languages.Arabic,         ErrorNames.MissingSegment), args => string.Format("تعذر تلبية القاعدة '{0}' باستخدام المقطع المسمى '{1}'", args)}, // reversed phrasing for natural flow
+                {(Languages.Swedish,        ErrorNames.MissingSegment), args => string.Format("Kunde inte uppfylla regeln '{0}' med segmentet med namnet '{1}'", args)},
+                {(Languages.Persian,        ErrorNames.MissingSegment), args => string.Format("قانون '{0}' با بخش با نام '{1}' برآورده نشد", args)}, // natural Persian structure
+                {(Languages.Chinese,        ErrorNames.MissingSegment), args => string.Format("无法使用名为“{1}”的段满足规则“{0}”", args)}, // reversed for proper Chinese flow
+                
+                // Rule is not an array
+                {(Languages.English_UK,     ErrorNames.NonArrayRule), args => string.Format("Rule '{0}' must be an array!", args)},
+                {(Languages.English_US,     ErrorNames.NonArrayRule), args => string.Format("Rule '{0}' must be an array!", args)},
+                {(Languages.Spanish,        ErrorNames.NonArrayRule), args => string.Format("¡La regla '{0}' debe ser una matriz!", args)},
+                {(Languages.German,         ErrorNames.NonArrayRule), args => string.Format("Die Regel '{0}' muss ein Array sein!", args)},
+                {(Languages.French,         ErrorNames.NonArrayRule), args => string.Format("La règle '{0}' doit être un tableau !", args)},
+                {(Languages.Portuguese,     ErrorNames.NonArrayRule), args => string.Format("A regra '{0}' deve ser uma matriz!", args)},
+                {(Languages.Russian,        ErrorNames.NonArrayRule), args => string.Format("Правило '{0}' должно быть массивом!", args)},
+                {(Languages.Italian,        ErrorNames.NonArrayRule), args => string.Format("La regola '{0}' deve essere un array!", args)},
+                {(Languages.Dutch,          ErrorNames.NonArrayRule), args => string.Format("Regel '{0}' moet een array zijn!", args)},
+                {(Languages.Polish,         ErrorNames.NonArrayRule), args => string.Format("Reguła '{0}' musi być tablicą!", args)},
+                {(Languages.Turkish,        ErrorNames.NonArrayRule), args => string.Format("'{0}' kuralı bir dizi olmalıdır!", args)},
+                {(Languages.Vietnamese,     ErrorNames.NonArrayRule), args => string.Format("Quy tắc '{0}' phải là một mảng!", args)},
+                {(Languages.Indonesian,     ErrorNames.NonArrayRule), args => string.Format("Aturan '{0}' harus berupa array!", args)},
+                {(Languages.Czech,          ErrorNames.NonArrayRule), args => string.Format("Pravidlo '{0}' musí být pole!", args)},
+                {(Languages.Korean,         ErrorNames.NonArrayRule), args => string.Format("규칙 '{0}'은(는) 배열이어야 합니다!", args)},
+                {(Languages.Ukrainian,      ErrorNames.NonArrayRule), args => string.Format("Правило '{0}' має бути масивом!", args)},
+                {(Languages.Arabic,         ErrorNames.NonArrayRule), args => string.Format("يجب أن تكون القاعدة '{0}' مصفوفة!", args)},
+                {(Languages.Swedish,        ErrorNames.NonArrayRule), args => string.Format("Regeln '{0}' måste vara en array!", args)},
+                {(Languages.Persian,        ErrorNames.NonArrayRule), args => string.Format("قانون '{0}' باید یک آرایه باشد!", args)},
+                {(Languages.Chinese,        ErrorNames.NonArrayRule), args => string.Format("规则“{0}”必须是数组！", args)},
+                
+                // Segment does not contain required member
+                {(Languages.English_UK,     ErrorNames.MissingSegmentMember), args => string.Format("Segment '{0}' does not contain required member {1}!", args)},
+                {(Languages.English_US,     ErrorNames.MissingSegmentMember), args => string.Format("Segment '{0}' does not contain required member {1}!", args)},
+                {(Languages.Spanish,        ErrorNames.MissingSegmentMember), args => string.Format("¡El segmento '{0}' no contiene el miembro requerido {1}!", args)},
+                {(Languages.German,         ErrorNames.MissingSegmentMember), args => string.Format("Das Segment '{0}' enthält das erforderliche Mitglied {1} nicht!", args)},
+                {(Languages.French,         ErrorNames.MissingSegmentMember), args => string.Format("Le segment '{0}' ne contient pas le membre requis {1} !", args)},
+                {(Languages.Portuguese,     ErrorNames.MissingSegmentMember), args => string.Format("O segmento '{0}' não contém o membro obrigatório {1}!", args)},
+                {(Languages.Russian,        ErrorNames.MissingSegmentMember), args => string.Format("Сегмент '{0}' не содержит обязательного элемента {1}!", args)},
+                {(Languages.Italian,        ErrorNames.MissingSegmentMember), args => string.Format("Il segmento '{0}' non contiene il membro richiesto {1}!", args)},
+                {(Languages.Dutch,          ErrorNames.MissingSegmentMember), args => string.Format("Segment '{0}' bevat het vereiste lid {1} niet!", args)},
+                {(Languages.Polish,         ErrorNames.MissingSegmentMember), args => string.Format("Segment '{0}' nie zawiera wymaganego elementu {1}!", args)},
+                {(Languages.Turkish,        ErrorNames.MissingSegmentMember), args => string.Format("'{0}' segmenti gerekli {1} üyesini içermiyor!", args)}, // reordered for Turkish
+                {(Languages.Vietnamese,     ErrorNames.MissingSegmentMember), args => string.Format("Phân đoạn '{0}' không chứa thành phần bắt buộc {1}!", args)},
+                {(Languages.Indonesian,     ErrorNames.MissingSegmentMember), args => string.Format("Segmen '{0}' tidak berisi anggota wajib {1}!", args)},
+                {(Languages.Czech,          ErrorNames.MissingSegmentMember), args => string.Format("Segment '{0}' neobsahuje požadovaný člen {1}!", args)},
+                {(Languages.Korean,         ErrorNames.MissingSegmentMember), args => string.Format("세그먼트 '{0}'에 필요한 구성원 {1}이(가) 없습니다!", args)}, // subject–object–verb structure
+                {(Languages.Ukrainian,      ErrorNames.MissingSegmentMember), args => string.Format("Сегмент '{0}' не містить обов’язкового елемента {1}!", args)},
+                {(Languages.Arabic,         ErrorNames.MissingSegmentMember), args => string.Format("المقطع '{0}' لا يحتوي على العضو المطلوب {1}!", args)}, // reversed phrase for natural flow
+                {(Languages.Swedish,        ErrorNames.MissingSegmentMember), args => string.Format("Segmentet '{0}' innehåller inte det obligatoriska elementet {1}!", args)},
+                {(Languages.Persian,        ErrorNames.MissingSegmentMember), args => string.Format("بخش '{0}' شامل عضو ضروری {1} نیست!", args)},
+                {(Languages.Chinese,        ErrorNames.MissingSegmentMember), args => string.Format("段“{0}”不包含必需的成员 {1}！", args)}, // localized punctuation
+                
+                
             };
 
         /// <summary>
