@@ -224,7 +224,10 @@ internal enum ErrorNames : byte {
     NonTableTopLevel,
     MissingSegment,
     NonArrayRule,
-    MissingSegmentMember
+    MissingSegmentMember,
+    SegmentOffsetTooHigh,
+    SegmentOffsetUnusable,
+    SegmentTooLarge
 }
 
 internal enum DecodingPhases : byte {

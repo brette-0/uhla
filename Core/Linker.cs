@@ -33,18 +33,19 @@ internal class Linker {
         if (Parse["dynamic"] is TomlTable DynamicSegments) foreach (var (key, value) in DynamicSegments) {
             if (value is TomlTable segToml) {
                 IDictionary<string, object> segDict = segToml.ToDictionary();
-                var                      (ctx, err) = ParseSegmentToml(ref segDict);
+                var                      (ctx, ParseErr) = ParseSegmentToml(ref segDict);
 
-                if (err is not null) {
-                    Terminal.Error(err.Value.ctx($"{key}.{err.Value.dbgname}"[..^1]));
+                if (ParseErr is not null) {
+                    Terminal.Error(ParseErr.Value.ctx($"{key}.{ParseErr.Value.dbgname}"[..^1]));
                     return;
                 }
                 
                 Dynamic.Add(key, ctx!);
 
                 var globalOffset = 0L;
-                if (!ctx!.Split(ref globalOffset, null, 0).success) {
-                    // error pass back
+                var (err, _) = ctx!.Split(ref globalOffset, null, 0);
+                if (err is not null) {
+                    Terminal.Error(err.Value.ctx(fp, $"{key}.{err.Value.dbgname}"[..^1]));
                     return;
                 }
             } else {
@@ -77,18 +78,19 @@ internal class Linker {
         if (Parse["static"] is TomlTable StaticSegments) foreach (var (key, value) in StaticSegments) {
             if (value is TomlTable segToml) {
                 IDictionary<string, object> segDict = segToml.ToDictionary();
-                var                      (ctx, err) = ParseStaticSegmentTopLevel(ref segDict);
+                var                      (ctx, ParseErr) = ParseStaticSegmentTopLevel(ref segDict);
 
-                if (err is not null) {
-                    Terminal.Error(err.Value.ctx($"{key}.{err.Value.dbgname}"[..^1]));
+                if (ParseErr is not null) {
+                    Terminal.Error(ParseErr.Value.ctx($"{key}.{ParseErr.Value.dbgname}"[..^1]));
                     return;
                 }
                 
                 Static.Add(key, ctx!);
                 
                 var globalOffset = 0L;
-                if (!ctx!.Split(ref globalOffset, null, 0).success) {
-                    // error pass back
+                var (err, _) = ctx!.Split(ref globalOffset, null, 0);
+                if (err is not null) {
+                    Terminal.Error(err.Value.ctx(fp, $"{key}.{err.Value.dbgname}"[..^1]));
                     return;
                 }
             } else {
@@ -432,62 +434,89 @@ internal class Linker {
         /// <param name="activeOffset">An 'incrementation' exploring global offsets.</param>
         /// <param name="parent"></param>
         /// <returns></returns>
-        internal (bool success, long contributed) Split(ref long activeOffset, Segment? parent, int nchild) {
+        internal ((Func<string, string, Terminal.ErrorContext> ctx, string dbgname)? err, long contributed) Split(ref long activeOffset, Segment? parent, int nchild) {
             globalOffset += activeOffset;
             Segments = Segments.OrderBy(s => s.Value.offset).ToDictionary();
             var contributed = 0L;
             
             foreach (var seg in Segments.Enumerate()) {
-                var (result, contribution) = seg.Element.Value.Split(ref activeOffset, this, seg.Index);
-                if (!result) {
+                var (err, contribution) = seg.Element.Value.Split(ref activeOffset, this, seg.Index);
+                if (err is not null) {
                     // it means a child process has failed, return with null (error escaping)
-                    return (false, 0L);;
+                    return ((err.Value.ctx, $"{seg.Element.Key}.{err.Value.dbgname}"), 0L);;
                 }
 
                 contributed += contribution;
             }
 
             // ensure that local (child) offset can reside in parent
-            if (parent is not null && parent.globalOffset + offset > parent.globalOffset + parent.width) {
+            if (parent is not null && offset > parent.width) {
                 // error, offset begins outside of parent's containment
-                return (false, 0L);
+                return (((fp, name) => new Terminal.ErrorContext {
+                    ErrorLevel      = ErrorLevels.ERROR,
+                    ErrorType       = ErrorTypes.LinkerError,
+                    DecodingPhase   = DecodingPhases.LINKER_INIT,
+                    Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.SegmentOffsetTooHigh)]([name, offset, offset - parent.width]),
+                    LineNumber      = -1,
+                    StepNumber      = 0,
+                    ContextFileName = fp,
+                    Context = () => string.Empty
+                }, string.Empty), 0L);
             }
             
             // add parent (negative space)
-            var lastSegment = nchild is 0 ? null : parent?.Segments.ElementAt(nchild - 1).Value;
             var offsetDelta = (parent?.globalOffset ?? 0) + offset - activeOffset;
-            
-            if (parent is not null && offsetDelta is not 0) {
-                parent.Slices.Add(new Slice(
-                    activeOffset,
-                    offsetDelta
-                ));
-                
-                contributed  += offsetDelta;
-                activeOffset += offsetDelta;
-            }
 
-            if (parent is not null && parent.globalOffset + offset < activeOffset) {
-                // error, we cannot parse this a previous segment is too large
-                return (false, 0L);
+            switch (offsetDelta) {
+                case < 0 when nchild > 0:
+                    // error offset has been used
+                    return (((fp, name) => new Terminal.ErrorContext {
+                        ErrorLevel      = ErrorLevels.ERROR,
+                        ErrorType       = ErrorTypes.LinkerError,
+                        DecodingPhase   = DecodingPhases.LINKER_INIT,
+                        Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.SegmentOffsetUnusable)]([name, offset, Math.Abs(offsetDelta)]),
+                        LineNumber      = -1,
+                        StepNumber      = 0,
+                        ContextFileName = fp,
+                        Context = () => string.Empty
+                    }, string.Empty), 0L);
+                
+                case 0: break;  // no leading region
+                
+                case > 0 when parent is not null:
+                    // leading data
+                    parent.Slices.Add(new Slice(
+                        activeOffset,
+                        offsetDelta
+                    ));
+                
+                    contributed  += offsetDelta;
+                    activeOffset += offsetDelta;
+                    break;
             }
 
             // check if we can fit within parent (active node)
             if (parent is not null && activeOffset + width > parent.globalOffset + parent.width) {
                 // error, this node exceeds the size of the parent
-                return (false, 0L);
+                var activeOffsetDereference = activeOffset;
+                return (((fp, name) => new Terminal.ErrorContext {
+                    ErrorLevel      = ErrorLevels.ERROR,
+                    ErrorType       = ErrorTypes.LinkerError,
+                    DecodingPhase   = DecodingPhases.LINKER_INIT,
+                    Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.SegmentTooLarge)]([name, width, activeOffsetDereference + width - parent.globalOffset + parent.width]),
+                    LineNumber      = -1,
+                    StepNumber      = 0,
+                    ContextFileName = fp,
+                    Context = () => string.Empty
+                }, string.Empty), 0L);
             }
             
-            // add self (positive space)
-            if (width - contributed is not 0L) {
+            // add self (positive space - leaf node)
+            if (Segments.Count is 0) {
                 Slices.Add(new Slice(activeOffset, width - contributed));
                 activeOffset += width;
                 contributed  += width;
-            } else if (Segments.Count is 0) {
-                // error, leaf node with no width is a pointless segment
-                return (false, 0L);
             }
-            
 
             // add trail negative space (parent node)
             if (parent is not null && this == parent.Segments.ElementAt(^1).Value && activeOffset != parent.globalOffset + parent.width) {
@@ -500,7 +529,7 @@ internal class Linker {
                 activeOffset =  parent.globalOffset                + parent.width;
             }
 
-            return (true, contributed);
+            return (null, contributed);
         }
         
         public  long                        offset { get; set; }
