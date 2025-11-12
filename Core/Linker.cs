@@ -43,7 +43,7 @@ internal class Linker {
                 Dynamic.Add(key, ctx!);
 
                 var globalOffset = 0L;
-                var (err, _) = ctx!.Split(ref globalOffset, null, 0);
+                var err = ctx!.Split(ref globalOffset, null, 0);
                 if (err is not null) {
                     Terminal.Error(err.Value.ctx(fp, $"{key}.{err.Value.dbgname}"[..^1]));
                     return;
@@ -88,7 +88,7 @@ internal class Linker {
                 Static.Add(key, ctx!);
                 
                 var globalOffset = 0L;
-                var (err, _) = ctx!.Split(ref globalOffset, null, 0);
+                var err = ctx!.Split(ref globalOffset, null, 0);
                 if (err is not null) {
                     Terminal.Error(err.Value.ctx(fp, $"{key}.{err.Value.dbgname}"[..^1]));
                     return;
@@ -167,6 +167,20 @@ internal class Linker {
                             bone = bone.Segments.GetValueOrDefault(nbone);
                         }
 
+                        if (bone is null) {
+                            Terminal.Error(new Terminal.ErrorContext {
+                                ErrorLevel      = ErrorLevels.ERROR,
+                                ErrorType       = ErrorTypes.LinkerError,
+                                DecodingPhase   = DecodingPhases.LINKER_INIT,
+                                Message         = Language.Language.Errors[(Program.ActiveLanguage, ErrorNames.MissingSegment)]([key, seg]),
+                                LineNumber      = -1,
+                                StepNumber      = 0,
+                                ContextFileName = fp,
+                                Context = () => string.Empty
+                            });
+                            return;
+                        }
+                        
                         Rule.Add(bone);
 
                     } else {
@@ -434,25 +448,22 @@ internal class Linker {
         /// <param name="activeOffset">An 'incrementation' exploring global offsets.</param>
         /// <param name="parent"></param>
         /// <returns></returns>
-        internal ((Func<string, string, Terminal.ErrorContext> ctx, string dbgname)? err, long contributed) Split(ref long activeOffset, Segment? parent, int nchild) {
+        internal (Func<string, string, Terminal.ErrorContext> ctx, string dbgname)? Split(ref long activeOffset, Segment? parent, int nchild) {
             globalOffset += activeOffset;
             Segments = Segments.OrderBy(s => s.Value.offset).ToDictionary();
-            var contributed = 0L;
             
             foreach (var seg in Segments.Enumerate()) {
-                var (err, contribution) = seg.Element.Value.Split(ref activeOffset, this, seg.Index);
+                var err = seg.Element.Value.Split(ref activeOffset, this, seg.Index);
                 if (err is not null) {
                     // it means a child process has failed, return with null (error escaping)
-                    return ((err.Value.ctx, $"{seg.Element.Key}.{err.Value.dbgname}"), 0L);;
+                    return (err.Value.ctx, $"{seg.Element.Key}.{err.Value.dbgname}");
                 }
-
-                contributed += contribution;
             }
 
             // ensure that local (child) offset can reside in parent
             if (parent is not null && offset > parent.width) {
                 // error, offset begins outside of parent's containment
-                return (((fp, name) => new Terminal.ErrorContext {
+                return ((fp, name) => new Terminal.ErrorContext {
                     ErrorLevel      = ErrorLevels.ERROR,
                     ErrorType       = ErrorTypes.LinkerError,
                     DecodingPhase   = DecodingPhases.LINKER_INIT,
@@ -461,7 +472,7 @@ internal class Linker {
                     StepNumber      = 0,
                     ContextFileName = fp,
                     Context = () => string.Empty
-                }, string.Empty), 0L);
+                }, string.Empty);
             }
             
             // add parent (negative space)
@@ -470,7 +481,7 @@ internal class Linker {
             switch (offsetDelta) {
                 case < 0 when nchild > 0:
                     // error offset has been used
-                    return (((fp, name) => new Terminal.ErrorContext {
+                    return ((fp, name) => new Terminal.ErrorContext {
                         ErrorLevel      = ErrorLevels.ERROR,
                         ErrorType       = ErrorTypes.LinkerError,
                         DecodingPhase   = DecodingPhases.LINKER_INIT,
@@ -479,9 +490,7 @@ internal class Linker {
                         StepNumber      = 0,
                         ContextFileName = fp,
                         Context = () => string.Empty
-                    }, string.Empty), 0L);
-                
-                case 0: break;  // no leading region
+                    }, string.Empty);
                 
                 case > 0 when parent is not null:
                     // leading data
@@ -490,7 +499,6 @@ internal class Linker {
                         offsetDelta
                     ));
                 
-                    contributed  += offsetDelta;
                     activeOffset += offsetDelta;
                     break;
             }
@@ -499,7 +507,7 @@ internal class Linker {
             if (parent is not null && activeOffset + width > parent.globalOffset + parent.width) {
                 // error, this node exceeds the size of the parent
                 var activeOffsetDereference = activeOffset;
-                return (((fp, name) => new Terminal.ErrorContext {
+                return ((fp, name) => new Terminal.ErrorContext {
                     ErrorLevel      = ErrorLevels.ERROR,
                     ErrorType       = ErrorTypes.LinkerError,
                     DecodingPhase   = DecodingPhases.LINKER_INIT,
@@ -508,14 +516,13 @@ internal class Linker {
                     StepNumber      = 0,
                     ContextFileName = fp,
                     Context = () => string.Empty
-                }, string.Empty), 0L);
+                }, string.Empty);
             }
             
             // add self (positive space - leaf node)
             if (Segments.Count is 0) {
-                Slices.Add(new Slice(activeOffset, width - contributed));
+                Slices.Add(new Slice(activeOffset, width));
                 activeOffset += width;
-                contributed  += width;
             }
 
             // add trail negative space (parent node)
@@ -525,11 +532,10 @@ internal class Linker {
                     parent.globalOffset + parent.width - activeOffset
                 ));
 
-                contributed  += parent.globalOffset + parent.width - activeOffset;
-                activeOffset =  parent.globalOffset                + parent.width;
+                activeOffset =  parent.globalOffset + parent.width;
             }
 
-            return (null, contributed);
+            return null;
         }
         
         public  long                        offset { get; set; }
