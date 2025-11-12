@@ -1,3 +1,4 @@
+using HonkSharp.Fluency;
 using Tomlyn.Model;
 
 namespace uhla.Core;
@@ -40,6 +41,12 @@ internal class Linker {
                 }
                 
                 Dynamic.Add(key, ctx!);
+
+                var globalOffset = 0L;
+                if (!ctx!.Split(ref globalOffset, null, 0).success) {
+                    // error pass back
+                    return;
+                }
             } else {
                 Terminal.Error(new Terminal.ErrorContext {
                     ErrorLevel      = ErrorLevels.ERROR,
@@ -78,6 +85,12 @@ internal class Linker {
                 }
                 
                 Static.Add(key, ctx!);
+                
+                var globalOffset = 0L;
+                if (!ctx!.Split(ref globalOffset, null, 0).success) {
+                    // error pass back
+                    return;
+                }
             } else {
                 Terminal.Error(new Terminal.ErrorContext {
                     ErrorLevel      = ErrorLevels.ERROR,
@@ -197,7 +210,9 @@ internal class Linker {
             }
 
             if (Table.ContainsKey("address") && Table["address"] is long address) {
-                return (new StaticTopLevel(ctx!.Value.offset, ctx.Value.width, address), null);
+                return (new StaticTopLevel(ctx!.Value.offset, ctx.Value.width, address) {
+                    Segments = ctx.Value.segments!
+                }, null);
             }
 
             // error, seg address is not integer or does not exist
@@ -417,67 +432,81 @@ internal class Linker {
         /// <param name="activeOffset">An 'incrementation' exploring global offsets.</param>
         /// <param name="parent"></param>
         /// <returns></returns>
-        internal bool Split(ref long activeOffset, Segment? parent) {
+        internal (bool success, long contributed) Split(ref long activeOffset, Segment? parent, int nchild) {
             globalOffset += activeOffset;
-
             Segments = Segments.OrderBy(s => s.Value.offset).ToDictionary();
+            var contributed = 0L;
             
-            foreach (var (n, seg) in Segments) {
-                var result = seg.Split(ref activeOffset,    this);
+            foreach (var seg in Segments.Enumerate()) {
+                var (result, contribution) = seg.Element.Value.Split(ref activeOffset, this, seg.Index);
                 if (!result) {
                     // it means a child process has failed, return with null (error escaping)
-                    return false;
+                    return (false, 0L);;
                 }
+
+                contributed += contribution;
             }
 
             // ensure that local (child) offset can reside in parent
-            if (parent is not null && parent.globalOffset + offset > parent.globalOffset + width) {
+            if (parent is not null && parent.globalOffset + offset > parent.globalOffset + parent.width) {
                 // error, offset begins outside of parent's containment
-                return false;
+                return (false, 0L);
             }
             
             // add parent (negative space)
-            if (offset is not 0 && parent is not null) {
+            var lastSegment = nchild is 0 ? null : parent?.Segments.ElementAt(nchild - 1).Value;
+            var offsetDelta = (parent?.globalOffset ?? 0) + offset - activeOffset;
+            
+            if (parent is not null && offsetDelta is not 0) {
                 parent.Slices.Add(new Slice(
                     activeOffset,
-                    parent.globalOffset + offset - activeOffset
+                    offsetDelta
                 ));
                 
-                activeOffset += parent.globalOffset + offset - activeOffset;
+                contributed  += offsetDelta;
+                activeOffset += offsetDelta;
             }
 
             if (parent is not null && parent.globalOffset + offset < activeOffset) {
                 // error, we cannot parse this a previous segment is too large
-                return false;
+                return (false, 0L);
             }
 
             // check if we can fit within parent (active node)
             if (parent is not null && activeOffset + width > parent.globalOffset + parent.width) {
                 // error, this node exceeds the size of the parent
-                return false;
+                return (false, 0L);
             }
             
             // add self (positive space)
-            Slices.Add(new Slice(activeOffset, width));
-            activeOffset += width;
+            if (width - contributed is not 0L) {
+                Slices.Add(new Slice(activeOffset, width - contributed));
+                activeOffset += width;
+                contributed  += width;
+            } else if (Segments.Count is 0) {
+                // error, leaf node with no width is a pointless segment
+                return (false, 0L);
+            }
+            
 
-            // add trail negative space (active token)
-            if (parent is not null && activeOffset != parent.globalOffset + width) {
+            // add trail negative space (parent node)
+            if (parent is not null && this == parent.Segments.ElementAt(^1).Value && activeOffset != parent.globalOffset + parent.width) {
                 parent.Slices.Add(new Slice(
                     activeOffset,
-                    parent.offset + parent.width - activeOffset
+                    parent.globalOffset + parent.width - activeOffset
                 ));
-                
-                activeOffset += parent.offset + parent.width - activeOffset;
+
+                contributed  += parent.globalOffset + parent.width - activeOffset;
+                activeOffset =  parent.globalOffset                + parent.width;
             }
 
-            return true;
+            return (true, contributed);
         }
         
         public  long                        offset { get; set; }
         public  long                        width  { get; set; }
         private long                        globalOffset;
-        private List<Slice>                 Slices = [];
+        public  List<Slice>                 Slices = [];
         public  Dictionary<string, Segment> Segments { get; set; } = [];
     }
 

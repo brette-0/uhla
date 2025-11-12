@@ -7,27 +7,53 @@ Example:
 
 .. code-block:: toml
 
-    [memory]
-        ram         = [1, 0x0000, 0x8000]
-        flash       = [0, 0x8000, 0x8000]
+    [dynamic]
+        [dynamic.system]
+            offset = 0          # address is derived from offset with bss regions (it does not contribute to file out)
+            width  = 0x800      # width of memory hunk (physical)
 
-    [segments]
-        direct      = ["ram",   0x0000, 0x0100]
-        ram         = ["ram",   0x0100, 0x0700]
-        rodata      = ["flash", 0x0000, 0x0140]
-        boot        = ["flash", 0xf000, 0x1000]
-        vectors     = ["flash", 0x7ffa, 6]
+            [dynamic.system.direct]
+                offset = 0      # relative offset to dynamic.system
+                width  = 256    # direct refers to 'zero page' or the first page
 
+            [dynamic.system.stack]
+                offset = 256    # relative offset to dynamic.system
+                width  = 256    # the stack lies from 0x100 to 0x200
+
+
+    [static]
+        [static.prgrom]
+            address = 0x8000    # with the NES in mind, ROM begins at 0x8000
+            offset  = 0         # in file, this is where the content begins
+            width   = 0x8000    # it is 32KiB in size
+
+            [static.prgrom.rodata]
+                offset = 0      # the rodata begins at the first ROM page
+                width  = 256    # page aligned data is faster to access
+
+            [static.prgrom.vectors]
+                offset = 0x7ffa # the vectors may only lie in the last
+                width  = 6      # 6 bytes of CPU
+
+        [static.chrrom]
+            address = 0         # required by linker, nothing else
+            offset = 0x8000     # NES ROMs demand the CHR to be stored after PRG
+            width  = 0x2000     # the minimum is 8KiB
+
+    # ordered in order of link
     [rules]
-        fast        = ["direct", "ram"]
-        slow        = ["ram", "direct"]
-        coproc      = ["proc", "rodata"]
+        direct  = ["dynamic.system.direct"]
+        fast    = ["dynamic.system.direct", "dynamic.system"]
+        proc    = ["static.prgrom", "static.prgrom.rodata"]
+        table   = ["static.prgrom.rodata", "static.prgrom"]
+        slow    = ["dynamic.system", "dynamic.system.direct"]
 
-``memory`` contains the physical locations for information. Each array in ``memory`` acts as a struct: the first element is a 'write flag', the second element is the final pointer base offset and the third and final element is the run length (or size) of the memory component.
+Segments and Memory are unified with ``uhla`` separated by constant or deferred allocation. Top level segments do **not** overlap each other and are not considered to share the same space to allow representing entirely different physical locations.
 
-``segments`` contains the 'segments' of information hunks, all information given to a segment begins *from* the first pointer base offset (or the index of the segment) and must collectively fit inside the segment run length (or segment size). The names of components in ``memory`` are not special and are never visible in source.
+The offset of a segment refers to the position it takes up relative to its parent segment, the width describes the size of the segment in bytes and is absolute such that all child segments must fit within the specified size.
 
-``rules`` contain the 'flow' of information allocation attempts, if a member cannot fit within the first segment specified it will attempt the next in sequence with no default but total failure if none of the segments in the sequence have enough space to contain the information.
+Static top level segments contain an additional ``address`` field which is added to the final absolute offset of any static segment.
+
 
 To allocate memory to a specified segment, the user simply types:
 

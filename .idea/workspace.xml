@@ -6,9 +6,12 @@
   <component name="ChangeListManager">
     <list default="true" id="970fab9b-c5cd-4b60-a267-48e25c6f0dea" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Core/Linker.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Linker.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Core/Terminal.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Terminal.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Test/link.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Test/link.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Docs/LinkerScripting.rst" beforeDir="false" afterPath="$PROJECT_DIR$/Docs/LinkerScripting.rst" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/_build/doctrees/Docs/LinkerScripting.doctree" beforeDir="false" afterPath="$PROJECT_DIR$/_build/doctrees/Docs/LinkerScripting.doctree" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/_build/doctrees/environment.pickle" beforeDir="false" afterPath="$PROJECT_DIR$/_build/doctrees/environment.pickle" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/_build/html/Docs/LinkerScripting.html" beforeDir="false" afterPath="$PROJECT_DIR$/_build/html/Docs/LinkerScripting.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/_build/html/_sources/Docs/LinkerScripting.rst.txt" beforeDir="false" afterPath="$PROJECT_DIR$/_build/html/_sources/Docs/LinkerScripting.rst.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/_build/html/searchindex.js" beforeDir="false" afterPath="$PROJECT_DIR$/_build/html/searchindex.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

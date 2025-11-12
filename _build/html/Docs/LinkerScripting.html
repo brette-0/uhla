@@ -42,7 +42,13 @@
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <!-- Local TOC -->
               <div class="local-toc"><ul>
-<li><a class="reference internal" href="#">Linker Scripting</a></li>
+<li><a class="reference internal" href="#">Linker Scripting</a><ul>
+<li><a class="reference internal" href="#platform-linker-script-intelligence-plsi">Platform Linker Script Intelligence (PLSI)</a><ul>
+<li><a class="reference internal" href="#nmos-6502">NMOS 6502</a></li>
+</ul>
+</li>
+</ul>
+</li>
 </ul>
 </div>
         </div>
@@ -73,27 +79,63 @@
 <h1>Linker Scripting<a class="headerlink" href="#linker-scripting" title="Link to this heading"></a></h1>
 <p>Numinous linker is unlike other linkers as it does not create object files but instead is used to map contents. The Linker Script must be written to abide the specified <code class="docutils literal notranslate"><span class="pre">toml</span></code> template described in docs here.</p>
 <p>Example:</p>
-<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[memory]</span>
-<span class="w">    </span><span class="n">ram</span><span class="w">         </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mh">0x0000</span><span class="p">,</span><span class="w"> </span><span class="mh">0x8000</span><span class="p">]</span>
-<span class="w">    </span><span class="n">flash</span><span class="w">       </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mh">0x8000</span><span class="p">,</span><span class="w"> </span><span class="mh">0x8000</span><span class="p">]</span>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[dynamic]</span>
+<span class="w">    </span><span class="k">[dynamic.system]</span>
+<span class="w">        </span><span class="n">offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="w">          </span><span class="c1"># address is derived from offset with bss regions (it does not contribute to file out)</span>
+<span class="w">        </span><span class="n">width</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="mh">0x800</span><span class="w">      </span><span class="c1"># width of memory hunk (physical)</span>
 
-<span class="k">[segments]</span>
-<span class="w">    </span><span class="n">direct</span><span class="w">      </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;ram&quot;</span><span class="p">,</span><span class="w">   </span><span class="mh">0x0000</span><span class="p">,</span><span class="w"> </span><span class="mh">0x0100</span><span class="p">]</span>
-<span class="w">    </span><span class="n">rodata</span><span class="w">      </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;flash&quot;</span><span class="p">,</span><span class="w"> </span><span class="mh">0x0000</span><span class="p">,</span><span class="w"> </span><span class="mh">0x0140</span><span class="p">]</span>
-<span class="w">    </span><span class="n">boot</span><span class="w">        </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;flash&quot;</span><span class="p">,</span><span class="w"> </span><span class="mh">0xf000</span><span class="p">,</span><span class="w"> </span><span class="mh">0x1000</span><span class="p">]</span>
-<span class="w">    </span><span class="n">proc</span><span class="w">        </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;flash&quot;</span><span class="p">,</span><span class="w"> </span><span class="mi">-1</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">]</span>
-<span class="w">    </span><span class="n">vectors</span><span class="w">     </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;flash&quot;</span><span class="p">,</span><span class="w"> </span><span class="mh">0x7ffa</span><span class="p">,</span><span class="w"> </span><span class="mi">6</span><span class="p">]</span>
+<span class="w">        </span><span class="k">[dynamic.system.direct]</span>
+<span class="w">            </span><span class="n">offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="w">      </span><span class="c1"># relative offset to dynamic.system</span>
+<span class="w">            </span><span class="n">width</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="mi">256</span><span class="w">    </span><span class="c1"># direct refers to &#39;zero page&#39; or the first page</span>
+
+<span class="w">        </span><span class="k">[dynamic.system.stack]</span>
+<span class="w">            </span><span class="n">offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">256</span><span class="w">    </span><span class="c1"># relative offset to dynamic.system</span>
+<span class="w">            </span><span class="n">width</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="mi">256</span><span class="w">    </span><span class="c1"># the stack lies from 0x100 to 0x200</span>
+
+
+<span class="k">[static]</span>
+<span class="w">    </span><span class="k">[static.prgrom]</span>
+<span class="w">        </span><span class="n">address</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x8000</span><span class="w">    </span><span class="c1"># with the NES in mind, ROM begins at 0x8000</span>
+<span class="w">        </span><span class="n">offset</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="w">         </span><span class="c1"># in file, this is where the content begins</span>
+<span class="w">        </span><span class="n">width</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="mh">0x8000</span><span class="w">    </span><span class="c1"># it is 32KiB in size</span>
+
+<span class="w">        </span><span class="k">[static.prgrom.rodata]</span>
+<span class="w">            </span><span class="n">offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="w">      </span><span class="c1"># the rodata begins at the first ROM page</span>
+<span class="w">            </span><span class="n">width</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="mi">256</span><span class="w">    </span><span class="c1"># page aligned data is faster to access</span>
+
+<span class="w">        </span><span class="k">[static.prgrom.vectors]</span>
+<span class="w">            </span><span class="n">offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x7ffa</span><span class="w"> </span><span class="c1"># the vectors may only lie in the last</span>
+<span class="w">            </span><span class="n">width</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="mi">6</span><span class="w">      </span><span class="c1"># 6 bytes of CPU</span>
+
+<span class="w">    </span><span class="k">[static.chrrom]</span>
+<span class="w">        </span><span class="n">address</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="w">         </span><span class="c1"># required by linker, nothing else</span>
+<span class="w">        </span><span class="n">offset</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x8000</span><span class="w">     </span><span class="c1"># NES ROMs demand the CHR to be stored after PRG</span>
+<span class="w">        </span><span class="n">width</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="mh">0x2000</span><span class="w">     </span><span class="c1"># the minimum is 8KiB</span>
+
+<span class="c1"># ordered in order of link</span>
+<span class="k">[rules]</span>
+<span class="w">    </span><span class="n">direct</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;dynamic.system.direct&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="n">fast</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;dynamic.system.direct&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;dynamic.system&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="n">proc</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;static.prgrom&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;static.prgrom.rodata&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="n">table</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;static.prgrom.rodata&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;static.prgrom&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="n">slow</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;dynamic.system&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;dynamic.system.direct&quot;</span><span class="p">]</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">memory</span></code> contains the physical locations for information. Each array in <code class="docutils literal notranslate"><span class="pre">memory</span></code> acts as a struct: the first element is a ‘write flag’, the second element is the final pointer base offset and the third and final element is the run length (or size) of the memory component.</p>
-<p><code class="docutils literal notranslate"><span class="pre">segments</span></code> contains the ‘segments’ of information hunks, all information given to a segment begins <em>from</em> the first pointer base offset (or the index of the segment) and must collectively fit inside the segment run length (or segment size). The names of components in <code class="docutils literal notranslate"><span class="pre">memory</span></code> are not special and are never visible in source.</p>
+<p>Segments and Memory are unified with <code class="docutils literal notranslate"><span class="pre">uhla</span></code> separated by constant or deferred allocation. Top level segments do <strong>not</strong> overlap each other and are not considered to share the same space to allow representing entirely different physical locations.</p>
+<p>The offset of a segment refers to the position it takes up relative to its parent segment, the width describes the size of the segment in bytes and is absolute such that all child segments must fit within the specified size.</p>
+<p>Static top level segments contain an additional <code class="docutils literal notranslate"><span class="pre">address</span></code> field which is added to the final absolute offset of any static segment.</p>
 <p>To allocate memory to a specified segment, the user simply types:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">direct</span> <span class="n">u8</span> <span class="n">MyFoo</span>         <span class="o">//</span> <span class="n">will</span> <span class="n">use</span> <span class="s1">&#39;direct&#39;</span> <span class="n">segment</span>
+<span class="n">fast</span> <span class="n">u8</span> <span class="n">MyBar</span>           <span class="o">//</span> <span class="n">uses</span> <span class="n">rule</span> <span class="s1">&#39;fast&#39;</span> <span class="n">trying</span> <span class="n">to</span> <span class="n">use</span> <span class="s1">&#39;direct&#39;</span> <span class="n">but</span> <span class="n">uses</span> <span class="s1">&#39;ram&#39;</span> <span class="k">if</span> <span class="n">fails</span>
 </pre></div>
 </div>
 <p>To write a procedure to a specified segment, the user simply types:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">.</span><span class="n">boot</span> <span class="n">init</span> <span class="p">{</span>
     <span class="o">//</span> <span class="n">example</span> <span class="n">code</span> <span class="k">for</span> <span class="s1">&#39;boot&#39;</span> <span class="n">segment</span> <span class="n">here</span>
+<span class="p">}</span>
+
+<span class="o">.</span><span class="n">coproc</span> <span class="n">cop_init</span> <span class="p">{</span>
+    <span class="o">//</span> <span class="n">example</span> <span class="n">code</span> <span class="n">to</span> <span class="n">offload</span> <span class="n">to</span> <span class="n">a</span> <span class="n">coprocessor</span> <span class="p">(</span><span class="n">eg</span><span class="p">)</span>
 <span class="p">}</span>
 </pre></div>
 </div>
@@ -102,11 +144,41 @@
     <span class="o">//</span> <span class="n">const</span> <span class="n">information</span> <span class="k">for</span> <span class="n">the</span> <span class="n">rodata</span> <span class="n">table</span>
 <span class="p">}</span>
 
+<span class="n">coproc</span> <span class="n">i8</span><span class="p">[]</span> <span class="n">CoTable</span> <span class="p">{</span>
+    <span class="o">//</span> <span class="n">const</span> <span class="n">information</span> <span class="n">that</span> <span class="n">follows</span> <span class="n">the</span> <span class="s1">&#39;coproc&#39;</span> <span class="n">information</span> <span class="n">allocation</span> <span class="n">rule</span>
+<span class="p">}</span>
+
 <span class="o">//</span> <span class="n">a</span> <span class="n">ptr</span>
 <span class="n">rodata</span> <span class="n">u16</span> <span class="n">ptr</span>
+
+<span class="o">//</span> <span class="n">a</span> <span class="n">hook</span> <span class="n">to</span> <span class="n">a</span> <span class="n">coroutine</span>
+<span class="n">coproc</span> <span class="n">i16</span> <span class="n">hook</span>
 </pre></div>
 </div>
 <p>It’s known to be <code class="docutils literal notranslate"><span class="pre">const</span></code> without specifying as the <code class="docutils literal notranslate"><span class="pre">memory</span></code> specified in the <code class="docutils literal notranslate"><span class="pre">segment</span></code> has the write flag clear.</p>
+<p>To provide information without specifying a target, simply use the following:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">.</span><span class="n">proc</span> <span class="n">MyProcedure</span> <span class="p">{</span>
+    <span class="o">//</span> <span class="n">Procedure</span> <span class="n">that</span> <span class="n">can</span> <span class="n">be</span> <span class="ow">in</span> <span class="nb">any</span> <span class="n">block</span>
+    <span class="o">//</span> <span class="n">proc</span> <span class="n">will</span> <span class="n">simply</span> <span class="n">search</span> <span class="k">for</span> <span class="n">non</span><span class="o">-</span><span class="n">writable</span> <span class="n">segment</span>
+<span class="p">}</span>
+
+<span class="n">const</span> <span class="n">u8</span><span class="p">[]</span> <span class="n">Table</span> <span class="p">{</span>
+    <span class="o">//</span> <span class="n">Table</span> <span class="n">that</span> <span class="n">can</span> <span class="n">be</span> <span class="ow">in</span> <span class="nb">any</span> <span class="n">block</span>
+    <span class="o">//</span> <span class="n">const</span> <span class="n">will</span> <span class="n">simply</span> <span class="n">find</span> <span class="n">a</span> <span class="n">non</span><span class="o">-</span><span class="n">writable</span> <span class="n">segment</span>
+<span class="p">}</span>
+
+<span class="o">//</span> <span class="n">constant</span> <span class="n">that</span> <span class="n">can</span> <span class="n">be</span> <span class="ow">in</span> <span class="nb">any</span> <span class="n">block</span>
+<span class="o">//</span> <span class="n">const</span> <span class="n">will</span> <span class="n">simply</span> <span class="n">find</span> <span class="n">a</span> <span class="n">non</span><span class="o">-</span><span class="n">writable</span> <span class="n">segment</span>
+<span class="n">const</span> <span class="n">u16</span> <span class="n">ptr</span>
+</pre></div>
+</div>
+<section id="platform-linker-script-intelligence-plsi">
+<h2>Platform Linker Script Intelligence (PLSI)<a class="headerlink" href="#platform-linker-script-intelligence-plsi" title="Link to this heading"></a></h2>
+<p>Architectures leverage the linker script for the linker script provided directives, but certain platforms use the Linker Script for additional purposes.</p>
+<section id="nmos-6502">
+<h3>NMOS 6502<a class="headerlink" href="#nmos-6502" title="Link to this heading"></a></h3>
+</section>
+</section>
 </section>
 
 
