@@ -234,7 +234,7 @@ internal enum DecodingPhases : byte {
     TERMINAL, LINKER_INIT, TOKEN, EVALUATION
 }
 
-internal enum Architectures {
+internal enum Architectures : byte{
     None,
         
     NMOS_6502,
@@ -243,7 +243,7 @@ internal enum Architectures {
     RICOH_2A03,                     // NES/Famicom                              '2a03', 'nes', 'fds'
 }
     
-internal enum ScopeTypes {
+internal enum ScopeTypes : byte{
     Root      = 0,
     Namespace = 1,
     Macro     = 2,
@@ -252,7 +252,7 @@ internal enum ScopeTypes {
     Interrupt = 5
 }
 
-internal enum CheckDirectiveStatus {
+internal enum CheckDirectiveStatus : byte {
     None,
     Success,
     Error

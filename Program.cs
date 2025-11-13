@@ -47,7 +47,7 @@ internal static class Program {
         if (error is not 0) return error;
         
         Architecture.Initalize();
-        Core.Core.Assemble([]);
+        // Core.Core.Assemble([]);
         
         return 0;
     }

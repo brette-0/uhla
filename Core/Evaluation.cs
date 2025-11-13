@@ -2,7 +2,7 @@
 
 namespace uhla.Core {
     internal static partial class Core {
-        internal static EvalToken? Evaluate(Modes mode = Modes.STANDARD, List<HierarchyTokens_t>? Tokens = null, int MaxHierarchy = -1, Statuses Status = Statuses.OK) {
+        /*internal static EvalToken? Evaluate(Modes mode = Modes.STANDARD, List<HierarchyTokens_t>? Tokens = null, int MaxHierarchy = -1, Statuses Status = Statuses.OK) {
             if (Tokens is null) {
                 var SourceFileIndexBufferSpan = CollectionsMarshal.AsSpan(Program.SourceFileIndexBuffer);
                 var SourceFileLineBufferSpan  = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
@@ -10,11 +10,11 @@ namespace uhla.Core {
 
 
                 (Tokens, MaxHierarchy, Status) = Lexer(
-                    Program.SourceFileContentBuffer[^1].ToArray(), 
+                    Program.SourceFileContentBuffer[^1].ToArray(),
                     ref SourceFileIndexBufferSpan[^1],
-                    ref SourceFileLineBufferSpan[^1], 
-                    ref SourceFileStepBufferSpan[^1], 
-                    Program.SourceFileNameBuffer[^1], 
+                    ref SourceFileLineBufferSpan[^1],
+                    ref SourceFileStepBufferSpan[^1],
+                    Program.SourceFileNameBuffer[^1],
                     mode
                 );
             }
@@ -27,20 +27,20 @@ namespace uhla.Core {
                      *
                      *      1 + foo:
                      *      1 + (foo, bar)
-                     * 
+                     *
                      *  Will provide only one definition to as many declared found in one hierarchy.
                      *  Must have at least undefined token. Will Generate as CINT local to the active scope.
-                     */
+                     #1#
                     break;
-                
-                
+
+
                 case (Statuses.OK, _):
                     /*
                      *  Invokes Generic Evaluate, Yielding List<EvalToken>
                      *
                      *  If returns with a lack of definition, subscribe to definition manager
                      *  otherwise pass back to Assemble.
-                     */
+                     #1#
 
                     while (MaxHierarchy > 0) {
                         var Targets = Tokens.Where(t => t.Hierarchy == MaxHierarchy);
@@ -59,7 +59,7 @@ namespace uhla.Core {
 
                             Tokens[Offset - 1].DeltaTokens[^1].Add((EvalToken)ctx.ctx);
                             Tokens[Offset - 1].DeltaTokens.AddRange(Tokens[Offset + 1].DeltaTokens);
-                            
+
                             Tokens[Offset - 1] = new HierarchyTokens_t() {
                                 DeltaTokens    = Tokens[Offset - 1].DeltaTokens,
                                 Hierarchy      = Tokens[Offset - 1].Hierarchy,
@@ -72,16 +72,16 @@ namespace uhla.Core {
 
                         MaxHierarchy--;
                     }
-                    
+
                     break;
-                
+
                 case (Statuses.FAIL, _): return null;
             }
 
             return null;
-            
-            
-            // TODO: consider how LE can be integrated into DE 
+
+
+            // TODO: consider how LE can be integrated into DE
             static (LE_Relationship ctx, EvaluationStatus status) LinearEvaluate(HierarchyTokens_t HierarchyTokens) {
                 foreach (var TermTokens in HierarchyTokens.DeltaTokens) {
                     var resp = TermEvaluate(TermTokens);
@@ -97,12 +97,12 @@ namespace uhla.Core {
                 var             TokenEnumerator       = Tokens.GetEnumerator();
                 List<EvalToken> ObjectStack           = [];
                 List<Operators> OperatorStack         = [];
-                
-                
+
+
                 List<EvalToken> Response = [];
-                
-                
-                
+
+
+
                 var i = 0; while (i < Tokens.Count) {
                     if (WantOperator) {
 
@@ -124,7 +124,7 @@ namespace uhla.Core {
                                     return [];
                                 }
                                 continue;
-                            
+
                             default:
                                 // error, this is not a unary operator
                                 return [];
@@ -141,13 +141,13 @@ namespace uhla.Core {
 
                         // if operator is not member fetching, break iterative logic
                         if ((Operators)TokenEnumerator.Current.ObjectData is not (Operators.PROPERTY or Operators.NULLPROPERTY)) break;
-                        
+
                         // access member
                         if (!TokenEnumerator.MoveNext()) {
                             // error, literally no member/property to view
                             return [];
                         }
-                             
+
                         // null propagation used here, lazily defined constant comprised members cannot have
                         // evaluated properties at this point
                         member = member?.GetMember((string)TokenEnumerator.Current.ObjectData);
@@ -159,7 +159,7 @@ namespace uhla.Core {
                             // error, pre mut requesting mut on constant component
                             return [];
                         }
-                        
+
                         // store pre muts
                     } else {
                         // compute pre muts
@@ -179,7 +179,7 @@ namespace uhla.Core {
                              )}
                         }, member.type, true, true);
 
-                        // process unaries 
+                        // process unaries
                         while (PendingUnaryOperators.Count > 0) {
                             if (!ProcessUnaryOperator(PendingUnaryOperators[^1], ref memnew)) return [];
                             PendingUnaryOperators.RemoveAt(PendingUnaryOperators.Count - 1);
@@ -188,9 +188,9 @@ namespace uhla.Core {
                         // member is managed, so maybe this should work, check if not
                         member = new ObjectToken(memnew);   // clone memnew to update member
                     }
-                    
+
                     // perform non unary operations
-                    
+
                     // post mut/dec tracking
                     if ((Operators)TokenEnumerator.Current.ObjectData is Operators.INC or Operators.DEC) {
                         if (member is null) {
@@ -202,7 +202,7 @@ namespace uhla.Core {
                         // branching logic requires definition <due to mid-line mutation based on conditional scripting>
                         return [];
                     }
-                    
+
                     WantOperator = !WantOperator;
                 }
                 return Response;
@@ -213,7 +213,7 @@ namespace uhla.Core {
                         case (Operators.SUB,    AssembleTimeTypes.INT):    memnew.GetMember("#self")!.data = -(int)memnew.GetMember("#self")!.data; break;
                         case (Operators.NOT,    AssembleTimeTypes.INT):    memnew.GetMember("#self")!.data = 0 == (int)memnew.GetMember("#self")!.data ? 1 : 0; break;
                         case (Operators.BITNOT, AssembleTimeTypes.INT):    memnew.GetMember("#self")!.data = ~(int)memnew.GetMember("#self")!.data; break;
-                        case (Operators.INC,    AssembleTimeTypes.INT):    
+                        case (Operators.INC,    AssembleTimeTypes.INT):
                             if (PendingUnaryOperators.Count == 1) memnew.GetMember("#self")!.data = 1 + (int)memnew.GetMember("#self")!.data;
                             else {
                                 // error, only permits increment once and at the end
@@ -232,7 +232,7 @@ namespace uhla.Core {
                         case (Operators.NOT,    AssembleTimeTypes.STRING): memnew.GetMember("#self")!.data =  new string(' ', ((string)memnew.GetMember("#self")!.data).Length); break;
                         case (Operators.BITNOT, AssembleTimeTypes.STRING): memnew.GetMember("#self")!.data = ((string)memnew.GetMember("#self")!.data).Length;
                                                                            memnew.type = AssembleTimeTypes.STRING; break;
-                        case (_,    AssembleTimeTypes.STRING): 
+                        case (_,    AssembleTimeTypes.STRING):
                             // error, inc/dec not possible on string
                             return false;
                     }
@@ -240,7 +240,7 @@ namespace uhla.Core {
                     return true;
                 }
             }
-        }
+        }*/
 
         /// <summary>
         /// LE must replace invocations with constant copy-of object result in-place, replace non-constant object
@@ -253,14 +253,14 @@ namespace uhla.Core {
             return default;
         }
 
-        private static EvalToken? DeltaEvaluate(List<HierarchyTokens_t>? Tokens, int MaxHierarchy, Statuses Status) {
+        /*private static EvalToken? DeltaEvaluate(List<HierarchyTokens_t>? Tokens, int MaxHierarchy, Statuses Status) {
             while (MaxHierarchy > 0) {
                 var Targets = Tokens.Where(t => t.Hierarchy == MaxHierarchy);
                 foreach (var Target in Targets) {
                     var (ctx, status) = LinearEvaluate(Target); switch (status) {
                         case EvaluationStatus.ERROR:            return null; // error pass back
                         case EvaluationStatus.OK:               break;
-                        case EvaluationStatus.SYMBOL_UNDEFINED: 
+                        case EvaluationStatus.SYMBOL_UNDEFINED:
                             // accept 'reshape' return
                             return null;    // return definition issue
 
@@ -273,7 +273,7 @@ namespace uhla.Core {
 
                     Tokens[Offset - 1].DeltaTokens[^1].Add((EvalToken)ctx.ctx);
                     Tokens[Offset - 1].DeltaTokens.AddRange(Tokens[Offset + 1].DeltaTokens);
-                            
+
                     Tokens[Offset - 1] = new HierarchyTokens_t() {
                         DeltaTokens = Tokens[Offset - 1].DeltaTokens,
                         Hierarchy   = Tokens[Offset - 1].Hierarchy,
@@ -289,17 +289,18 @@ namespace uhla.Core {
 
             return null;
         }
+        */
     }
-    
-    
-    /*
-     *
-     * The Evaluation pipeline requires that:
-     *  - tokens can invoke Delta Evaluate
-     *  - DE requests Database.ProvideDefinition, and Database.Declare
-     *  - LE reshapes to prevent evaluation latency based over-invocation
-     *
-     * 
-     */
+
+
+        /*
+         *
+         * The Evaluation pipeline requires that:
+         *  - tokens can invoke Delta Evaluate
+         *  - DE requests Database.ProvideDefinition, and Database.Declare
+         *  - LE reshapes to prevent evaluation latency based over-invocation
+         *
+         *
+         */
 }
 

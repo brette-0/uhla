@@ -37,6 +37,22 @@ namespace uhla.Architectures {
                 {"#self",    new ObjectToken('y', AssembleTimeTypes.INT, true, true)},
                 {"indexing", new ObjectToken(0,   AssembleTimeTypes.INT, true, true) }
             }, AssembleTimeTypes.REG, true, true);
+
+            if (!Program.Linker!.Rules.ContainsKey("direct")) {
+                // Error : must have direct page rule
+            }
+            
+            if (!Program.Linker!.Rules.ContainsKey("system")) {
+                // Error : must have system page rule
+            }
+            
+            if (!Program.Linker!.Rules.ContainsKey("fast")) {
+                // Error : must have fast page rule
+            }
+            
+            if (!Program.Linker!.Rules.ContainsKey("slow")) {
+                // Error : must have slow page rule
+            }
         }
 
         public virtual CheckDirectiveStatus CheckDirective(ref List<EvalToken> args,
@@ -64,7 +80,7 @@ namespace uhla.Architectures {
 
             void Step(bool regexParse = true) {
                 ActiveToken = default;
-                if (DefineResolveBuffer.Count == 0) { // si to be mutated ONLY by typed tokens
+                if (DefineResolveBuffer.Count == 0) { // is to be mutated ONLY by typed tokens
                     Representation += BasicRegexTokens.Span[TokenIndex];
                     StringIndex    += BasicRegexTokens.Span[TokenIndex].Length;
                 }

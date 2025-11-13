@@ -279,7 +279,7 @@ namespace uhla.Core {
             #endif
         };
         
-        internal static (object Return, AssembleTimeTypes Type, bool Success) Assemble(List<EvalToken> args) {
+/*        internal static (object Return, AssembleTimeTypes Type, bool Success) Assemble(List<EvalToken> args) {
             Span<int>           SourceFileIndexBufferSpan   = CollectionsMarshal.AsSpan(Program.SourceFileIndexBuffer);
             Span<int>           SourceFileLineBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
             Span<int>           SourceFileStepBufferSpan    = CollectionsMarshal.AsSpan(Program.SourceFileLineBuffer);
@@ -296,7 +296,7 @@ namespace uhla.Core {
             (List<(List<List<(int StringOffset, int StringLength, object data, bool IsOperator)>> DeltaTokens, int Hierachy, string Representation)> Tokens, int MaxHierachy, int Finish, bool Success, bool Continue) lexer_resp; 
             (List<(int StringOffset, int StringLength, object data, AssembleTimeTypes type, bool IsOperator)> result, bool Success, bool Unevaluable)                                              evaluate_resp;
 
-            while (true) {
+            /*while (true) {
                 Step();
                 switch (ActiveToken.ctx[0]) {
                     case '#': {
@@ -402,13 +402,13 @@ namespace uhla.Core {
 
             EvalToken? ProcessRValue() {
                 return null;
-            }
+            }#1#
             
-            void Step(bool regexParse = true) {
+            /*void Step(bool regexParse = true) {
                 ActiveToken = default;
                 if (DefineResolveBuffer.Count == 0) {                                                   // si to be mutated ONLY by typed tokens
                     Representation += BasicRegexTokens.Span[TokenIndex];
-                    StringIndex       += BasicRegexTokens.Span[TokenIndex].Length;
+                    StringIndex    += BasicRegexTokens.Span[TokenIndex].Length;
                 }
 
                 if (regexParse) {
@@ -442,9 +442,9 @@ namespace uhla.Core {
                 while (seekPredicate()) {
                     Step(regexParse);
                 }
-            }
+            }#1#
             
-            (List<(string token, int StringIndex, int StringLength)> ctx, bool success) PartialResolveDefine(string Token) {
+            /*(List<(string token, int StringIndex, int StringLength)> ctx, bool success) PartialResolveDefine(string Token) {
             
 
                 List<(string token, int StringIndex, int StringLength)>    Resolved = [(Token, ActiveToken.StringIndex, Token.Length)];
@@ -467,7 +467,7 @@ namespace uhla.Core {
                 } while (ctx is not null && ctx.type == AssembleTimeTypes.EXP);
 
                 return (Resolved, HadSuccess);
-            }
+            }#1#
             
             /*(OperationTypes oper, object ctx) ExtractOperation() {
                 object ctx; bool success;
@@ -732,7 +732,7 @@ namespace uhla.Core {
                             /*while (DefineResolveBuffer.Count > 0) {
                                 Step();
                                 define_ctx += ActiveToken[0];
-                            }#1#
+                            }#2#
 
                             // gather until ctx exhausted, that's our define. Add as DEFINE and return as DEFINE
                             while (DefineResolveBuffer.Count > 0 || CheckLineTerminated()) {
@@ -1021,7 +1021,7 @@ namespace uhla.Core {
                      *          memory location
                      *          preprocessor INT
                      *
-                     #1#
+                     #2#
 
                     var opcode = ActiveToken.ctx.ToLower();
                     switch (opcode) {
@@ -1575,14 +1575,14 @@ namespace uhla.Core {
 
 
                 #endregion      OperationExtract Local Functions
-            }*/
+            }#1#
         
             bool CheckLineTerminated() => (TokenIndex == BasicRegexTokens.Length && DefineResolveBuffer.Count == 0) || ActiveToken.ctx[0] == ';' || ActiveToken.ctx[0] == '\n' || ActiveToken.ctx == "//" || ActiveToken.ctx == "/*";
 
             // keep seeking beyond whitespace
-            void seek_no_whitespace(bool skip = false, bool regexParse = true) => Steps(() => !CheckLineTerminated() && (ActiveToken.ctx[0] == ' ' || ActiveToken.ctx[0] == '\t'), skip, regexParse);
+            // void seek_no_whitespace(bool skip = false, bool regexParse = true) => Steps(() => !CheckLineTerminated() && (ActiveToken.ctx[0] == ' ' || ActiveToken.ctx[0] == '\t'), skip, regexParse);
 
-        }
+        }*/
 
 
         internal static (string filepath, bool success) CheckInclude(string target) {
