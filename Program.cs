@@ -1,5 +1,4 @@
-﻿using uhla.Architectures;
-using uhla.Core;
+﻿using uhla.Core;
 using uhla.Core.Language;
 
 namespace uhla;
@@ -26,20 +25,20 @@ internal static class Program {
 
         if (InputPath == string.Empty) {
             Terminal.Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{Language.Connectives[(ActiveLanguage, "Input path must be provided")]}.",
-                -1, default, null, null);
+                -1, 0, null, null);
             return (int)ErrorTypes.ParsingError;
         }
 
         if (OutputPath == string.Empty) {
             Terminal.Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"{Language.Connectives[(ActiveLanguage, "Output path must be provided")]}.",
-                -1, default, null, null);
+                -1, 0, null, null);
             return (int)ErrorTypes.ParsingError;
         }
 
         if (!File.Exists(InputPath)) {
             // error, path does not exist
             Terminal.Error(ErrorTypes.ParsingError, DecodingPhases.TERMINAL, $"Input path {Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, InputPath))} does not exist.",
-                -1, default, null, null);
+                -1, 0, null, null);
             return (int)ErrorTypes.ParsingError;
         }
 

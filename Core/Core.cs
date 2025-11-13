@@ -278,6 +278,36 @@ namespace uhla.Core {
             _ => throw new NotSupportedException($"FATAL ERROR :: (REPORT THIS ON THE GITHUB) CANNOT CLONE TYPE {ctx?.GetType()}")
             #endif
         };
+
+        internal static (ObjectToken obj, Terminal.ErrorContext? err)? Assemble(ref List<string>.Enumerator line, List<EvalToken> args) {
+            while (line.MoveNext()) {
+                if (line.Current[0] >= '0' && line.Current[0] <= '9') {
+                    // error, first cannot begin with number
+                    // TODO: Implement different branching method : Numerical
+                    return null;
+                }
+
+                if (line.Current[0] is '#') {
+                    // we have a core directive
+                    if (line.MoveNext()) {
+                        switch (line.Current) {
+                            case "assert":
+                            case "define":
+                            case "undefine":
+                            case "include":
+                                break;
+                        }
+                    } else {
+                        // error, directive body is missing
+                    }
+                } else if (line.Current[0] is '.') {
+                    // we have an architecture directive / rule use
+                }   // TODO: else check rt member declaration (no rule)
+            }
+            
+            
+            return null;
+        }
         
 /*        internal static (object Return, AssembleTimeTypes Type, bool Success) Assemble(List<EvalToken> args) {
             Span<int>           SourceFileIndexBufferSpan   = CollectionsMarshal.AsSpan(Program.SourceFileIndexBuffer);
