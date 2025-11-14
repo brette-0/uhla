@@ -1,6 +1,6 @@
-﻿using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using uhla.Architectures;
+using EList;
 
 namespace uhla.Core {
     internal static partial class Core {
@@ -279,18 +279,155 @@ namespace uhla.Core {
             #endif
         };
 
-        internal static (ObjectToken obj, Terminal.ErrorContext? err)? Assemble(ref List<string>.Enumerator line, List<EvalToken> args) {
-            while (line.MoveNext()) {
-                if (line.Current[0] >= '0' && line.Current[0] <= '9') {
+        internal static (ObjectToken obj, Terminal.ErrorContext? err)? Assemble(ref EList<string> src, List<EvalToken> args) {
+            var         blockNumber = 0;
+            EList<int>  jumpPoints  = [];
+            bool?       success     = null;
+            EList<bool> needsJump   = [];
+            
+            loop: if (!ContinueUntilToken(ref src)) {
+                // error in continuance
+                return null;
+            }
+         
+            // control flow keywords TODO: needs more work
+            switch (src.Current) {
+                case "if":
+                    if (!ContinueUntilToken(ref src)) {
+                        // error in continuance
+                        return null;
+                    }
+                    
+                    var (line, err) = Lex(ref src);
+                    if (err is not null) {
+                        // error pass back
+                        return null;
+                    }
+
+                    (var result, err) = (new ObjectToken(0, default, false, false), null);
+
+                    if (err is not null) {
+                        // error pass back
+                        return null;
+                    }
+
+                    if (result.data is int condition) {
+                        success = condition is 1;
+                    } else {
+                        // error condition is not int
+                        return null;
+                    }
+                    
+                    if (src.Current[0] is '{') {
+                        needsJump.Add(false);
+                        if ((bool)success) {
+                            goto loop;
+                            // take path
+                        } else {
+                            if (!ContinueUntilCloseBrace(ref src)) {
+                                // continuation error
+                                return null;
+                            }
+
+                            if (src.Current is "else") goto case "else";
+                            break;
+                        }
+                    } else {
+                        // erroneous content following else keyword
+                        return null;
+                    }
+                    
+                case "else":
+                    if (success is null) {
+                        // no condition to fail, keyword is erroneous
+                        return null;
+                    } else if (!(bool)success) {
+                        if (!ContinueUntilToken(ref src)) {
+                            // error in continuance
+                            return null;
+                        }
+                        if (src.Current is "if") goto case "if";
+                        if (src.Current[0] is '{') {
+                            needsJump.Add(false);
+                            // open else block
+                        } else {
+                            // erroneous content following else keyword
+                            return null;
+                        }
+                        
+                        // this is else body
+                    } else {
+                        if (!ContinueUntilCloseBrace(ref src)) {
+                            // continuation error
+                            return null;
+                        }
+
+                        if (src.Current is "else") goto case "else";
+                    }
+
+                    break;
+                
+                case "loop":
+                    jumpPoints.Add(src.Index);
+                    if (!ContinueUntilToken(ref src)) {
+                        // error in continuance
+                        return null;
+                    }
+
+                    if (src.Current[0] is not '{') {
+                        // error, loop contains no body
+                    }
+                    // peak to bracket
+                    break;
+                
+                case "break":
+                    if (jumpPoints.Count is 0) {
+                        // error, nothing to break out of
+                        return null;
+                    }
+                    
+                    // peak until closed brace
+                    if (!ContinueUntilCloseBrace(ref src)) {
+                        // continuation error
+                        return null;
+                    }
+                    
+                    jumpPoints.RemoveAt(^1);
+                    break;
+            }
+
+            // if lexing terminated with this, we need to close a block AFTER finishing line.
+            if (src.Current[0] is '}') {
+                var jumpNow = needsJump.Pop(^1);
+                if (jumpNow) {
+                    src.JumpTo(jumpPoints.Pop(^1));
+                } else {
+                    if (!ContinueUntilToken(ref src)) {
+                        // continuation error
+                        return null;
+                    }
+
+                    if (src.Current is "else") {
+                        if (!ContinueUntilCloseBrace(ref src)) {
+                            // continuation error
+                            return null;
+                        }
+                    }
+                }
+                // if we are closing a loop, we MUST jump. if we are closing condition we don't need to
+            }
+            
+            while (src.MoveNext()) {
+                if (src.Current[0] >= '0' && src.Current[0] <= '9') {
                     // error, first cannot begin with number
                     // TODO: Implement different branching method : Numerical
                     return null;
                 }
 
-                if (line.Current[0] is '#') {
+                if (src.Current[0] is '#') {
                     // we have a core directive
-                    if (line.MoveNext()) {
-                        switch (line.Current) {
+                    if (src.MoveNext()) {
+                        switch (src.Current) {
                             case "assert":
                             case "define":
                             case "undefine":
@@ -300,13 +437,61 @@ namespace uhla.Core {
                     } else {
                         // error, directive body is missing
                     }
-                } else if (line.Current[0] is '.') {
+                } else if (src.Current[0] is '.') {
                     // we have an architecture directive / rule use
                 }   // TODO: else check rt member declaration (no rule)
             }
             
             
             return null;
+
+            bool ContinueUntilCloseBrace(ref EList<string> src) {
+                while (src.Current[0] is not '{') {
+                    if (!ContinueUntilToken(ref src)) {
+                        // continuation error
+                        return false;
+                    }
+                }
+                var braceCount = 1;
+                while (braceCount is not 0) {
+                    if (!ContinueUntilToken(ref src)) {
+                        // continuation error, or code block was not closed
+                        return false;
+                    }
+                            
+                    if      (src.Current[0] is '{') braceCount++;
+                    else if (src.Current[0] is '}') braceCount--;
+                }
+            }
+
+            bool ContinueUntilToken(ref EList<string> src) {
+                while (src.Current[0] is not (' ' or '\t' or '\n')) {
+                    if (!src.MoveNext()) {
+                        // no else body or sequential condition
+                        return false;
+                    }
+
+                    if (src.Current is not "//") continue;
+                    while (src.Current[0] is not '\n') {
+                        if (!src.MoveNext()) {
+                            // no else body or sequential condition
+                            return false;
+
+                            // increment line debugger count
+                        }
+
+                        if (src.Current is not "/*") continue;
+                        while (src.Current is not "*/") {
+                            if (!src.MoveNext()) {
+                                // error comment left unterminated
+                                return false;
+                            }
+                        }
+                    }
+                }
+
+                return true;
+            }
         }
         
 /*        internal static (object Return, AssembleTimeTypes Type, bool Success) Assemble(List<EvalToken> args) {

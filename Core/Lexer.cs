@@ -3,11 +3,13 @@
           On error report, refer to RegexParsed[0].ctx, index, length etc...
 */
 
+using EList;
+
 namespace uhla.Core {
     internal static partial class Core {
-        internal static (List<string>? line, Terminal.ErrorContext? err) Lex(ref List<string>.Enumerator src) {
+        internal static (EList<string>? line, Terminal.ErrorContext? err) Lex(ref EList<string> src) {
             List<char>   containerBuff = [];
-            List<string> line = [];
+            EList<string> line = [];
             while (src.MoveNext()) {
                 while (containerBuff.Count > 0 && containerBuff[^1] is '\"') {
                     if (src.Current[0] is '\"') {
@@ -27,7 +29,16 @@ namespace uhla.Core {
                         return (null, new Terminal.ErrorContext()); // TODO: parameterise 
                     }
                 }
+                
                 switch (src.Current[0]) {
+                    case ';':
+                        if (containerBuff.Count is 0) {                                         // ending with all closed
+                            return (line, null);
+                        } else {                                                                // ending with unclosed
+                            // container left open (terminated)
+                            return (null, new Terminal.ErrorContext()); // TODO: parameterise
+                        }
+
                     case '(' or '[': containerBuff.Add(src.Current[0]); break;
                     case '{':
                         if (containerBuff.Count is 0) {                                         // ending with all closed
