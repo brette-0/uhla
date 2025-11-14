@@ -462,6 +462,8 @@ namespace uhla.Core {
                     if      (src.Current[0] is '{') braceCount++;
                     else if (src.Current[0] is '}') braceCount--;
                 }
+
+                return true;
             }
 
             bool ContinueUntilToken(ref EList<string> src) {
