@@ -3,9 +3,9 @@
 namespace uhla.Core {
     internal static partial class Core {
         internal static (EList<EList<Token>>? line, Terminal.ErrorContext? err) Lex(ref EList<string> src) {
-            List<char>   containerBuff = [];
-            EList<EList<Token>>  line = [[]];
-            var lastToken = string.Empty;
+            List<char>          containerBuff = [];
+            EList<EList<Token>> line          = [[]];
+            var                 lastToken     = string.Empty;
             
             while (src.MoveNext()) {
                 line[^1].Add(new Token(src.Current, src.Index));
@@ -37,18 +37,22 @@ namespace uhla.Core {
                 lastToken = src.Current;
                 switch (src.Current) {
                     case ";":
+                        line[^1].RemoveAt(^1);
                         if (containerBuff.Count is 0) {                                         // ending with all closed
-                            line[^1].RemoveAt(^1);
                             return (line, null);
                         } else {                                                                // ending with unclosed
                             // container left open (terminated)
                             return (null, new Terminal.ErrorContext()); // TODO: parameterise
                         }
 
-                    case "(" or "[": containerBuff.Add(src.Current[0]); break;
+                    case "(" or "[": 
+                        line[^1].RemoveAt(^1);
+                        containerBuff.Add(src.Current[0]); 
+                        break;
+                    
                     case "{":
-                        if (containerBuff.Count is 0) {                                         // ending with all closed
-                            line[^1].RemoveAt(^1);
+                        line[^1].RemoveAt(^1);
+                        if (containerBuff.Count is 0) {
                             return (line, null);
                         } else if (containerBuff.Count > 1 && containerBuff[^1] is '$') {      // string interpolation
                             containerBuff[^1] = src.Current[0];
@@ -57,7 +61,9 @@ namespace uhla.Core {
                             // container left open (terminated)
                             return (null, new Terminal.ErrorContext()); // TODO: parameterise
                         }
+                    
                     case ")":
+                        line[^1].RemoveAt(^1);
                         if (containerBuff[^1] is '(') {
                             containerBuff = [.. containerBuff.Take(containerBuff.Count - 1)];
                             continue;
@@ -67,7 +73,8 @@ namespace uhla.Core {
                         }
                     
                     case "]":
-                        if (containerBuff[^1] is ']') {
+                        line[^1].RemoveAt(^1);
+                        if (containerBuff[^1] is '[') {
                             containerBuff = [.. containerBuff.Take(containerBuff.Count - 1)];
                             continue;
                         } else {
@@ -76,9 +83,9 @@ namespace uhla.Core {
                         }
                     
                     case "}":
+                        line[^1].RemoveAt(^1);
                         if (containerBuff.Count is 0) {
                             // exit with presumed block closure
-                            line[^1].RemoveAt(^1);
                             return (line, null);
                         } else if (containerBuff[^1] is '{') {
                             // close string interpolation
@@ -90,14 +97,13 @@ namespace uhla.Core {
                         }
 
                     case "\"":
+                        line[^1].RemoveAt(^1);
                         containerBuff.Add('\"');
                         continue;
-                    case "$\"":
-                        containerBuff.Add('$');
-                        continue;
                     
-                    case ",":
-                        line.Add([]);
+                    case "$\"":
+                        line[^1].RemoveAt(^1);
+                        containerBuff.Add('$');
                         continue;
                 }
             }
