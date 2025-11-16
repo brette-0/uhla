@@ -1,5 +1,6 @@
 ﻿using uhla.Core;
 using uhla.Core.Language;
+using EList;
 
 namespace uhla;
 
@@ -46,7 +47,8 @@ internal static class Program {
         if (error is not 0) return error;
         
         Architecture.Initalize();
-        // Core.Core.Assemble([]);
+        var entry = new EList<string>(SourceFileContentBuffer[0]);
+        Core.Core.Assemble(ref entry, []);
         
         return 0;
     }
@@ -57,9 +59,9 @@ internal static class Program {
     internal static readonly List<int>          SourceFileLineBuffer    = []; // Used for ERROR REPORT ONLY
     internal static readonly List<int>          SourceFileStepBuffer    = []; // Used for ERROR REPORT ONLY
 
-    internal static readonly Dictionary<string, ObjectToken?>       LabelDataBase      = [];
-    internal static readonly List<Dictionary<string, ObjectToken?>> ActiveScopeBuffer  = [];
-    internal static readonly List<Dictionary<string, ObjectToken?>> ObjectSearchBuffer = [];
+    internal static readonly Dictionary<string, AssembleTimeObject?>       LabelDataBase      = [];
+    internal static readonly List<Dictionary<string, AssembleTimeObject?>> ActiveScopeBuffer  = [];
+    internal static readonly List<Dictionary<string, AssembleTimeObject?>> ObjectSearchBuffer = [];
 
     internal static readonly List<string>                           SourceFileSearchPaths = [];
 

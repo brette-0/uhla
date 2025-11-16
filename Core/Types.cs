@@ -30,7 +30,7 @@ internal record struct HierarchyTokens_t {
         return new EvalToken(
             Mapping["0"].StringIndex,
             Mapping[$"{Mapping.Count - 1}"].StringIndex + Mapping[$"{Mapping.Count - 1}"].StringLength,
-            new ObjectToken(
+            new AssembleTimeObject(
                 Mapping,
                 AssembleTimeTypes.TUPLE,
                 true,
@@ -301,4 +301,12 @@ internal interface IArchitecture {
                                         ref int                                                     pStringIndex, ref int pTokenIndex,
                                         ref (string ctx, int StringIndex, int StringLength)         pActiveToken,
                                         ref string                                                  pRepresentation);
+}
+
+internal class Token {
+    internal Token(string Reprsentation, int StringIndex) => (representation, stringIndex) = (Reprsentation, StringIndex);
+    
+    internal string representation;
+    internal int    stringIndex;
+    internal int    stringLength { get => representation.Length; }
 }

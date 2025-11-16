@@ -12,8 +12,8 @@ internal static class Database {
     /// </summary>
     /// <param name="Alias"></param>
     /// <returns></returns>
-    internal static ObjectToken? GetObjectFromAlias(string Alias) {
-        List<Dictionary<string, ObjectToken?>> LocalObjectSearchBuffer = [Program.ActiveScopeBuffer[^1], .. Program.ObjectSearchBuffer];
+    internal static AssembleTimeObject? GetObjectFromAlias(string Alias) {
+        List<Dictionary<string, AssembleTimeObject?>> LocalObjectSearchBuffer = [Program.ActiveScopeBuffer[^1], .. Program.ObjectSearchBuffer];
         return __GetObjectFromAlias(Alias, LocalObjectSearchBuffer);
     }
     /// <summary>
@@ -24,7 +24,7 @@ internal static class Database {
     /// <param name="TargetScope"></param>
     /// <returns></returns>
     /// 
-    internal static ObjectToken? GetObjectFromAlias(string Alias, Dictionary<string, ObjectToken?> TargetScope) => __GetObjectFromAlias(Alias, [TargetScope]);
+    internal static AssembleTimeObject? GetObjectFromAlias(string Alias, Dictionary<string, AssembleTimeObject?> TargetScope) => __GetObjectFromAlias(Alias, [TargetScope]);
     
     /// <summary>
     /// Internal function iterating over the LocalObjectSearchPath to find the required context if possible.
@@ -32,9 +32,9 @@ internal static class Database {
     /// <param name="Alias"></param>
     /// <param name="LocalObjectSearchBuffer"></param>
     /// <returns></returns>
-    private  static ObjectToken? __GetObjectFromAlias(string Alias, List<Dictionary<string, ObjectToken?>> LocalObjectSearchBuffer) {
+    private  static AssembleTimeObject? __GetObjectFromAlias(string Alias, List<Dictionary<string, AssembleTimeObject?>> LocalObjectSearchBuffer) {
         foreach (var LocalObjectSearchContainer in LocalObjectSearchBuffer) {
-            ObjectToken? ctx;
+            AssembleTimeObject? ctx;
             if (LocalObjectSearchContainer.TryGetValue(Alias, out ctx)) {
                 return ctx;
             }
@@ -51,8 +51,8 @@ internal static class Database {
         }
         
         // Declaration
-        var OT = new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"#self", new ObjectToken(Query, AssembleTimeTypes.UNDEFINED, false, false)}        
+        var OT = new AssembleTimeObject(new Dictionary<string, AssembleTimeObject>() {
+            {"#self", new AssembleTimeObject(Query, AssembleTimeTypes.UNDEFINED, false, false)}        
         }, type, false, isconst);
 
         Program.ActiveScopeBuffer[^1].Add(alias, OT);
@@ -66,12 +66,12 @@ internal static class Database {
         }
         
         // Declaration
-        var OT = new ObjectToken(new Dictionary<string, ObjectToken>() {
-            {"#self",   new ObjectToken(Query, AssembleTimeTypes.UNDEFINED, false, false)},
-            {"#offset", new ObjectToken(Program.Architecture.MemoryReserve(ref type), AssembleTimeTypes.INT, true, true)}
+        var OT = new AssembleTimeObject(new Dictionary<string, AssembleTimeObject>() {
+            {"#self",   new AssembleTimeObject(Query, AssembleTimeTypes.UNDEFINED, false, false)},
+            {"#offset", new AssembleTimeObject(Program.Architecture.MemoryReserve(ref type), AssembleTimeTypes.INT, true, true)}
         }, AssembleTimeTypes.RT, false, isconst);
 
-        if ((int)((Dictionary<string, ObjectToken>)OT.data)["#offset"].data is -1) {
+        if ((int)((Dictionary<string, AssembleTimeObject>)OT.data)["#offset"].data is -1) {
             // failed memory reserve
             return false;
         }
@@ -112,7 +112,7 @@ internal static class Database {
     /// <param name="ctx"></param>
     /// <param name="tar"></param>
     /// <returns></returns>
-    internal static bool ProvideDefinition(ref ObjectToken ctx, ref ObjectToken tar) {
+    internal static bool ProvideDefinition(ref AssembleTimeObject ctx, ref AssembleTimeObject tar) {
         if (ctx.constant) {
             if (ctx.defined) {
                 // error, cannot redefine

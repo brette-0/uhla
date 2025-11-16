@@ -1,13 +1,13 @@
 namespace uhla.Core;
 
-internal class ObjectToken {
+internal class AssembleTimeObject {
     [Flags]
     internal enum ObjectTokenFlags : byte {
         defined  = 0x01,
         constant = 0x02
     }
             
-    internal ObjectToken (object pData, AssembleTimeTypes pType, bool pDefined, bool pConstant) {
+    internal AssembleTimeObject (object pData, AssembleTimeTypes pType, bool pDefined, bool pConstant) {
         data     = pData;
         type     = pType;
         defined  = pDefined;
@@ -18,14 +18,14 @@ internal class ObjectToken {
     /// Cloning Constructor.
     /// </summary>
     /// <param name="pOT">Token to be cloned</param>
-    internal ObjectToken(ObjectToken pOT) {
-        data     = Core.Clone((Dictionary<string, ObjectToken>)pOT.data);    // recursively clone contents
+    internal AssembleTimeObject(AssembleTimeObject pOT) {
+        data     = Core.Clone((Dictionary<string, AssembleTimeObject>)pOT.data);    // recursively clone contents
         type     = pOT.type > type ? pOT.type : type;
         defined  = pOT.defined;
         constant = pOT.constant;
 
         if (!defined) {
-            var members = (Dictionary<string, ObjectToken>)data;
+            var members = (Dictionary<string, AssembleTimeObject>)data;
             #if DEBUG
             if (!members.Remove("#dependants")) {
                 // error, should have the "dependants" key if undefined
@@ -35,15 +35,15 @@ internal class ObjectToken {
                     members.Remove("#dependants");
             #endif
                     
-            members = (Dictionary<string, ObjectToken>)pOT.data;
+            members = (Dictionary<string, AssembleTimeObject>)pOT.data;
             members.Add("this", this);  // entirely broken!! TODO: immediate fix required!
         }
     }
 
-    internal ObjectToken? GetMember(string name) => ((Dictionary<string, ObjectToken>)data).GetValueOrDefault(name);
+    internal AssembleTimeObject? GetMember(string name) => ((Dictionary<string, AssembleTimeObject>)data).GetValueOrDefault(name);
             
-    internal bool GetMember(string name, out ObjectToken? ctx) {
-        var obj = (Dictionary<string, ObjectToken>)data;
+    internal bool GetMember(string name, out AssembleTimeObject? ctx) {
+        var obj = (Dictionary<string, AssembleTimeObject>)data;
         ctx = obj.GetValueOrDefault(name);
                 
         return ctx is not null;

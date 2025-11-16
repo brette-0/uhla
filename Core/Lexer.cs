@@ -1,16 +1,20 @@
-﻿/*
-    TODO: RegexTokenizedBuffer to store (ctx, index, length)
-          On error report, refer to RegexParsed[0].ctx, index, length etc...
-*/
-
-using EList;
+﻿using EList;
 
 namespace uhla.Core {
     internal static partial class Core {
-        internal static (EList<string>? line, Terminal.ErrorContext? err) Lex(ref EList<string> src) {
+        internal static (EList<EList<Token>>? line, Terminal.ErrorContext? err) Lex(ref EList<string> src) {
             List<char>   containerBuff = [];
-            EList<string> line = [];
+            EList<EList<Token>>  line = [[]];
+            var lastToken = string.Empty;
+            
             while (src.MoveNext()) {
+                line[^1].Add(new Token(src.Current, src.Index));
+                if (src.Current[0] is '\n') {
+                    // check if we have an open container or if our last token was not an operator
+                    if (containerBuff.Count is 0 && GetOperator(lastToken) is not null) {
+                        return (line, null);
+                    }   // else continue as normal, we have context to finish.
+                }
                 while (containerBuff.Count > 0 && containerBuff[^1] is '\"') {
                     if (src.Current[0] is '\"') {
                         containerBuff = [.. containerBuff.Take(containerBuff.Count - 1)];
@@ -30,27 +34,29 @@ namespace uhla.Core {
                     }
                 }
                 
-                switch (src.Current[0]) {
-                    case ';':
+                switch (src.Current) {
+                    case ";":
                         if (containerBuff.Count is 0) {                                         // ending with all closed
+                            line[^1].RemoveAt(^1);
                             return (line, null);
                         } else {                                                                // ending with unclosed
                             // container left open (terminated)
                             return (null, new Terminal.ErrorContext()); // TODO: parameterise
                         }
 
-                    case '(' or '[': containerBuff.Add(src.Current[0]); break;
-                    case '{':
+                    case "(" or "[": containerBuff.Add(src.Current[0]); break;
+                    case "{":
                         if (containerBuff.Count is 0) {                                         // ending with all closed
+                            line[^1].RemoveAt(^1);
                             return (line, null);
-                        } else if (containerBuff.Count > 1 && containerBuff[^1] is '\"') {      // string interpolation
+                        } else if (containerBuff.Count > 1 && containerBuff[^1] is '$') {      // string interpolation
                             containerBuff[^1] = src.Current[0];
                             continue;
                         } else {                                                                // ending with unclosed
                             // container left open (terminated)
                             return (null, new Terminal.ErrorContext()); // TODO: parameterise
                         }
-                    case ')':
+                    case ")":
                         if (containerBuff[^1] is '(') {
                             containerBuff = [.. containerBuff.Take(containerBuff.Count - 1)];
                             continue;
@@ -59,7 +65,7 @@ namespace uhla.Core {
                             return (null, new Terminal.ErrorContext()); // TODO: parameterise
                         }
                     
-                    case ']':
+                    case "]":
                         if (containerBuff[^1] is ']') {
                             containerBuff = [.. containerBuff.Take(containerBuff.Count - 1)];
                             continue;
@@ -68,9 +74,10 @@ namespace uhla.Core {
                             return (null, new Terminal.ErrorContext()); // TODO: parameterise
                         }
                     
-                    case '}':
+                    case "}":
                         if (containerBuff.Count is 0) {
                             // exit with presumed block closure
+                            line[^1].RemoveAt(^1);
                             return (line, null);
                         } else if (containerBuff[^1] is '{') {
                             // close string interpolation
@@ -81,12 +88,19 @@ namespace uhla.Core {
                             return (null, new Terminal.ErrorContext()); // TODO: parameterise
                         }
 
-                    case '\"':
+                    case "\"":
                         containerBuff.Add('\"');
+                        continue;
+                    case "$\"":
+                        containerBuff.Add('$');
+                        continue;
+                    
+                    case ",":
+                        line.Add([]);
                         continue;
                 }
             }
-            return default;
+            return (line, null);
         }
     }
 }

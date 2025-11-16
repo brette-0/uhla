@@ -4,7 +4,7 @@ internal class EvalToken {
     internal EvalToken(
         int         pStringIndex,
         int         pStringLength,
-        ObjectToken pData
+        AssembleTimeObject pData
     ) {
         Data         = pData;
         StringIndex  = pStringIndex;
@@ -25,6 +25,6 @@ internal class EvalToken {
     internal object            ObjectData => Data.data;
     internal AssembleTimeTypes ObjectType => Data.type;
 
-    internal ObjectToken Data;
+    internal AssembleTimeObject Data;
     internal int         StringIndex, StringLength; // debugging indexes
 }

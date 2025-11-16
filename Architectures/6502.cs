@@ -23,19 +23,19 @@ namespace uhla.Architectures {
             throw new NotImplementedException();
         }
         public virtual void Initalize() {
-            Program.LabelDataBase["a"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"#self",    new ObjectToken('a', AssembleTimeTypes.REG, true, true)},
-                {"indexing", new ObjectToken(0,   AssembleTimeTypes.INT, true, true) }
+            Program.LabelDataBase["a"] = new AssembleTimeObject(new Dictionary<string, AssembleTimeObject>() {
+                {"#self",    new AssembleTimeObject('a', AssembleTimeTypes.REG, true, true)},
+                {"indexing", new AssembleTimeObject(0,   AssembleTimeTypes.INT, true, true) }
             }, AssembleTimeTypes.REG, true, true);
 
-            Program.LabelDataBase["x"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"#self",    new ObjectToken('x', AssembleTimeTypes.INT, true, true)},
-                {"indexing", new ObjectToken(0,   AssembleTimeTypes.INT, true, true) }
+            Program.LabelDataBase["x"] = new AssembleTimeObject(new Dictionary<string, AssembleTimeObject>() {
+                {"#self",    new AssembleTimeObject('x', AssembleTimeTypes.INT, true, true)},
+                {"indexing", new AssembleTimeObject(0,   AssembleTimeTypes.INT, true, true) }
             }, AssembleTimeTypes.REG, true, true);
 
-            Program.LabelDataBase["y"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"#self",    new ObjectToken('y', AssembleTimeTypes.INT, true, true)},
-                {"indexing", new ObjectToken(0,   AssembleTimeTypes.INT, true, true) }
+            Program.LabelDataBase["y"] = new AssembleTimeObject(new Dictionary<string, AssembleTimeObject>() {
+                {"#self",    new AssembleTimeObject('y', AssembleTimeTypes.INT, true, true)},
+                {"indexing", new AssembleTimeObject(0,   AssembleTimeTypes.INT, true, true) }
             }, AssembleTimeTypes.REG, true, true);
 
             if (!Program.Linker!.Rules.ContainsKey("direct")) {
@@ -125,7 +125,7 @@ namespace uhla.Architectures {
 
                 List<(string token, int StringIndex, int StringLength)> Resolved =
                     [(Token, ActiveToken.StringIndex, Token.Length)];
-                ObjectToken? ctx;
+                AssembleTimeObject? ctx;
                 bool         success;
                 bool         HadSuccess = false;
 

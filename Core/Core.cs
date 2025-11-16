@@ -22,46 +22,46 @@ namespace uhla.Core {
             Program.SourceFileLineBuffer   .Add(0); // debug line, naturally 0
             Program.SourceFileStepBuffer   .Add(0); // debug step, naturally 0
 
-            Program.LabelDataBase["type"] =  new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",        new ObjectToken(ScopeTypes.Root, AssembleTimeTypes.EXP, true, true)},
+            Program.LabelDataBase["type"] =  new AssembleTimeObject(new Dictionary<string, AssembleTimeObject>() {
+                {"",        new AssembleTimeObject(ScopeTypes.Root, AssembleTimeTypes.EXP, true, true)},
             }, AssembleTimeTypes.EXP, true, true);
 
             // rs "Root Scope" has itself as key, value and parent - sitting in the root pointing to itself.
             // this is the only way via asm to directly refer to rs. Useful for when you use a 'as' level keyword but desires rs resolve.
-            Program.LabelDataBase["rs"] =  new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"#self", new ObjectToken(Program.LabelDataBase, AssembleTimeTypes.SCOPE, true, true)},
+            Program.LabelDataBase["rs"] =  new AssembleTimeObject(new Dictionary<string, AssembleTimeObject>() {
+                {"#self", new AssembleTimeObject(Program.LabelDataBase, AssembleTimeTypes.SCOPE, true, true)},
             }, AssembleTimeTypes.SCOPE, true, true);
 
             // make language a compiler variable
-            Program.LabelDataBase["lang"]   = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"", new ObjectToken($"\"{Program.ActiveLanguage}\"", AssembleTimeTypes.INT, true, true)},
+            Program.LabelDataBase["lang"]   = new AssembleTimeObject(new Dictionary<string, AssembleTimeObject>() {
+                {"", new AssembleTimeObject($"\"{Program.ActiveLanguage}\"", AssembleTimeTypes.INT, true, true)},
             }, AssembleTimeTypes.STRING, true, true);
             
-            Program.LabelDataBase["ToString"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                    {"args", new ObjectToken(1, AssembleTimeTypes.INT, true, true)},
-                    {"#self", new ObjectToken(GenerateFunctionalDefine("# args", ["args"]), AssembleTimeTypes.FUNCTION, true, true)}
+            Program.LabelDataBase["ToString"] = new AssembleTimeObject(new Dictionary<string, AssembleTimeObject>() {
+                    {"args", new AssembleTimeObject(1, AssembleTimeTypes.INT, true, true)},
+                    {"#self", new AssembleTimeObject(GenerateFunctionalDefine("# args", ["args"]), AssembleTimeTypes.FUNCTION, true, true)}
             }, AssembleTimeTypes.FEXP, true, true);
             
             // Functions are just lambdas, 0 refers to arg 0, and so on. They are of type Function returns type of type 'type'
             // The 'self' containing the lambda's type is the return type
-            Program.LabelDataBase["typeof"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",        new ObjectToken((ObjectToken ctx) => new ObjectToken(ctx.type, AssembleTimeTypes.TYPE, true, true), AssembleTimeTypes.TYPE, true, true)},
-                {"ctx",     new ObjectToken(0, AssembleTimeTypes.OBJECT, true, true) },
+            Program.LabelDataBase["typeof"] = new AssembleTimeObject(new Dictionary<string, AssembleTimeObject>() {
+                {"",        new AssembleTimeObject((AssembleTimeObject ctx) => new AssembleTimeObject(ctx.type, AssembleTimeTypes.TYPE, true, true), AssembleTimeTypes.TYPE, true, true)},
+                {"ctx",     new AssembleTimeObject(0, AssembleTimeTypes.OBJECT, true, true) },
                 
                 // arg num 0 => ctx
-                {"0",       new ObjectToken("ctx", default, true, true)},
+                {"0",       new AssembleTimeObject("ctx", default, true, true)},
                 
-                {"args",    new ObjectToken(1, AssembleTimeTypes.INT, true, true)}
+                {"args",    new AssembleTimeObject(1, AssembleTimeTypes.INT, true, true)}
             }, AssembleTimeTypes.FUNCTION, true, true);
 
-            Program.LabelDataBase["exists"] = new ObjectToken(new Dictionary<string, ObjectToken>() {
-                {"",        new ObjectToken((string ctx) => Database.GetObjectFromAlias(ctx) is null, AssembleTimeTypes.INT, true, true)},
-                {"ctx",     new ObjectToken(0, AssembleTimeTypes.OBJECT, true, true) },
+            Program.LabelDataBase["exists"] = new AssembleTimeObject(new Dictionary<string, AssembleTimeObject>() {
+                {"",        new AssembleTimeObject((string ctx) => Database.GetObjectFromAlias(ctx) is null, AssembleTimeTypes.INT, true, true)},
+                {"ctx",     new AssembleTimeObject(0, AssembleTimeTypes.OBJECT, true, true) },
                 
                 // arg num 0 => ctx
-                {"0",       new ObjectToken("ctx", default, false, true)},
+                {"0",       new AssembleTimeObject("ctx", default, false, true)},
                 
-                {"args",    new ObjectToken(1, AssembleTimeTypes.INT, true, true)}
+                {"args",    new AssembleTimeObject(1, AssembleTimeTypes.INT, true, true)}
             }, AssembleTimeTypes.FUNCTION, true, true);
 
             Program.ActiveScopeBuffer.Add(Program.LabelDataBase); // add rs to 'as', default rs
@@ -279,12 +279,16 @@ namespace uhla.Core {
             #endif
         };
 
-        internal static (ObjectToken obj, Terminal.ErrorContext? err)? Assemble(ref EList<string> src, List<EvalToken> args) {
+        internal static (AssembleTimeObject obj, Terminal.ErrorContext? err)? Assemble(ref EList<string> src, List<EvalToken> args) {
             var         blockNumber = 0;
             EList<int>  jumpPoints  = [];
             bool?       success     = null;
             EList<bool> needsJump   = [];
-            
+
+            if (!src.MoveNext()) {
+                // error, content is empty
+                return null;
+            }
             loop: if (!ContinueUntilToken(ref src)) {
                 // error in continuance
                 return null;
@@ -304,7 +308,7 @@ namespace uhla.Core {
                         return null;
                     }
 
-                    (var result, err) = (new ObjectToken(0, default, false, false), null);
+                    (var result, err) = (new AssembleTimeObject(0, default, false, false), null);
 
                     if (err is not null) {
                         // error pass back
@@ -417,29 +421,42 @@ namespace uhla.Core {
                 // if we are closing a loop, we MUST jump. if we are closing condition we don't need to
             }
             
-            while (src.MoveNext()) {
-                if (src.Current[0] >= '0' && src.Current[0] <= '9') {
-                    // error, first cannot begin with number
-                    // TODO: Implement different branching method : Numerical
-                    return null;
-                }
+            if (src.Current[0] >= '0' && src.Current[0] <= '9') {
+                // error, first cannot begin with number
+                // TODO: Implement different branching method : Numerical
+                return null;
+            }
 
-                if (src.Current[0] is '#') {
-                    // we have a core directive
-                    if (src.MoveNext()) {
-                        switch (src.Current) {
-                            case "assert":
-                            case "define":
-                            case "undefine":
-                            case "include":
-                                break;
-                        }
-                    } else {
-                        // error, directive body is missing
+            if (src.Current[0] is '#') {
+                // we have a core directive
+                if (src.MoveNext()) {
+                    switch (src.Current) {
+                        case "assert":
+                            // lex from here
+                            if (!src.MoveNext()) {
+                                // error, nothing to assert
+                                return null;
+                            }
+                            var (line, err) = Lex(ref src);
+                            if (err is not null) {
+                                // error pass back
+                                return null;
+                            }
+                            
+                            // evaluate line
+                            // complete assert
+                                
+                            break;
+                        case "define":
+                        case "undefine":
+                        case "include":
+                            break;
                     }
-                } else if (src.Current[0] is '.') {
-                    // we have an architecture directive / rule use
-                }   // TODO: else check rt member declaration (no rule)
+                } else {
+                    // error, directive body is missing
+                }
+            } else if (src.Current[0] is '.') {
+                // we have an architecture directive / rule use
             }
             
             
@@ -467,7 +484,7 @@ namespace uhla.Core {
             }
 
             bool ContinueUntilToken(ref EList<string> src) {
-                while (src.Current[0] is not (' ' or '\t' or '\n')) {
+                while (src.Current[0] is ' ' or '\t' or '\n') {
                     if (!src.MoveNext()) {
                         // no else body or sequential condition
                         return false;
@@ -1881,12 +1898,67 @@ namespace uhla.Core {
             ";", ":", "#", "\\", "\"", "{", "}", "?", ">", "<", "!", ".", ","
         ];
 
-        
+        internal static Operators? GetOperator(string op) => op switch {
+            "."   => Operators.PROPERTY,
+            "?."  => Operators.NULLPROPERTY,
+            "*"   => Operators.MULT,
+            "/"   => Operators.DIV,
+            "%"   => Operators.MOD,
+            "+"   => Operators.ADD,
+            "-"   => Operators.SUB,
+            ">>"  => Operators.RIGHT,
+            "<<"  => Operators.LEFT,
+            "<"   => Operators.LT,
+            ">"   => Operators.GT,
+            "<="  => Operators.LOET,
+            "=>"  => Operators.GOET,
+            "=="  => Operators.EQUAL,
+            "!="  => Operators.INEQUAL,
+            "&"   => Operators.BITMASK,
+            "^"   => Operators.BITFLIP,
+            "|"   => Operators.BITSET,
+            "&&"  => Operators.AND,
+            "||"  => Operators.OR,
+            "??"  => Operators.NULL,
+            "?"   => Operators.CHECK,
+            ":"   => Operators.ELSE,
+            "="   => Operators.SET,
+            "+="  => Operators.INCREASE,
+            "-="  => Operators.DECREASE,
+            "*="  => Operators.MULTIPLY,
+            "/="  => Operators.DIVIDE,
+            "%="  => Operators.MODULATE,
+            ">>=" => Operators.RIGHTSET,
+            "<<=" => Operators.LEFTSET,
+            "&="  => Operators.ASSIGNMASK,
+            "^="  => Operators.ASSIGNFLIP,
+            "|="  =>  Operators.ASSIGNSET,
+            "??=" => Operators.NULLSET,
+            ","   => Operators.TERM,
+            _     => null  
+        };
 
-        
-
-        
-
+        internal static int GetPrecedence(Operators op) => op switch {
+            Operators.PROPERTY   or Operators.NULLPROPERTY                                     => 0,
+            Operators.MULT       or Operators.DIV          or Operators.MOD                    => 1,
+            Operators.ADD        or Operators.SUB                                              => 2,
+            Operators.RIGHT      or Operators.LEFT                                             => 3,
+            Operators.LT         or Operators.GT           or Operators.LOET or Operators.GOET => 4,
+            Operators.EQUAL      or Operators.INEQUAL                                          => 5,
+            Operators.BITMASK                                                                  => 6,
+            Operators.BITFLIP                                                                  => 7,
+            Operators.BITSET                                                                   => 8,
+            Operators.AND                                                                      => 9,
+            Operators.OR                                                                       => 10,
+            Operators.NULL                                                                     => 11,
+            Operators.CHECK      or Operators.ELSE                                             => 12,
+            Operators.SET        or Operators.MULTIPLY              or Operators.DIVIDE        or
+            Operators.MODULATE   or Operators.INCREASE              or Operators.DECREASE      or
+            Operators.RIGHTSET   or Operators.LEFTSET               or Operators.ASSIGNMASK    or
+            Operators.ASSIGNFLIP or Operators.ASSIGNSET             or Operators.NULLSET       => 13,
+            
+            _ => -1,
+        };
 
         /// <summary>
         /// NOT PART OF THE DEFINE SYSTEM => THIS IS THE REGEX PATTERN MATCHER TO CREATE LEXER TOKENS
