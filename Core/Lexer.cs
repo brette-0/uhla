@@ -34,6 +34,7 @@ namespace uhla.Core {
                     }
                 }
                 
+                lastToken = src.Current;
                 switch (src.Current) {
                     case ";":
                         if (containerBuff.Count is 0) {                                         // ending with all closed
@@ -100,6 +101,17 @@ namespace uhla.Core {
                         continue;
                 }
             }
+
+            if (containerBuff.Count is not 0) {
+                // error, unterminated container
+                return (null, new Terminal.ErrorContext());
+            }
+            
+            if (GetOperator(lastToken) is not null) {
+                // error, no context ended on token
+                return (null, new Terminal.ErrorContext());
+            }
+            
             return (line, null);
         }
     }
